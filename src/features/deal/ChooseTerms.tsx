@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Explain } from "@/features/assist/Explain";
 import { CalendarDays, Check, Copy, Download, FileText } from "lucide-react";
 import type { ActionPackage, DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
@@ -122,5 +123,6 @@ export function PackageCard({ ws, pkg, onShared, onAgreed, onReminder, onNotice 
       <ClientDraftView draft={pkg.clientDraft} notes={clientDraftNotes(v)} />
       <RemindersView pkg={pkg} onToggle={onReminder} />
     </details>
+    <Explain ws={ws} subject="deal_choice" refId={pkg.id} label="Why this option?" />
   </article>;
 }

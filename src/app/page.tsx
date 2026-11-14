@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TrackVisit } from "@/features/start/TrackVisit";
 import { ArrowRight, Briefcase, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { samples } from "@/features/samples";
@@ -13,6 +14,7 @@ export default function Home() {
         <h1>Know what a client offer leaves your family — and find terms that work.</h1>
         <p className="intro">Bring the offer and your figures. Review the facts, compare the terms, and keep the plan up to date as payments arrive.</p>
         <ContinuePlan />
+        <TrackVisit />
         <div className="entry-grid">
           <Link href="/start?intent=offer" className="entry primary-entry"><Briefcase size={20} aria-hidden="true" /><strong>Check a client offer</strong>
             <span>What it adds after taxes and your health-insurance subsidy — and which price or payment dates would work better.</span><span className="go">Start <ArrowRight size={15} /></span></Link>

@@ -7,7 +7,7 @@ import type { HouseholdWorkspace, WorkspaceEvent } from "@/domain/household-work
 import { withEvent } from "@/domain/household-workspace";
 import {
   EXTRACTION_FIELDS, applyDocumentFact, extractDocument, getCapabilities, previewDocumentFacts,
-  type FactPreview, type FactTarget,
+  trackEvent, type FactPreview, type FactTarget,
 } from "@/lib/client/api";
 import { money, shortDate } from "@/features/format";
 
@@ -101,6 +101,7 @@ export function DocumentFacts({ ws, onCommit }: { ws: HouseholdWorkspace; onComm
     for (const e of events) next = withEvent(next, e);
     const ok = await onCommit(next, `Added ${events.length} figure${events.length > 1 ? "s" : ""} from ${doc.name}.`);
     if (ok) {
+      void trackEvent("review_completed", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "document" });
       const facts = previewDocumentFacts(next, doc.extraction!);
       const left = facts.filter(f => !f.alreadyApplied && !f.blockers.length && !(doc.answers[f.index]?.skip));
       patch(doc.id, { facts, state: left.length ? "review" : "done", summary: [`Saved ${events.length} figure${events.length > 1 ? "s" : ""}.`, ...results].join(" ") });

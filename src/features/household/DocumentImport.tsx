@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, FileUp, X } from "lucide-react";
 import type { ExtractionResult } from "@/domain/contracts";
-import { EXTRACTION_FIELDS, extractDocument, getCapabilities, type ExtractionFieldPath, type ProposedFieldValue } from "@/lib/client/api";
+import { EXTRACTION_FIELDS, extractDocument, getCapabilities, trackEvent, type ExtractionFieldPath, type ProposedFieldValue } from "@/lib/client/api";
 import { moneyExact } from "@/features/format";
 import { adults, describePath, fieldId, getAt, isMoneyFact, personName, setAt, type Draft } from "./draft";
 import type { Update } from "./editors";
@@ -154,7 +154,9 @@ export function DocumentImport({ draft, update, initialText = null }: { draft: D
       for (const path of prepared.paths) changed = setAt(d, path, isMoneyFact(prepared.value) ? { ...prepared.value } : prepared.value) || changed;
       if (changed && !d.evidence.some(e => e.id === field.evidence.id)) d.evidence.push(field.evidence);
     });
-    setState({ ...state, decided: { ...state.decided, [index]: "applied" } });
+    const decided = { ...state.decided, [index]: "applied" as const };
+    setState({ ...state, decided });
+    if (Object.keys(decided).length === state.fields.length) void trackEvent("review_completed", { dataKind: "own", inputPath: initialText ? "paste" : "document" });
     if (focusPath) setTimeout(() => {
       const el = document.getElementById(fieldId(focusPath));
       el?.scrollIntoView({ behavior: "smooth", block: "center" });

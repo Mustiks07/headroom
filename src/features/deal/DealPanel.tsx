@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Readiness } from "@/features/assist/Readiness";
+import { Explain } from "@/features/assist/Explain";
+import { trackEvent } from "@/lib/client/api";
 import { AlertTriangle, CheckCircle2, CircleSlash, Star, XCircle } from "lucide-react";
 import type { DealSearchResult, DealVariant, DecisionSensitivityResult, NoFeasibleTerms, ReadyDealSearch } from "@/domain/deal-planning";
 import { effectiveLine, type HouseholdWorkspace, type Project } from "@/domain/household-workspace";
@@ -54,12 +57,14 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
       const space = saved.dealPlanning!.termSpaces.find(t => t.projectId === project.id)!;
       const result = await searchTerms(saved, goal, space, saved.dealPlanning!.cashContext);
       setSearch({ key: draftKey, pending: false, result });
+      if (result.status === "ready") void trackEvent("result_calculated", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "manual" });
     } catch (e) { setSearch({ key: draftKey, pending: false, error: e instanceof Error ? e.message : String(e) }); }
     setBusy(false);
     setTimeout(() => document.getElementById("deal-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   }
 
   const stale = !!search && search.key !== draftKey;
+  const savedGoalId = (ws.dealPlanning?.goals ?? []).filter(g => g.projectId === project.id).at(-1)?.id ?? null;
   const r = search?.result;
 
   /** A computed one-constraint relaxation can be applied to the form, then searched again. */
@@ -79,6 +84,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
     </div>
     <p className="muted small">Tell Headroom what your household needs. It searches prices and payment dates you&apos;d be willing to ask for — on top of your agreed projects — and shows only terms it actually calculated.
       {unpaid.length > 0 && <> Still open: {unpaid.map(e => `${money(e.amountCents)} expected ${shortDate(e.date)}`).join(", ")}.</>}</p>
+    <Readiness ws={ws} intent="two_year_terms" projectId={project.id} onAnswer={() => onGoToForecast()} />
     <GoalForm ws={ws} project={project} goal={draft} onChange={setDraft} problems={problems} touched={touched} fixedReceived={fixed} />
     {message && <p className="field-error" role="alert">{message}</p>}
     <div className="row gap wrap">
@@ -93,6 +99,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
       {r && !search?.pending && (r.status === "needs_data" || r.status === "unsupported" || r.status === "unavailable") && <BlockedDeal result={r} onGoToForecast={onGoToForecast} />}
       {!search?.pending && r?.status === "no_feasible_terms" && <NoTerms result={r} onApply={applyRelaxation} />}
       {!search?.pending && r?.status === "ready" && <Variants ws={ws} result={r} stale={stale} onChoose={v => onChoose(v, r)} onGoToForecast={onGoToForecast} />}
+      {!search?.pending && r?.status === "ready" && !stale && savedGoalId && <Explain ws={ws} subject="deal_choice" refId={savedGoalId} label="Why these options?" />}
     </div>
   </section>;
 }

@@ -23,6 +23,7 @@ import { ComparisonView, DecisionOverview } from "@/features/results/ComparisonV
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { StorageFallback } from "@/features/plan/StorageFallback";
 import { PASTED_KEY } from "@/features/start/StartChooser";
+import { trackEvent } from "@/lib/client/api";
 
 /** Pasted offer/statement text is used once for this import, then removed from the browser. */
 function takePasted(): string | null {
@@ -229,6 +230,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry, import
     try {
       const ws = workspaceFromCase(built.input, draftRef.current.ui.forecasts ?? [], draftRef.current.ui.projectStarted);
       const saved = await workspaceRepo().save(ws, null);
+      void trackEvent("plan_saved", { dataKind: mode === "own" ? "own" : "sample", inputPath: importMode === "doc" ? "document" : importMode === "pasted" ? "paste" : "manual" });
       router.push(`/household/${encodeURIComponent(saved.id)}?saved=1`);
     } catch (e) { setSaveError(`The household plan couldn't be saved: ${e instanceof Error ? e.message : String(e)}. Your figures here are kept.`); }
   }
@@ -257,6 +259,12 @@ export function Workspace({ seed, mode, initialStep = "household", entry, import
   const riskStale = isStale(risk, version) || risk.pending;
   const compStale = isStale(comparison, version) || comparison.pending;
   const riskReady = risk.outcome?.kind === "done" && risk.outcome.result.status === "ready" ? risk.outcome.result : null;
+  const tracked = useRef(false);
+  useEffect(() => {
+    if (!riskReady || tracked.current) return;
+    tracked.current = true;
+    void trackEvent("result_calculated", { dataKind: mode === "own" ? "own" : "sample", inputPath: importMode === "doc" ? "document" : importMode === "pasted" ? "paste" : mode === "own" ? "manual" : "none" });
+  }, [riskReady, mode, importMode]);
   const invalidCount = invalidProblems(draft).length;
   const progressive = mode === "own";
   const sectionProps = (key: SectionKey) => ({ k: key, open: openSections.has(key), onToggle: () => toggleSection(key),
