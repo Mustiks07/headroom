@@ -4,7 +4,9 @@
 
 Headroom is a browser-based planning product for self-employed US adults. It helps a household understand how changing income affects its ACA subsidy, compare feasible next steps, and update its plan when income changes again.
 
-**Current status: integrated application, with local guest use available without service keys.** The English interface, deterministic financial engine and backend are connected. No signup, email, password or card is required. Optional cloud storage and AI document reading require configuration; they are not represented as live services until checked in deployment.
+**[Open Headroom](https://headroom-amber.vercel.app) · [Try the family example](https://headroom-amber.vercel.app/demo?case=family-cliff) · [Use your own figures](https://headroom-amber.vercel.app/check)**
+
+**Current status: live on Vercel, with guest cloud save connected to Supabase.** The English interface, deterministic financial engine and backend are connected. No signup, email, password or card is required. Public calculation, cloud save/reopen and PDF export were checked on November 15, 2026; see the [live release handoff](docs/handoffs/vercel-live-release.md). CSV/TXT import is available. AI PDF/image reading is not enabled, and checkout remains explicitly in demo mode.
 
 See the [round 3 integration review](docs/handoffs/integration-round3.md) for checked journeys, corrections and remaining work. Current calculation versions: `headroom-engine-1.2.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`.
 
@@ -70,4 +72,4 @@ The included households are synthetic. Some insurance inputs are derived from pu
 
 ## Contest delivery
 
-The contest submission needs a public guest URL, English UI, an English PDF deck of at most 10 slides, and this public repository. The live link and deck will be added when those artifacts are ready and checked. The $99/year price is a business hypothesis. Checkout is explicitly demo/test mode; no real customer payments or independent professional tax review are claimed.
+The contest submission needs a public guest URL, English UI, an English PDF deck of at most 10 slides, and this public repository. The verified guest URL is [headroom-amber.vercel.app](https://headroom-amber.vercel.app). The deck will be linked after its final artifact is ready and checked. The $99/year price is a business hypothesis. Checkout is explicitly demo/test mode; no real customer payments or independent professional tax review are claimed.

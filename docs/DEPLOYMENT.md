@@ -1,6 +1,6 @@
 # Deployment and configuration
 
-Owner: Claude 3. The integrated app builds and runs without external keys. Supabase was configured and checked against the real service on November 15, 2026: see [the live setup handoff](handoffs/supabase-live-setup.md). Public Vercel deployment, AI and payment-provider connections still require their own configuration and verification.
+Owner: Claude 3; Codex performs production integration. The integrated app builds and runs without external keys. Supabase and the public Vercel deployment were configured and checked on November 15, 2026: see [the Supabase setup handoff](handoffs/supabase-live-setup.md) and [the live release handoff](handoffs/vercel-live-release.md). Production: **https://headroom-amber.vercel.app**. AI reading is off and checkout is in demo mode.
 
 ## Local
 
@@ -39,6 +39,10 @@ Default contest path: an explicitly labeled demo checkout, no card collection. T
 Optional Stripe **test-mode** variables: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_ANNUAL_PRICE_ID`. Server-verified test purchases are recorded as test. Real billing is not required for this handoff and must not be claimed or silently enabled.
 
 ## Vercel
+
+The existing `headroom` project in `mustiks07s-projects` is connected to GitHub `Mustiks07/headroom`, production branch `main`. Do not create a second project for the same release. Branch previews are separate from the public production alias. The public alias was checked without Vercel cookies or authorization headers; it returns the application directly.
+
+Configured privately: the two public Supabase variables, server-only `SUPABASE_SECRET_KEY`, `AI_PROVIDER=none`, and production `NEXT_PUBLIC_APP_URL=https://headroom-amber.vercel.app`. Environment changes require a new deployment. Do not overwrite these settings with placeholder values from another clone.
 
 Import `Mustiks07/headroom`; root directory is the repo root, framework Next.js, Node 22, install `npm ci`, build `npm run build`, default framework output. Production should come from the integrated `main`, not one developer's incomplete branch. Branch previews can be used for development but are not the final submission.
 
