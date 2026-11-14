@@ -1,6 +1,16 @@
 # Claude 3 handoff — backend and integration
 
-Branch: `claude3`. Status: **backend part complete; integration pending the claude1/claude2 handoffs** (both branches were still at the foundation commit when this was written).
+Branch: `claude3`. Status: **backend part complete; `claude1` (UI) merged and stitched; `claude2` (engine) not yet available** — `origin/claude2` is still at the foundation commit, so the integrated build truthfully shows "The calculation isn't available right now" and saving/export refuse (no fake results). Not ready for `main` until the engine is merged and the ACCEPTANCE journeys pass.
+
+## Integration log
+
+- `origin/claude1` @ `e50783f` merged into `claude3` (no conflicts). Seam fixes, all in the integration commit:
+  - repository `storageMode()` returns `"cloud" | "local" | "unavailable"` (Claude 1's proposal); `storageModeInfo()` gives label/detail;
+  - `src/features/plan/storage.ts`: typed `PlanConflictError` / `STALE_RESULT` messages instead of message regex; clears the entitlement key;
+  - `src/features/household/DocumentImport.tsx`: whitelisted proposals (`income.*`, `coverage.*`, `opportunity.*`) are mapped to a user-chosen tax year/person (coverage → every month); YTD/unstated-period income saved as **estimated**; monthly↔annual mismatches refused; consent step before a PDF/image is sent to the AI provider (shown only when `aiExtraction` is available); old contract-path/cents proposals still accepted;
+  - `src/features/pricing/DemoCheckout.tsx`: demo checkout through `/api/checkout` (no card, local fallback), Stripe TEST button only when configured, server verification on return;
+  - JSON: one format, Claude 1's `kind: "headroom.saved-plan" | "headroom.case-input"`; `clearLocalData()` also removes `headroom.*` UI drafts.
+- Checks after merge: typecheck ✔, `npm test` ✔ (16), build ✔, `tests/ui/smoke.cjs` against `next start` ✔ (3 demos reach the truthful unavailable state, missing-field focus, no horizontal scroll at 360 px).
 
 ## What works without any keys
 
@@ -51,12 +61,12 @@ Branch: `claude3`. Status: **backend part complete; integration pending the clau
 
 ## Checks run (this increment)
 
-- `npm run typecheck` ✔, `npm test` ✔ (18 tests: 2 foundation + 16 integration), `npm run build` ✔.
+- `npm run typecheck` ✔, `npm test` ✔ (16 tests: 2 foundation + 14 integration), `npm run build` ✔.
 - Integration tests use a labelled test double for the engine (`tests/support/fake-engine.ts`) only to exercise storage/export plumbing: local round trip (save → reload → revision → conflict → events → remove → clear); stale/tampered/infeasible rejection; real CSV import + bank-statement refusal + unsupported file + no-provider PDF + consent gate; PDF content (fingerprint, chosen option, both years, retirement label) and stale-export refusal; truthful capabilities; 503 cloud without config; demo checkout not a payment; analytics whitelist; Stripe signature.
 - Manual: `next start` smoke of capabilities, CSV extract, checkout, plans 503.
 
 ## Remaining
 
-- Merge `origin/claude2` then `origin/claude1`, rerun acceptance journeys on the integrated build.
+- Merge `origin/claude2` when it exists, run the real-engine integration check and the three ACCEPTANCE journeys, then prepare the PR to `main`.
 - Supabase project + keys → apply migrations, run `scripts/verify-rls.mjs`, check API owner handling once.
 - AI key → one real extraction + one failure recovery. Vercel project + deployed URL check.
