@@ -14,11 +14,31 @@ Free insight should be useful and honest. Do not hide the fact that no special i
 
 - [MyTaxQuarter](https://mytaxquarter.com/aca-subsidy) provides a free ACA estimate and a [SEP/income-change discussion](https://mytaxquarter.com/blog/aca-subsidy-2026-freelancers-guide). Do not say it lacks ACA or SEP knowledge.
 - [ACAIndex](https://acacreditindex.com/) provides a free cliff calculator and source registry. A gauge and official citations are not enough differentiation.
+- [Bracketsight](https://www.bracketsight.com/aca) is free without signup and offers cliff distance, retirement levers and source explanations. Its published methodology also discusses SEHI/PTC iteration; that claim has not been independently audited here. Its page labels benchmark premiums as sample data. Do not claim a sourced deterministic cliff calculator is unique to Headroom.
 - [ProjectionLab](https://projectionlab.com/pricing) has a $129/year plan, ACA calculations, scenarios and reports. Its [reconciliation documentation](https://projectionlab.com/help/aca-subsidy-reconciliation) explicitly handles advance credits. Do not claim it cannot model these outcomes.
 
 Our concrete comparison task: current documents, a $12,000 opportunity, limited retirement cash, optional split payment and uncertain next-year income. Measure time to a correct and understandable feasible answer and time to update it after another fact changes. Document-first intake and ongoing plan revision are the proposed advantage; superiority over every feature of competitors has not been established.
 
 [ProjectionLab's founder reported $1M ARR in June 2025](https://projectionlab.com/blog/we-reached-1m-arr-with-zero-funding). This supports paid demand in the broader planning category, not proven willingness to buy Headroom. There are no claimed Headroom payments or user interviews in this foundation.
+
+## Evidence added on 15 November 2026
+
+| Finding | Primary source and interpretation |
+| --- | --- |
+| 6,391,741 returns reported excess advance premium tax credit repayment, totaling $8,812,506,000 | [IRS filing-season workbook](https://www.irs.gov/pub/irs-soi/25inweek47.xlsx), `Filing Season` B83/B84; monetary figures are in thousands. Tax year 2024 returns processed through November 20, 2025. This is actual reconciliation at national scale, not all avoidable loss or Headroom's addressable market. |
+| 23,130,860 people selected or automatically renewed a 2026 Marketplace plan | [CMS OEP state-level PUF](https://www.cms.gov/files/zip/2026-oep-state-level-public-use-file.zip), national Total/All row. People, not households or verified full-year paid coverage. Ages 26–44 sum to 8,173,935; this is not exactly the contest's 25–45 audience. |
+| 455,449 people in TX/FL/TN fall in the broad >300%–500% FPL bands | Sum of the two relevant income bands for these states in the same CMS file. Includes all ages and employment types. It is not SAM; the required joint age/employment/household/eligibility/ability-to-pay breakdown is unavailable. |
+| Self-employed applicants must estimate the coverage year's net income and update changed forecasts | [HealthCare.gov's self-employment guidance](https://www.healthcare.gov/self-employed/income/). It also describes detailed income/expense records when verification is requested. This supports an ongoing forecast-and-update job, not measured monthly use or willingness to pay. |
+
+The national enrollment figure declined from the preceding open-enrollment period; do not describe the market as automatically growing. A large reconciliation total does not prove software can prevent that total.
+
+## What to build and validate next
+
+Round 3's product hypothesis is **one household forecast with several commitments, actual-versus-expected payments and a usable explanation of the forecast**. A new project is an entry point; another receipt, a corrected income estimate or renewal creates the next task. This targets a concrete limitation of disconnected calculations. It remains a proposed advantage until a like-for-like workflow comparison and user behavior support it.
+
+Proposed validation with 6–8 recruited target households: ask about the last real forecast/update decision and current paid/free help; have the person use their own supported situation; observe whether they can confirm the assumptions, choose an action, explain its cash cost, and return after an actual change. Offer a clearly priced real purchase only when the payment/product setup is ready. Track completion, consequential mistakes, repeat use and actual purchase separately. A checkout click, compliment or synthetic demo is not a sale. Recruitment/outreach has not been performed by this repository work.
+
+Prioritize an independent professional review of the decisive example and a small set of counterexamples. More unit tests do not replace that review or demand evidence. Free Marketplace assistance, brokers and existing accountants are alternatives to compare and possible acquisition partners, while the household remains the payer.
 
 ## Market and economics
 

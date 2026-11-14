@@ -1,6 +1,7 @@
 import { CaseInputSchema, CONTRACT_VERSION, type BlockedComparison, type CaseInput, type ReadyComparison, type SavedPlan } from "@/domain/contracts";
 import { calculateComparison, calculationFingerprint } from "@/lib/engine";
 import type { VersionPair } from "./plan-upgrade";
+import { retainedCompletedActions } from "./completed-actions";
 
 export const PLAN_FILE_KIND = "headroom.saved-plan";
 export const INPUT_FILE_KIND = "headroom.case-input";
@@ -87,14 +88,14 @@ export async function analyzePlanFile(text: string): Promise<RestoreAnalysis> {
   }
 
   const fromFile = typeof plan?.chosenScenarioId === "string" ? plan.chosenScenarioId : null;
-  const fileOption = fromFile ? (stored?.scenarios ?? []).find(s => s?.id === fromFile) : undefined;
+  const fileOption = fromFile && Array.isArray(stored?.scenarios) ? stored.scenarios.find(s => s?.id === fromFile) : undefined;
   const now = fromFile ? result.scenarios.find(s => s.id === fromFile) : undefined;
   const state = !fromFile ? "none" : !now ? "missing" : now.feasible ? "kept" : "infeasible";
   if (state === "missing") notes.push(`The option chosen in the file ("${fileOption?.label ?? fromFile}") is not offered in the current calculation. Choose an option.`);
   if (state === "infeasible") notes.push(`The option chosen in the file ("${now!.label}") is not available now: ${now!.infeasibilityReasons.join(" ") || "it is outside your limits."} Choose an option.`);
 
   const completed = Array.isArray(plan?.completedActionIds) ? plan!.completedActionIds.filter((x): x is string => typeof x === "string") : [];
-  const completedKept = state === "kept" ? completed.filter(id => now!.actions.some(a => a.id === id)) : [];
+  const completedKept = state === "kept" ? retainedCompletedActions(completed, fileOption, now) : [];
   const completedDropped = completed.filter(id => !completedKept.includes(id));
   if (completedDropped.length) notes.push(`${completedDropped.length} completed action(s) from the file no longer match the current plan and were not restored as done.`);
 
@@ -103,7 +104,7 @@ export async function analyzePlanFile(text: string): Promise<RestoreAnalysis> {
 
   return {
     status: "ready", input, comparison: result, fileKind, fileVersions, fingerprintMatches,
-    choice: { fromFile, label: now?.label ?? fileOption?.label ?? null, state },
+    choice: { fromFile, label: now?.label ?? (typeof fileOption?.label === "string" ? fileOption.label : null), state },
     suggestedScenarioId: state === "kept" ? fromFile : null,
     completedKept, completedDropped,
     feasibleOptions: result.scenarios.filter(s => s.feasible).map(s => ({ id: s.id, label: s.label, recommended: s.id === result.recommendedScenarioId })),

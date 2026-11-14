@@ -12,6 +12,17 @@ function ready(r: ComparisonResult): ReadyComparison {
 
 describe("agreed plan after income changes", async () => {
   const before = ready(await calculateComparison(family()));
+  it("rejects damaged agreed years, dates and receipt totals without calculating them", async () => {
+    const original = before.scenarios.find(s => s.kind === "split_payment")!;
+    const wrongYear = structuredClone(original);
+    wrongYear.decisions.expenses = [{ year: 2028 as 2026, amountCents: 100 }];
+    const wrongDate = structuredClone(original);
+    wrongDate.decisions.receipts[0].date = "2026-02-30";
+    const wrongTotal = structuredClone(original);
+    wrongTotal.decisions.grossRevenueCents += 100;
+    for (const invalid of [wrongYear, wrongDate, wrongTotal])
+      expect(await evaluateAgreedPlan(family(), invalid)).toMatchObject({ status: "needs_data", code: "INVALID_AGREED_PLAN" });
+  });
   const split = before.scenarios.find(s => s.kind === "split_payment")!;
   const sep = before.scenarios.find(s => s.kind === "sep_minimum")!;
 

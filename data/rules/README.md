@@ -1,12 +1,14 @@
 # Versioned rule packs
 
-Owner: Claude 2. Rule set id: **`us-federal-aca-2026-2027.r3`** (engine `headroom-engine-1.1.0`) (see `src/lib/engine/rules.ts`).
+Owner: Claude 2. Rule set id: **`us-federal-aca-2026-2027.r3`** (engine `headroom-engine-1.1.1`) (see `src/lib/engine/rules.ts`).
 
 | File | Content |
 | --- | --- |
 | `us-federal-2026.json` | 2026 tax/ACA parameters. Applicable figure from the transcribed **DRAFT** 2026 Form 8962 Table 2 (`data/reference/2026-8962-table2.json`). |
 | `us-federal-2027.json` | 2027 parameters. Table 2 is not published; the figure is interpolated from Rev. Proc. 2026-26 bands with the method that reproduces all 301 2026 entries (checked in `tests/engine`). |
 | `sources.json` | Source ids referenced by packs, traces and actions, with status (final / DRAFT / derived / engine policy). |
+
+The Tax Table method reference is `data/reference/2025-tax-table-method-reference.json`: the underlying Form 1040 PDF is explicitly **tax year 2025**, dated February 25, 2026. Its header and original SHA-256 were rechecked during integration. The round-2 handoff initially misidentified it as 2026. It verifies the table method only; production uses each year's own Revenue Procedure brackets. A published 2026 Tax Table has not been verified.
 
 Rules:
 

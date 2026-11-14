@@ -198,7 +198,8 @@ function scheduleTax(brackets: Array<{ top: number; rate: { num: number; den: nu
 /**
  * Tax Table below $100,000 (tax on the band midpoint, whole dollars: $5/$10 bands
  * to $25, $25 bands to $3,000, $50 bands to $100,000), else the Tax Computation
- * Worksheet rounded to whole dollars. Verified against every row of the 2026 draft table.
+ * Worksheet rounded to whole dollars. Method verified against the 2025 draft table;
+ * each calculated year uses its own published Revenue Procedure brackets.
  */
 export function regularTax(rules: RulePack, filing: Filing, taxable: number): number {
   const brackets = rules.brackets[filing];

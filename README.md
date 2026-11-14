@@ -6,7 +6,7 @@ Headroom is a browser-based planning product for self-employed US adults. It hel
 
 **Current status: integrated application, with local guest use available without service keys.** The English interface, deterministic financial engine and backend are connected. No signup, email, password or card is required. Optional cloud storage and AI document reading require configuration; they are not represented as live services until checked in deployment.
 
-See the [integration review](docs/handoffs/integration-review.md) for checked journeys, corrections and remaining work.
+See the [round 2 integration review](docs/handoffs/integration-round2.md) for checked journeys, corrections and remaining work. Current calculation versions: `headroom-engine-1.1.1` / `us-federal-aca-2026-2027.r3`.
 
 ## Try it locally
 
@@ -15,7 +15,7 @@ See the [integration review](docs/handoffs/integration-review.md) for checked jo
 - Open `/demo?case=missing-spouse-income`: confirm the missing facts before a result is shown.
 - Open `/check` for your own current-year subsidy check. Comparing a project across years requires the second-year forecast.
 
-Saved plans reopen in the same browser. “Something changed” recalculates a plan, records its revision and preserves its history. PDF and restorable JSON exports include inputs, assumptions and calculation versions. CSV/TXT imports propose figures for confirmation; PDF/image analysis is optional.
+Saved plans reopen in the same browser. “Something changed” first checks the amounts and dates already agreed, then shows new proposals for explicit review. An accepted update records a revision and preserves history. Old rule versions have a separate review/upgrade path. PDF and restorable JSON exports include inputs, assumptions and calculation versions. CSV/TXT imports propose figures for confirmation; PDF/image analysis is optional.
 
 ## Development
 
@@ -32,6 +32,8 @@ npm test
 npm run build
 ```
 
+For the bounded browser check, install Chromium once with `npx playwright install chromium`, build the app, then run `npm run check:ui`. It starts a production server on a free port; set `BASE_URL` to use an already running server instead. The script uses an isolated browser context and synthetic households.
+
 ## Team handoff
 
 | Branch | Responsibility | Assignment |
@@ -42,7 +44,7 @@ npm run build
 
 Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
 
-Second-round briefs, starting from integrated `main`: [Claude 1 — UX](docs/tasks/CLAUDE1_ROUND2.md), [Claude 2 — decisions and rules](docs/tasks/CLAUDE2_ROUND2.md), [Claude 3 — persistence and deployment](docs/tasks/CLAUDE3_ROUND2.md).
+**Current assignments:** read the [round 3 shared brief](docs/tasks/ROUND3_SHARED.md), then [Claude 1 — household journey](docs/tasks/CLAUDE1_ROUND3.md), [Claude 2 — combined decisions](docs/tasks/CLAUDE2_ROUND3.md), or [Claude 3 — durable household workspace](docs/tasks/CLAUDE3_ROUND3.md). Round 2 is integrated; its briefs remain as history. Round 3 features are planned, not present in the current release.
 
 ## Specification
 
@@ -59,7 +61,7 @@ Second-round briefs, starting from integrated `main`: [Claude 1 — UX](docs/tas
 
 Financial outcomes come from a deterministic, versioned engine. AI may extract document facts; it does not calculate taxes. Unknown household facts block the affected calculation. Retirement principal, available cash and advance-credit settlement are shown separately.
 
-The initial scope covers federal planning for Texas, Florida and Tennessee, single or married filing jointly, one sole-proprietor business, supported W-2 wages and interest, and full-year Marketplace eligibility in 2026–2027. Unsupported situations return an explanation. The [engine handoff](docs/handoffs/claude2.md) lists exact limits, rounding and search assumptions. Uncertainty checks move declared business-profit and interest ranges together; they do not cover every independent combination. Payroll, retirement and insurance ranges are explicitly blocked.
+The initial scope covers federal planning for Texas, Florida and Tennessee, single or married filing jointly, one sole-proprietor business, supported W-2 wages and interest, and full-year Marketplace eligibility in 2026–2027. Unsupported situations return an explanation. The [round 2 engine handoff](docs/handoffs/claude2-round2.md) and its integration correction list limits, rounding and search assumptions. Supported business-profit and interest ranges are independent: validity and loss of credit use the engine's monotone bounds; spendable-cash stress uses finite checks and is not a proven global minimum. Payroll, retirement and insurance ranges remain blocked.
 
 The included households are synthetic. Some insurance inputs are derived from published CMS county plan candidates, with address availability and personal eligibility assumed. Reference examples are not actual customer savings or independently reviewed tax returns. See [the audit notes](docs/ENGINE_SPEC.md) before reusing the legacy Python prototype.
 

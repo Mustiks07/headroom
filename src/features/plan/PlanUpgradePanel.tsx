@@ -6,6 +6,7 @@ import type { SavedPlan } from "@/domain/contracts";
 import { checkPlanCurrency, confirmPlanUpgrade, previewPlanUpgrade, type PlanCurrency, type PlanUpgradePreview } from "@/lib/client/api";
 import { moneyExact as money } from "@/features/format";
 import { describeStorageError, planRepository } from "./storage";
+import { AgreedPlanImpact } from "./AgreedPlanImpact";
 
 type Ready = Extract<PlanUpgradePreview, { status: "ready" }>;
 
@@ -15,7 +16,7 @@ type Ready = Extract<PlanUpgradePreview, { status: "ready" }>;
  * kept in history; the previous option is never replaced without the user's choice.
  */
 export function PlanUpgradePanel({ plan, onStatus, onUpgraded }: {
-  plan: SavedPlan; onStatus: (outdated: boolean) => void; onUpgraded: () => Promise<void>;
+  plan: SavedPlan; onStatus: (outdated: boolean) => void; onUpgraded: (historyWarning?: string) => Promise<void>;
 }) {
   const [currency, setCurrency] = useState<PlanCurrency | null>(null);
   const [preview, setPreview] = useState<PlanUpgradePreview | null>(null);
@@ -45,7 +46,10 @@ export function PlanUpgradePanel({ plan, onStatus, onUpgraded }: {
   async function confirm(p: Ready) {
     if (!choice) return;
     setBusy(true); setError(null);
-    try { await confirmPlanUpgrade(planRepository(), plan, p, choice); await onUpgraded(); }
+    try {
+      const saved = await confirmPlanUpgrade(planRepository(), plan, p, choice);
+      await onUpgraded(saved.historyWarning);
+    }
     catch (e) { setError(describeStorageError(e)); setBusy(false); }
   }
 
@@ -62,13 +66,15 @@ export function PlanUpgradePanel({ plan, onStatus, onUpgraded }: {
       {preview.sameOption
         ? !preview.sameOption.feasible && <p className="small"><strong>Your option “{preview.previousChoice.label}” is no longer available:</strong> {preview.sameOption.reasons.join(" ") || "it is outside your limits now."}</p>
         : <p className="small"><strong>Your option “{preview.previousChoice.label}” isn&apos;t offered by the updated calculation.</strong></p>}
+      <AgreedPlanImpact evaluation={preview.agreedEvaluation} />
+      <p className="small"><strong>Newly calculated option:</strong> review its amounts and dates before replacing your saved plan.</p>
       <div className="table-wrap"><table className="years-table compact">
         <thead><tr><th scope="col">For “{preview.previousChoice.label}”</th><th scope="col">Saved</th><th scope="col">Updated</th></tr></thead>
         <tbody>{preview.figures.map(f => <tr key={f.label}><th scope="row">{f.label}</th>
           <td className="num">{f.beforeCents === null ? "—" : money(f.beforeCents)}</td>
           <td className="num">{f.afterCents === null ? "—" : money(f.afterCents)}</td></tr>)}</tbody>
       </table></div>
-      {preview.completedDropped.length > 0 && <p className="small">These completed actions don&apos;t exist in the updated plan and won&apos;t stay marked as done: {preview.completedDropped.map(a => a.title).join("; ")}.</p>}
+      {preview.completedDropped.length > 0 && <p className="small">These completed actions changed or no longer exist and need review: {preview.completedDropped.map(a => a.title).join("; ")}. Their original confirmation remains in the saved revision.</p>}
       {preview.newActions.length > 0 && <p className="small">New or changed actions: {preview.newActions.map(a => `${a.title}${a.dueDate ? ` (by ${a.dueDate})` : ""}`).join("; ")}.</p>}
       <fieldset className="option-list">
         <legend className="small"><strong>Option to keep in your plan</strong></legend>

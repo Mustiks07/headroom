@@ -1,6 +1,6 @@
 // Round 2 source checks: one regression per discrepancy found against the primary sources.
 import { describe, expect, it } from "vitest";
-import taxTable from "../../data/reference/2026-tax-table.json";
+import taxTable from "../../data/reference/2025-tax-table-method-reference.json";
 import type { CaseInput } from "@/domain/contracts";
 import { NO_VARIATION } from "@/lib/engine/model";
 import { rate } from "@/lib/engine/money";
@@ -26,10 +26,10 @@ function couple(year: 0 | 1, profit: number, spouseWages: number, children = 0):
 }
 
 describe("rules r3 checked against IRS sources", () => {
-  it("reproduces every row of the draft 2026 Tax Table with the Tax Table method; the draft rows use 2025 brackets", () => {
-    // Finding: all 2,062 rows of the DRAFT table equal the method applied to 2025 brackets (Rev. Proc. 2024-40),
-    // not the 2026 brackets (Rev. Proc. 2025-32). The method (bands, midpoint, whole-dollar rounding) is verified;
-    // the engine keeps the final 2026 brackets and does not use the stale draft values.
+  it("reproduces the 2025 draft Tax Table method and uses separate 2026 brackets", () => {
+    // The source header says tax year 2025 (published February 2026). This checks
+    // the method, not a 2026 table. Production uses the applicable year's brackets.
+    expect(taxTable.taxYear).toBe(2025);
     const r26 = rulesFor(2026);
     const implied = taxTable.impliedBrackets2025 as Record<"single" | "mfj", Array<[number, string]>>;
     const r25 = { ...r26, brackets: {

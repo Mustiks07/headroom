@@ -1,5 +1,7 @@
 # Claude 2 — round 2 handoff (financial engine)
 
+> Integration correction, 2026-11-15: the `i1040gi--dft.pdf` file below is headed **Instructions for Form 1040 (2025)**, dated February 25, 2026. Its SHA-256 matches the original manifest. It is a 2025 method reference, not a 2026 table with inconsistent rates. The extract is now `data/reference/2025-tax-table-method-reference.json`; source metadata and the method test were corrected. Production continues to use the appropriate year's Revenue Procedure brackets. The original handoff below is retained as history; use [integration-round2.md](integration-round2.md) for the released state.
+
 Branch `claude2`, merged with `origin/main` (`d6590ac`) by a normal merge; the integrator's fixes are kept (2027 QBI $415/$1,030, source links, forecast-based Marketplace action, refused payroll/SEP/coverage ranges).
 
 - Engine `headroom-engine-1.1.0` (was 1.0.1), rules `us-federal-aca-2026-2027.r3` (was r2). Results changed, so saved fingerprints from r2 no longer match — by design.

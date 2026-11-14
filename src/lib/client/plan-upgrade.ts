@@ -1,6 +1,7 @@
 import type { BlockedComparison, PlanEvent, PlanRepository, ReadyComparison, SavedPlan, ScenarioResult } from "@/domain/contracts";
-import { calculateComparison, calculationFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
+import { calculateComparison, calculationFingerprint, evaluateAgreedPlan, ENGINE_VERSION, RULES_VERSION, type AgreedPlanEvaluation } from "@/lib/engine";
 import { PlanIntegrityError } from "./errors";
+import { retainedCompletedActions } from "./completed-actions";
 
 export interface VersionPair { engineVersion: string; rulesVersion: string }
 
@@ -32,6 +33,7 @@ export type PlanUpgradePreview =
     status: "ready";
     currency: PlanCurrency;
     comparison: ReadyComparison;
+    agreedEvaluation: AgreedPlanEvaluation | null;
     previousChoice: { id: string; label: string };
     /** The same option in the new calculation, when it still exists. */
     sameOption: { id: string; label: string; feasible: boolean; reasons: string[] } | null;
@@ -71,14 +73,15 @@ export async function previewPlanUpgrade(plan: SavedPlan): Promise<PlanUpgradePr
   const result = await calculateComparison(plan.input);
   if (result.status !== "ready") return { status: "blocked", currency, result };
   const previous = plan.comparison.scenarios.find(s => s.id === plan.chosenScenarioId);
+  const agreedEvaluation = previous ? await evaluateAgreedPlan(plan.input, previous, previous) : null;
   const same = result.scenarios.find(s => s.id === plan.chosenScenarioId)
     ?? (previous ? result.scenarios.find(s => s.kind === previous.kind) : undefined);
   const suggested = same?.feasible ? same.id : null;
   const nextActions = same?.actions ?? [];
   const previousActions = new Map((previous?.actions ?? []).map(a => [a.id, a.title]));
-  const completedKept = plan.completedActionIds.filter(id => nextActions.some(a => a.id === id));
+  const completedKept = retainedCompletedActions(plan.completedActionIds, previous, same);
   return {
-    status: "ready", currency, comparison: result,
+    status: "ready", currency, comparison: result, agreedEvaluation,
     previousChoice: { id: plan.chosenScenarioId, label: previous?.label ?? plan.chosenScenarioId },
     sameOption: same ? { id: same.id, label: same.label, feasible: same.feasible, reasons: same.infeasibilityReasons } : null,
     suggestedScenarioId: suggested,
@@ -86,7 +89,7 @@ export async function previewPlanUpgrade(plan: SavedPlan): Promise<PlanUpgradePr
     completedKept,
     completedDropped: plan.completedActionIds.filter(id => !completedKept.includes(id))
       .map(id => ({ id, title: previousActions.get(id) ?? id })),
-    newActions: nextActions.filter(a => !previousActions.has(a.id)).map(a => ({ id: a.id, title: a.title, dueDate: a.dueDate })),
+    newActions: nextActions.filter(a => !retainedCompletedActions([a.id], previous, same).length).map(a => ({ id: a.id, title: a.title, dueDate: a.dueDate })),
     feasibleOptions: result.scenarios.filter(s => s.feasible)
       .map(s => ({ id: s.id, label: s.label, recommended: s.id === result.recommendedScenarioId })),
   };
@@ -97,10 +100,11 @@ export async function previewPlanUpgrade(plan: SavedPlan): Promise<PlanUpgradePr
  * revision stays in the repository's revision history and a "rules_updated" event is recorded.
  */
 export async function confirmPlanUpgrade(repo: PlanRepository, plan: SavedPlan,
-  preview: Extract<PlanUpgradePreview, { status: "ready" }>, chosenScenarioId: string): Promise<SavedPlan> {
+  preview: Extract<PlanUpgradePreview, { status: "ready" }>, chosenScenarioId: string): Promise<SavedPlan & { historyWarning?: string }> {
   const chosen = preview.comparison.scenarios.find(s => s.id === chosenScenarioId);
   if (!chosen?.feasible) throw new PlanIntegrityError("INFEASIBLE_SCENARIO", "Choose an option that is available in the updated calculation.");
-  const completed = plan.completedActionIds.filter(id => chosen.actions.some(a => a.id === id));
+  const previous = plan.comparison.scenarios.find(s => s.id === plan.chosenScenarioId);
+  const completed = retainedCompletedActions(plan.completedActionIds, previous, chosen);
   const saved = await repo.save({ ...plan, comparison: preview.comparison, chosenScenarioId, completedActionIds: completed }, plan.revision);
   const from = `${plan.comparison.engineVersion} / ${plan.comparison.rulesVersion}`;
   const to = `${preview.comparison.engineVersion} / ${preview.comparison.rulesVersion}`;
@@ -109,6 +113,10 @@ export async function confirmPlanUpgrade(repo: PlanRepository, plan: SavedPlan,
     description: `Recalculated with ${to} (was ${from}). Option: ${chosen.label}${chosenScenarioId !== plan.chosenScenarioId ? ` (was ${preview.previousChoice.label})` : ""}.`,
     previousFingerprint: plan.comparison.calculationFingerprint, nextFingerprint: preview.comparison.calculationFingerprint,
   };
-  await repo.appendEvent(event);
+  try { await repo.appendEvent(event); }
+  catch {
+    // The revision was already committed. Do not invite a retry using the old revision.
+    return { ...saved, historyWarning: "Plan saved with the current rules, but its history event could not be recorded. The previous revision is preserved." };
+  }
   return saved;
 }

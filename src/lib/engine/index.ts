@@ -1,6 +1,6 @@
 import { CONTRACT_VERSION, type BlockedComparison, type CaseInput, type ComparisonResult, type CurrentRisk,
   type RiskAssessment, type ScenarioResult } from "@/domain/contracts";
-import { evaluateAgreed, type AgreedPlan, type AgreedPlanOutcome } from "./agreed";
+import { AgreedPlanSchema, evaluateAgreed, type AgreedPlan, type AgreedPlanOutcome } from "./agreed";
 import { compare } from "./comparison";
 import { buildYearModel, checkOpportunity, Issues, parseCase } from "./guard";
 import { formatUsd } from "./money";
@@ -158,6 +158,12 @@ export type AgreedPlanEvaluation = ReadyAgreedPlanEvaluation | BlockedComparison
  * Call calculateComparison separately to see new options.
  */
 export async function evaluateAgreedPlan(raw: CaseInput, plan: AgreedPlan, previous: ScenarioResult | null = null): Promise<AgreedPlanEvaluation> {
+  const checked = AgreedPlanSchema.safeParse(plan);
+  if (!checked.success) return {
+    status: "needs_data", code: "INVALID_AGREED_PLAN", message: "The saved payment arrangements need review before they can be calculated.",
+    fields: checked.error.issues.map(i => ({ path: `agreedPlan.${i.path.join(".")}`, reason: i.message })),
+  };
+  plan = checked.data;
   const issues = new Issues();
   const input = parseCase(raw, issues);
   const m0 = input ? buildYearModel(input, 0, issues) : null;

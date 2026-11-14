@@ -73,7 +73,10 @@
       "source": "https://www.irs.gov/pub/irs-dft/i1040gi--dft.pdf",
       "bytes": 4550250,
       "sha256": "24ad652c8f89a778990720873c13ff0d7fa35485a991a288bd9625804e5d932f",
-      "retrieved_date": "2026-11-14"
+      "retrieved_date": "2026-11-14",
+      "tax_year": 2025,
+      "header_verified_date": "2026-11-15",
+      "note": "Header says Instructions for Form 1040 (2025), dated Feb 25, 2026. Original recorded SHA-256 matches; use only for general rounding and Tax Table method."
     },
     {
       "filename": "f8962--dft.pdf",

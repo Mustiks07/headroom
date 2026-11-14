@@ -5,9 +5,8 @@
  *   node tests/ui/smoke.cjs                      # starts `next start` on a free port
  *   BASE_URL=http://localhost:3000 node tests/ui/smoke.cjs   # or use a running app
  *
- * Needs Playwright with a Chromium browser. It is not a project dependency yet;
- * if `require("playwright")` fails, install it once (e.g. `npm i --no-save playwright`
- * and `npx playwright install chromium`). The check uses the real engine and the
+ * Playwright is a pinned dev dependency. Install its browser once with
+ * `npx playwright install chromium`. The check uses the real engine and the
  * browser-local plan repository: it REQUIRES ready results where the sample
  * household is supported and fails on "unavailable".
  */
@@ -16,7 +15,7 @@ const net = require("node:net");
 
 let chromium;
 try { ({ chromium } = require("playwright")); } catch {
-  console.error("Playwright is not installed. Run: npm i --no-save playwright && npx playwright install chromium");
+  console.error("Playwright is not installed. Run: npm ci && npx playwright install chromium");
   process.exit(2);
 }
 
@@ -59,7 +58,7 @@ async function startServer() {
     // 2. Changing the price changes the real result.
     const price = page.locator("#f-opportunity-grossRevenueCents");
     await price.fill("13000");
-    await page.waitForFunction(b => { const el = document.querySelectorAll(".tile .tile-big")[0]; return el && !document.querySelector(".overview.is-stale") && Number(el.textContent.replace(/[^0-9−-]/g, "").replace("−", "-")) !== b; }, before, { timeout: 15000 });
+    await page.waitForFunction(b => { const el = document.querySelectorAll(".tile")[1]?.querySelector(".tile-big"); return el && !document.querySelector(".overview.is-stale") && Number(el.textContent.replace(/[^0-9−-]/g, "").replace("−", "-")) !== b; }, before, { timeout: 15000 });
     check(true, "price $12,000 → $13,000 changes the accept-as-offered amount");
 
     // 3. Invalid money blocks the calculation and saving; it is not silently ignored.
@@ -90,6 +89,7 @@ async function startServer() {
     await page.getByRole("button", { name: "Recalculate" }).click();
     await page.waitForSelector(".change-review", { timeout: 15000 });
     check((await page.locator(".diff-list").innerText()).includes("$121,000"), "income change shows the before → after difference");
+    check((await page.locator("section[aria-labelledby='agreed-impact-title']").innerText()).includes("now loses the 2026"), "saved payments are evaluated separately and expose the lost subsidy");
     await page.getByRole("button", { name: "Save the updated plan" }).click();
     await page.waitForFunction(() => document.querySelector(".save-status")?.textContent?.includes("Revision 2"), null, { timeout: 10000 });
     check((await page.locator(".history").innerText()).includes("Income changed"), "plan saved as revision 2 with history entry");

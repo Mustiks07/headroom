@@ -87,9 +87,9 @@
     },
     {
       "id": "irs-i1040-tax-table",
-      "title": "2026 Form 1040 instructions (draft): Tax Table and rounding to whole dollars",
+      "title": "2025 Form 1040 instructions (draft): Tax Table method and whole-dollar rounding",
       "url": "https://www.irs.gov/pub/irs-dft/i1040gi--dft.pdf",
-      "status": "DRAFT; Tax Table METHOD verified on all 2,062 rows (data/reference/2026-tax-table.json). The draft rows were built with 2025 brackets, so values come from the final 2026 brackets (Rev. Proc. 2025-32), not from the draft table. Whole-dollar rounding rule ('Rounding Off to Whole Dollars') checked."
+      "status": "DRAFT 2025 instructions, dated February 25, 2026; year and PDF hash rechecked 2026-11-15. Method verified on 2,062 rows in data/reference/2025-tax-table-method-reference.json. 2026 and 2027 calculations use their own final Revenue Procedure brackets; this is not a published 2026 Tax Table."
     },
     {
       "id": "irs-i8995",
@@ -107,7 +107,7 @@
       "id": "irs-pub-974",
       "title": "Publication 974, SEHI deduction and PTC interaction",
       "url": "https://www.irs.gov/publications/p974",
-      "status": "2025 edition; any computation method allowed if deduction + PTC computed with it ≤ enrollment premiums (checked 2026-11-14)"
+      "status": "2025 edition; any computation method allowed if deduction + PTC computed with it в‰¤ enrollment premiums (checked 2026-11-14)"
     },
     {
       "id": "irs-pub-560",

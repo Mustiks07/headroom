@@ -5,7 +5,8 @@
  * what its fixed actions now produce — or why they are no longer possible —
  * before any new option is suggested.
  */
-import type { CaseInput, ScenarioKind, ScenarioResult, TaxYear } from "@/domain/contracts";
+import { z } from "zod";
+import { CentsSchema, TaxYearSchema, type CaseInput, type ScenarioKind, type ScenarioResult, type TaxYear } from "@/domain/contracts";
 import { makeCtx, run, scenarioFromPlan, total, YEARS, yearIndexOf, type Models, type Plan } from "./comparison";
 import { formatUsd } from "./money";
 import { EngineStop } from "./model";
@@ -16,6 +17,25 @@ export interface AgreedPlan {
   label?: string;
   decisions: ScenarioResult["decisions"];
 }
+
+/** Saved decisions may come from an older or damaged browser file. Validate before indexing years. */
+export const AgreedPlanSchema = z.object({
+  kind: z.enum(["decline", "accept_now", "sep_minimum", "sep_buffer", "split_payment", "renegotiate"]),
+  label: z.string().optional(),
+  decisions: z.object({
+    grossRevenueCents: CentsSchema.nonnegative(),
+    receipts: z.array(z.object({ date: z.string().date(), amountCents: CentsSchema.nonnegative() })),
+    expenses: z.array(z.object({ year: TaxYearSchema, amountCents: CentsSchema.nonnegative() })),
+    additionalSep: z.array(z.object({ year: TaxYearSchema, personId: z.string(), amountCents: CentsSchema.nonnegative() })),
+  }).superRefine((d, ctx) => {
+    const receipts = d.receipts.reduce((sum, r) => sum + r.amountCents, 0);
+    if (!Number.isSafeInteger(receipts) || receipts !== d.grossRevenueCents)
+      ctx.addIssue({ code: "custom", path: ["grossRevenueCents"], message: "Agreed revenue must equal the total agreed payments." });
+    for (const key of ["expenses", "additionalSep"] as const)
+      if (!Number.isSafeInteger(d[key].reduce((sum, r) => sum + r.amountCents, 0)))
+        ctx.addIssue({ code: "custom", path: [key], message: "The total agreed amount is too large." });
+  }),
+});
 
 export interface AgreedPlanChange {
   year: TaxYear | null;

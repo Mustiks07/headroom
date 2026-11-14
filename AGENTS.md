@@ -10,6 +10,8 @@ Headroom helps US self-employed people protect their ACA health-insurance subsid
 4. Your assignment in `docs/tasks/CLAUDE1.md`, `CLAUDE2.md` or `CLAUDE3.md`.
 5. `docs/ACCEPTANCE.md` — a bounded verification plan and release definition.
 
+Current round: also read `docs/tasks/ROUND3_SHARED.md` and your `CLAUDE<N>_ROUND3.md`. Earlier assignments/handoffs describe history. Round 3 keeps the v1 calculation contract stable and adds a separate household workspace contract owned by Claude 3. Codex performs the final combined review and main integration; each Claude delivers its own branch and handoff.
+
 The user wants a strong, complete, checked result. Public app, README, deck and demo must match the current build. Preserve user-provided final materials; do not replace them with weaker generated versions without agreement. Inspect the actual artifacts judges will open before final publication.
 
 ## Shared decisions

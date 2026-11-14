@@ -66,6 +66,26 @@ describe("saved plan after an engine/rules update (real engine)", () => {
     expect(preview.suggestedScenarioId).toBeNull();
     await expect(confirmPlanUpgrade(repo, (await repo.get(saved.id))!, preview, "retired_kind")).rejects.toMatchObject({ code: "INFEASIBLE_SCENARIO" });
   });
+
+  it("returns the committed revision with a warning when only its history event fails", async () => {
+    const store = new MemoryStore();
+    const repo = createLocalPlanRepository({ store });
+    const saved = await repo.save(await freshPlan(), null);
+    ageStoredPlan(store, saved.id, p => { p.comparison.engineVersion = "old"; });
+    const old = (await repo.get(saved.id))!;
+    const preview = await previewPlanUpgrade(old);
+    if (preview.status !== "ready") throw new Error("expected ready");
+    const eventWrite = vi.spyOn(repo, "appendEvent").mockRejectedValue(new Error("Network unavailable"));
+    const save = vi.spyOn(repo, "save");
+    const result = await confirmPlanUpgrade(repo, old, preview, preview.suggestedScenarioId!);
+    expect(result.revision).toBe(2);
+    expect(result.historyWarning).toContain("Plan saved");
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(eventWrite).toHaveBeenCalledTimes(1);
+    expect((await repo.get(saved.id))?.revision).toBe(2);
+    expect((await repo.listRevisions(saved.id)).map(r => r.revision)).toEqual([1]);
+    expect((await repo.get(saved.id))).not.toHaveProperty("historyWarning");
+  });
 });
 
 describe("cloud failure after a guest session exists", () => {

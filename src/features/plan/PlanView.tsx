@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, Download, FileJson, FileSearch, FlaskConical, History, Mail, RefreshCw, Trash2 } from "lucide-react";
 import type { ComparisonResult, PlanEvent, ReadyComparison, SavedPlan, ScenarioResult } from "@/domain/contracts";
 import { resolveSource } from "@/domain/sources";
-import { calculateComparison } from "@/lib/engine";
+import { calculateComparison, evaluateAgreedPlan, type AgreedPlanEvaluation } from "@/lib/engine";
 import { exportPlanPdf } from "@/lib/client/api";
+import { retainedCompletedActions } from "@/lib/client/completed-actions";
 import { dateTime, money, shortDate, shortFingerprint, signClass, signedMoney } from "@/features/format";
 import { adults, buildCaseInput, draftFromCase, fieldId, invalidProblems, normalizePath, personName, pruneInvalid, type Draft } from "@/features/household/draft";
 import { InvalidInputsProvider } from "@/features/household/invalidInputs";
@@ -19,6 +20,7 @@ import { ComparisonView, baselineLabel, deltaVs, scenarioTrace } from "@/feature
 import { diffInputs } from "./diff";
 import { PlanUpgradePanel } from "./PlanUpgradePanel";
 import { StorageFallback } from "./StorageFallback";
+import { AgreedPlanImpact } from "./AgreedPlanImpact";
 import {
   clearBrowserDrafts, describeStorageError, detectStorageMode, downloadBlob, downloadJson, eventId, fileStamp, planFile, planRepository,
   storageText, type StorageMode,
@@ -112,7 +114,7 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
   async function switchScenario(scenarioId: string) {
     setBusy(scenarioId);
     const next = c.scenarios.find(s => s.id === scenarioId);
-    const ok = await persist({ ...plan, chosenScenarioId: scenarioId, completedActionIds: plan.completedActionIds.filter(a => next?.actions.some(x => x.id === a)) }, null, `Your plan now uses “${next?.label}”.`);
+    const ok = await persist({ ...plan, chosenScenarioId: scenarioId, completedActionIds: retainedCompletedActions(plan.completedActionIds, chosen, next) }, null, `Your plan now uses “${next?.label}”.`);
     setBusy(null);
     if (ok) setShowAll(false);
   }
@@ -154,7 +156,11 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
     {notice && <p className={`notice ${notice.tone === "warn" ? "warn" : "ok"}`} role={notice.tone === "warn" ? "alert" : "status"}>{notice.text}</p>}
     {saveFailure && notice?.tone === "warn" && <StorageFallback error={saveFailure.error} plan={saveFailure.plan}
       onSaved={saved => router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`)} />}
-    <PlanUpgradePanel plan={plan} onStatus={setRulesOutdated} onUpgraded={async () => { setNotice({ tone: "ok", text: "Plan recalculated with the current rules. The previous version is kept in its history." }); await onReload(); }} />
+    <PlanUpgradePanel plan={plan} onStatus={setRulesOutdated} onUpgraded={async (historyWarning) => {
+      setNotice(historyWarning ? { tone: "warn", text: historyWarning }
+        : { tone: "ok", text: "Plan recalculated with the current rules. The previous version is kept in its history." });
+      await onReload();
+    }} />
 
     <section className={`plan-figures ${outdated ? "is-stale" : ""}`} aria-labelledby="figures-title">
       {outdated && <p className="stale-banner">These figures are from your saved plan (revision {plan.revision}). They don&apos;t include the changes you&apos;re making yet.</p>}
@@ -288,7 +294,7 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
   const [draft, setDraft] = useState<Draft>(() => draftFromCase(plan.input));
   const [version, setVersion] = useState(0);
   const [description, setDescription] = useState("");
-  const [calc, setCalc] = useState<{ version: number; pending: boolean; result?: ComparisonResult; input?: SavedPlan["input"]; problems?: Array<{ path: string; reason: string }>; error?: string } | null>(null);
+  const [calc, setCalc] = useState<{ version: number; pending: boolean; result?: ComparisonResult; agreed?: AgreedPlanEvaluation | null; input?: SavedPlan["input"]; problems?: Array<{ path: string; reason: string }>; error?: string } | null>(null);
   const [choice, setChoice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const hasSpouse = plan.input.people.some(p => p.role === "spouse");
@@ -305,8 +311,12 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
     const built = buildCaseInput(draft, "comparison");
     if (!built.ok) { setCalc({ version: v, pending: false, problems: built.problems }); return; }
     try {
-      const result = await calculateComparison(built.input);
-      setCalc({ version: v, pending: false, result, input: built.input });
+      const previous = plan.comparison.scenarios.find(s => s.id === plan.chosenScenarioId);
+      const [result, agreed] = await Promise.all([
+        calculateComparison(built.input),
+        previous ? evaluateAgreedPlan(built.input, previous, previous) : Promise.resolve(null),
+      ]);
+      setCalc({ version: v, pending: false, result, agreed, input: built.input });
       if (result.status === "ready") {
         const same = result.scenarios.find(s => s.id === plan.chosenScenarioId && s.feasible)
           ?? result.scenarios.find(s => s.kind === plan.comparison.scenarios.find(x => x.id === plan.chosenScenarioId)?.kind && s.feasible);
@@ -366,14 +376,14 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
       {!stale && calc?.problems && <ProblemsList title="Before we can recalculate" problems={calc.problems} draft={draft} onGoTo={goTo} />}
       {!stale && calc?.error && <ErrorNotice message={calc.error} onRetry={recalc} />}
       {!stale && calc?.result && calc.result.status !== "ready" && <BlockedResult result={calc.result} draft={calc.input ?? draft} context="comparison" onGoTo={goTo} />}
-      {ready && calc?.input && <ChangeReview before={plan} after={ready} afterInput={calc.input} changes={changes} choice={choice} setChoice={setChoice} onDrawer={onDrawer}
+      {ready && calc?.input && <ChangeReview before={plan} after={ready} agreed={calc.agreed} afterInput={calc.input} changes={changes} choice={choice} setChoice={setChoice} onDrawer={onDrawer}
         saving={saving} onSave={async () => {
           if (!choice || !calc.input) return;
           setSaving(true);
           const kind = CHANGE_KINDS.find(k => k.key === key)?.kind ?? "income_changed";
           const nextScenario = ready.scenarios.find(s => s.id === choice);
           await onSaved({ ...plan, input: calc.input, comparison: ready, chosenScenarioId: choice,
-            completedActionIds: plan.completedActionIds.filter(a => nextScenario?.actions.some(x => x.id === a)) },
+            completedActionIds: retainedCompletedActions(plan.completedActionIds, plan.comparison.scenarios.find(s => s.id === plan.chosenScenarioId), nextScenario) },
           { kind, description: description.trim() || "Plan updated", previousFingerprint: plan.comparison.calculationFingerprint, nextFingerprint: ready.calculationFingerprint });
           setSaving(false);
         }} />}
@@ -381,8 +391,9 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
   </section></InvalidInputsProvider>;
 }
 
-function ChangeReview({ before, after, afterInput, changes, choice, setChoice, onSave, saving, onDrawer }: {
+function ChangeReview({ before, after, agreed, afterInput, changes, choice, setChoice, onSave, saving, onDrawer }: {
   before: SavedPlan; after: ReadyComparison; afterInput: SavedPlan["input"]; changes: ReturnType<typeof diffInputs>;
+  agreed: AgreedPlanEvaluation | null | undefined;
   choice: string | null; setChoice: (id: string) => void; onSave: () => void; saving: boolean; onDrawer: (c: DrawerContent) => void;
 }) {
   const oldChosen = before.comparison.scenarios.find(s => s.id === before.chosenScenarioId);
@@ -398,17 +409,19 @@ function ChangeReview({ before, after, afterInput, changes, choice, setChoice, o
     {changes.length === 0 ? <p className="muted small">No figures changed.</p> : <ul className="diff-list">
       {changes.map(ch => <li key={ch.path}><span>{ch.label}</span><span className="num muted">{ch.before}</span><span aria-hidden="true">→</span><span className="num"><strong>{ch.after}</strong></span></li>)}
     </ul>}
-    <h3 className="small-head">Effect on your plan</h3>
+    <AgreedPlanImpact evaluation={agreed} />
+    <h3 className="small-head">Review the newly calculated options</h3>
+    <p className="muted small">The amounts and dates below may differ from your saved agreement. Confirm any new arrangement before using it.</p>
     <div className="before-after">
       <div><p className="k">Before · saved</p><p className="v num">{oldDelta ? signedMoney(oldDelta.cash) : "—"}</p><p className="muted small">{oldChosen?.label}</p></div>
-      <div><p className="k">After · recalculated</p><p className={`v num ${newDelta ? signClass(newDelta.cash) : ""}`}>{newDelta ? signedMoney(newDelta.cash) : "—"}</p>
+      <div><p className="k">New proposal · recalculated</p><p className={`v num ${newDelta ? signClass(newDelta.cash) : ""}`}>{newDelta ? signedMoney(newDelta.cash) : "—"}</p>
         <p className="muted small">{sameNow ? `${sameNow.label}${sameNow.feasible ? "" : " — no longer available"}` : "This option is no longer offered"}</p></div>
     </div>
     <p className="muted small">Cash after tax-year settlements, {baselineLabel(newBase).toLowerCase()}.</p>
     {sameNow && !sameNow.feasible && <p className="notice warn">Your chosen option no longer works: {sameNow.infeasibilityReasons.join(" ") || "it is outside your limits now."} Choose another below.</p>}
 
     <fieldset className="field">
-      <legend className="field-label">Keep or choose an option</legend>
+      <legend className="field-label">Choose the option to save after reviewing its terms</legend>
       <div className="option-list">
         {feasible.map(s => <OptionRow key={s.id} s={s} base={newBase} checked={choice === s.id} onChange={() => setChoice(s.id)} recommended={s.id === after.recommendedScenarioId} />)}
       </div>
