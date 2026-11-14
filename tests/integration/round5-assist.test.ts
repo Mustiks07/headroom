@@ -181,6 +181,11 @@ describe("decision lifecycle and calendar", () => {
     const record = afterAgreement.dealPlanning!.decisionRecords![0];
     expect(record).toMatchObject({ status: "client_agreed", searchFingerprint: pkg.searchFingerprint, workspaceRevision: withPkg.revision });
     expect((await recordClientAgreement(afterAgreement, pkg.id)).workspace.dealPlanning!.decisionRecords).toHaveLength(1); // retry: no second record
+    // The comparison context and the client's first offer travel with the decision; the offer is captured once and kept.
+    expect(pkg.decisionContext!.alternatives.find(a => a.chosen)!.variantId).toBe("v-cash");
+    expect(record.decisionContext!.originalOffer).toMatchObject({ source: { kind: "existing_project" }, confirmation: "captured" });
+    const offerAtAgreement = afterAgreement.projects.find(p => p.id === pkg.projectId)!.originalOffer!;
+    expect(offerAtAgreement.priceCents).toBe(record.decisionContext!.originalOffer!.priceCents);
 
     expect((await json(exportDecision, { workspace: afterAgreement, packageId: pkg.id })).status).toBe(409); // current export refuses old numbers
     const hist = await json(exportRecord, { workspace: afterAgreement, recordId: record.id });
@@ -190,6 +195,7 @@ describe("decision lifecycle and calendar", () => {
     expect(text).toMatch(/Decision recorded on .*; figures as of plan revision/);
     expect(text).toContain("not a fresh recommendation");
     expect(text).toContain("+$5,123.00");
+    expect(text).toContain("Client's original offer");
 
     // Current calendar: the agreed open payments; then one is received, one moves.
     const cal1 = await exportCurrentCalendar(repo, afterAgreement, new Date("2026-11-16T12:00:00Z"));
@@ -215,9 +221,72 @@ describe("decision lifecycle and calendar", () => {
     expect(later).toContain("+$5,123.00");
     expect(later).toMatch(/Received \$5,000.00 on 2026-12-15/);
     expect(later).toMatch(/now expects \$8,000.00 on 2027-01-08/);
+    expect(changed.projects.find(p => p.id === pkg.projectId)!.originalOffer).toEqual(offerAtAgreement); // moved payment never rewrites the original offer
 
     // Old/new state survives JSON export → restore.
     const restored = analyzeWorkspaceFile(await exportWorkspaceJson(changed).text());
     expect(restored.status === "workspace" && restored.workspace.dealPlanning).toEqual(changed.dealPlanning);
+  });
+});
+
+describe("explanations bound to the plan revision; insurance lookups", () => {
+  it("a confirmed new offer keeps its original terms when a payment later moves", async () => {
+    const ws = structuredClone(workspaceFixture) as HouseholdWorkspace;
+    const base = { workspaceId: ws.id, revision: ws.revision, fingerprint: await engineWorkspaceFingerprint(ws) };
+    const offer: ChangeProposal = { id: "prop-offer", createdAt: "2026-11-16T10:00:00Z", base, intent: "offer", ambiguities: [], resolvedDates: [], evidence: [], provenance: "ai_model", status: "proposed",
+      commands: [{ type: "add_offered_project", title: "Site redesign", ownerPersonId: "primary", totalPriceCents: 900_000, received: [], unpaid: [{ amountCents: 900_000, date: "2026-12-20" }], expenses: [], priceNegotiable: true, scheduleNegotiable: true }] };
+    const added = (await applyChangeProposal(ws, offer)).workspace;
+    const project = added.projects.at(-1)!;
+    expect(project.originalOffer).toMatchObject({ priceCents: 900_000, payments: [{ amountCents: 900_000, date: "2026-12-20" }], source: { kind: "assistant_text" }, confirmation: "user_confirmed" });
+    added.revision += 1;
+    const move: ChangeProposal = { ...offer, id: "prop-move", intent: "update", base: { workspaceId: added.id, revision: added.revision, fingerprint: await engineWorkspaceFingerprint(added) },
+      commands: [{ type: "update_expected_payment", projectId: project.id, lineId: project.receipts[0].id, newAmountCents: null, newDate: "2027-01-08" }] };
+    const moved = (await applyChangeProposal(added, move)).workspace;
+    expect(moved.projects.at(-1)!.receipts[0].expected!.date).toBe("2027-01-08");
+    expect(moved.projects.at(-1)!.originalOffer).toEqual(project.originalOffer);
+  });
+
+  it("rebuilds the packet on the server, labels a browser packet, and only accepts a number-free provider framing", async () => {
+    const ws = structuredClone(workspaceFixture) as HouseholdWorkspace;
+    const server = await (await json(explain, { workspace: ws, subject: "current_year", consentToProvider: false })).json();
+    expect(server.verification).toMatchObject({ origin: "server_recomputed", workspaceId: ws.id, workspaceRevision: ws.revision });
+    expect(server.explanation.text).toMatch(/2026 household income for the subsidy is \$/);
+    const legacy = await (await json(explain, { packet: { id: "p", subject: "current_year", fingerprint: "f", facts: [], statements: ["Fine."], limitations: [] } })).json();
+    expect(legacy.verification.origin).toBe("client_packet_unverified");
+
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abcdefgh.supabase.co"); vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_testvalue");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_testvalue"); vi.stubEnv("AI_PROVIDER", "anthropic"); vi.stubEnv("AI_API_KEY", "sk-ant-test-not-real");
+    vi.stubEnv("AI_FEATURES", "explanation"); vi.stubEnv("AI_MODEL", "claude-haiku-5-5");
+    requireOwner.mockResolvedValue({ userId: "11111111-1111-4111-8111-111111111111", db: {} });
+    rpc.mockImplementation(async (name: string) => name === "headroom_settle_ai_spend" ? { data: null, error: null } : { data: [{ reservation_id: "r1", outcome: "ok" }], error: null });
+    create.mockResolvedValueOnce({ stop_reason: "end_turn", usage: { input_tokens: 300, output_tokens: 30 }, content: [{ type: "text", text: "In short, your income still lets you keep the credit this year." }] });
+    const framed = await (await json(explain, { workspace: ws, subject: "current_year", consentToProvider: true })).json();
+    expect(framed).toMatchObject({ providerUsed: true, explanation: { source: "ai_model" } });
+    expect(framed.explanation.text.startsWith("In short, your income still lets you keep the credit this year. ")).toBe(true);
+    expect(framed.explanation.text).toContain(server.explanation.text.slice(0, 60)); // the figures are still the engine's template sentences
+  });
+
+  it("insurance: county candidate with source/version/date; county by name; ZIP lookup off or ambiguous, never guessed", async () => {
+    const { POST: benchmark } = await import("@/app/api/insurance/benchmark/route");
+    const { GET: location } = await import("@/app/api/insurance/location/route");
+    const { lookupCountiesByZip } = await import("@/lib/server/insurance");
+    const ws = structuredClone(workspaceFixture) as HouseholdWorkspace;
+    ws.household.years[0].benchmarkStatus = "county_candidate";
+    const b = await (await json(benchmark, { workspace: ws, year: 2026 })).json();
+    expect(b).toMatchObject({ status: "county_candidate", countyFips: "47037", source: { kind: "cms_county_extract", dataVersion: "PY2026", sourceDate: "2026-11-14" } });
+    expect(b.source.sha256).toMatch(/^[0-9a-f]{64}$/);
+    ws.household.countyFips = null;
+    expect((await (await json(benchmark, { workspace: ws, year: 2026 })).json()).status).toBe("not_available");
+
+    const get = (qs: string) => location(new Request(`http://localhost/api/insurance/location?${qs}`));
+    expect(await (await get("state=TN&q=david")).json()).toMatchObject({ status: "single", counties: [{ countyFips: "47037", planDataYears: [2026, 2027] }] });
+    expect((await (await get("state=CA&q=los")).json()).status).toBe("not_available");
+    expect((await (await get("zip=37203")).json()).status).toBe("not_available"); // no MARKETPLACE_API_KEY → off, no external call
+    const twoCounties = vi.fn(async () => new Response(JSON.stringify({ counties: [{ fips: "47037", name: "Davidson County", state: "TN" }, { fips: "47187", name: "Williamson County", state: "TN" }] })));
+    const amb = await lookupCountiesByZip("37027", { MARKETPLACE_API_KEY: "test-key-not-real-0000" } as unknown as NodeJS.ProcessEnv, twoCounties as unknown as typeof fetch);
+    expect(amb).toMatchObject({ status: "ambiguous", counties: [{ countyFips: "47037", planDataYears: [2026, 2027] }, { countyFips: "47187", planDataYears: [] }] });
+    expect(String((twoCounties.mock.calls[0] as unknown[])[0])).toMatch(/^https:\/\/marketplace\.api\.healthcare\.gov\/api\/v1\/counties\/by\/zip\/37027\?apikey=/);
+    const odd = await lookupCountiesByZip("37028", { MARKETPLACE_API_KEY: "test-key-not-real-0000" } as unknown as NodeJS.ProcessEnv, (async () => new Response("{}")) as unknown as typeof fetch);
+    expect(odd.status).toBe("not_available");
   });
 });

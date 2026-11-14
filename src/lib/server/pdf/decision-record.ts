@@ -74,9 +74,24 @@ export function buildDecisionRecordModel({ ws, record, snapshot, goal, variant, 
     ...variant.terms.payments.map((p, i) => [`Payment ${i + 1}`, p.date, money(p.amountCents)]),
     ...(variant.terms.additionalSep ? [[`Additional SEP-IRA for ${variant.terms.additionalSep.year}`, "-", money(variant.terms.additionalSep.amountCents)]] : []),
   ] });
+  const ctx = record.decisionContext;
+  if (ctx) {
+    blocks.push({ type: "heading", text: "Original offer and what was compared" });
+    const offer = ctx.originalOffer;
+    blocks.push({ type: "keyValues", rows: [
+      ["Client's original offer", offer ? `${money(offer.priceCents)}: ${offer.payments.map(p => `${money(p.amountCents)}${p.date ? ` on ${p.date}` : " (date unknown)"}`).join(", ")}` : "Not recorded"],
+      ["Offer source", offer ? `${offer.source.kind.replace(/_/g, " ")}${offer.confirmation === "captured" ? " (read from the saved project, not re-confirmed)" : " (confirmed by you)"}` : "-"],
+      ["Baseline of the comparison", ctx.baseline.label],
+      ["Horizon", `${ctx.horizon.from} to ${ctx.horizon.through}; tax settlement through ${ctx.horizon.settlementThrough}`],
+    ] });
+    if (ctx.alternatives.length) blocks.push({ type: "table", columns: [{ title: "Option (then)", width: 0.46 }, { title: "Price", width: 0.16, align: "right" }, { title: "Cash vs baseline", width: 0.19, align: "right" }, { title: "vs the offer", width: 0.19, align: "right" }],
+      rows: ctx.alternatives.map(a => [`${a.label}${a.chosen ? " - chosen" : ""}${a.recommended ? " - recommended" : ""}`, money(a.priceCents), signed(a.twoYearCashDeltaCents),
+        a.comparisons?.versusOfferedCents == null ? "-" : signed(a.comparisons.versusOfferedCents)]) });
+    if (ctx.recommendationReasons.length) blocks.push({ type: "bullets", items: ctx.recommendationReasons });
+  }
   blocks.push({ type: "heading", text: "Figures as calculated then" });
   blocks.push({ type: "keyValues", rows: [
-    ["Change in spendable cash after both tax years (vs. the plan without the unpaid terms)", signed(variant.twoYearCashDeltaCents)],
+    [`Change in spendable cash after both tax years (vs. ${goal.baseline === "accept_as_offered" ? "accepting the offer as it stood" : "the plan without the unpaid terms"})`, signed(variant.twoYearCashDeltaCents)],
     ["Added to retirement (separate; not spendable cash)", money(variant.retirementAddedCents)],
     ...variant.aca.map(a => [`${a.year}: income for the subsidy / premium tax credit`, `${money(a.magiCents)} / ${money(a.ptcCents)}${a.creditLost ? " (credit lost)" : ""}`] as [string, string]),
   ] });

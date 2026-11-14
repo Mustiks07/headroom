@@ -142,8 +142,17 @@ export function onlyPacketFigures(text: string, packet: ExplanationPacket): bool
   return tokens.every(tok => allowed.has(norm(tok)) || /^\d$/.test(tok)); // single digits ("2 payments") are not financial figures
 }
 
-const EXPLAIN_SYSTEM = `Rewrite the given explanation in plain, friendly English for a self-employed person (at most 120 words).
-Use ONLY the figures and dates that appear in the explanation or the facts list, written exactly the same way. Do not add new numbers, percentages, dates, advice or promises. Keep the limitations.`;
+/** True when a text contains no digits at all (no amounts, dates, years or percentages). */
+export function figureFree(text: string): boolean {
+  return !/\d/.test(text);
+}
+
+/*
+ * The provider writes only a short, NUMBER-FREE framing of what the explanation means. Every financial
+ * statement stays the engine's template sentence, so a figure can never be attached to the wrong meaning.
+ */
+const EXPLAIN_SYSTEM = `Write one or two short sentences in plain, friendly English (at most 50 words) that tell a self-employed person what the explanation below means for them.
+Do not write ANY digits: no amounts, percentages, dates or years. Do not give advice, recommendations or promises, and do not add facts that are not in the explanation.`;
 
 export async function explainWithProvider(packet: ExplanationPacket, reservation: AiReservation): Promise<ProviderCall<string>> {
   const client = new Anthropic({ apiKey: reservation.apiKey, timeout: reservation.timeoutMs, maxRetries: 0 });
