@@ -68,7 +68,7 @@ describe("service states without keys", () => {
     vi.stubEnv("AI_PROVIDER", "none");
     vi.stubEnv("STRIPE_SECRET_KEY", "");
     const body = await (await capabilitiesRoute.GET()).json();
-    expect(body).toEqual({ cloudSave: false, aiExtraction: false, checkoutMode: "demo", localTextImport: true });
+    expect(body).toEqual({ cloudSave: false, aiExtraction: false, aiTextProposals: false, aiExplanations: false, checkoutMode: "demo", localTextImport: true });
   });
 
   it("cloud plan API answers 503 (not a fake save) when Supabase is not configured", async () => {

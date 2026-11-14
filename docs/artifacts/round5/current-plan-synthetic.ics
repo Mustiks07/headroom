@@ -1,0 +1,117 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Headroom//Current plan 1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Headroom plan
+BEGIN:VEVENT
+UID:dc9f5843-c1b2-4697-affc-23f7cb2b3325.proj-b.line-pay-w-dec-pkg-proj-b-e
+ 55ff0e3fd5d-v-simplest.receipt@headroom.plan
+DTSTAMP:20261114T231051Z
+DTSTART;VALUE=DATE:20261201
+DTEND;VALUE=DATE:20261202
+SEQUENCE:0
+SUMMARY:Expect $400.00 from “December design project”
+DESCRIPTION:Agreed payment date. When it arrives\, record the actual amount
+  and date in Headroom.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Expect $400.00 from “December design project”
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:dc9f5843-c1b2-4697-affc-23f7cb2b3325.proj-a.a-pay-2.receipt@headroom.pl
+ an
+DTSTAMP:20261114T231051Z
+DTSTART;VALUE=DATE:20261215
+DTEND;VALUE=DATE:20261216
+SEQUENCE:0
+SUMMARY:Expect $3\,000.00 from “Bakery website redesign”
+DESCRIPTION:Agreed payment date. When it arrives\, record the actual amount
+  and date in Headroom.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Expect $3\,000.00 from “Bakery website redesign”
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:dc9f5843-c1b2-4697-affc-23f7cb2b3325.proj-b.line-pay-w-jan-pkg-proj-b-e
+ 55ff0e3fd5d-v-simplest.receipt@headroom.plan
+DTSTAMP:20261114T231051Z
+DTSTART;VALUE=DATE:20270104
+DTEND;VALUE=DATE:20270105
+SEQUENCE:0
+SUMMARY:Expect $11\,600.00 from “December design project”
+DESCRIPTION:Agreed payment date. When it arrives\, record the actual amount
+  and date in Headroom.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Expect $11\,600.00 from “December design project”
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:dc9f5843-c1b2-4697-affc-23f7cb2b3325.proj-b.settle-2026@headroom.plan
+DTSTAMP:20261114T231051Z
+DTSTART;VALUE=DATE:20270415
+DTEND;VALUE=DATE:20270416
+SEQUENCE:0
+SUMMARY:Keep about $119 for this project's extra 2026 tax and credit repaym
+ ent (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Action from your saved terms in Headroom. Planning reminder\, n
+ ot an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $119 for this project's extra 2026 tax and credit re
+ payment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:dc9f5843-c1b2-4697-affc-23f7cb2b3325.sep.primary.2026@headroom.plan
+DTSTAMP:20261114T231051Z
+DTSTART;VALUE=DATE:20270415
+DTEND;VALUE=DATE:20270416
+SEQUENCE:0
+SUMMARY:SEP-IRA: $3\,000.00 of your 2026 goal still to contribute
+DESCRIPTION:2026 SEP-IRA contributions are due by the due date of your 2026
+  return\; a later date applies only if you file an extension (IRS Publicat
+ ion 560). Record the contribution in Headroom when you make it.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:SEP-IRA: $3\,000.00 of your 2026 goal still to contribute
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:dc9f5843-c1b2-4697-affc-23f7cb2b3325.proj-b.settle-2027@headroom.plan
+DTSTAMP:20261114T231051Z
+DTSTART;VALUE=DATE:20280418
+DTEND;VALUE=DATE:20280419
+SEQUENCE:0
+SUMMARY:Keep about $3\,581 for this project's extra 2027 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Action from your saved terms in Headroom. Planning reminder\, n
+ ot an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $3\,581 for this project's extra 2027 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+END:VCALENDAR

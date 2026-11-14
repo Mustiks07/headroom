@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { CashContext, DealSearchResult, DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { dealCashFixture, dealGoalFixture, dealTermsFixture, dealWorkspaceFixture } from "@/fixtures/deal-planning";
-import { evaluateDecisionSensitivity, evaluateHouseholdWorkspace, searchDealTerms } from "@/lib/engine";
+import { evaluateDecisionSensitivity, evaluateHouseholdWorkspace, searchDealTerms, type EngineDealVariant } from "@/lib/engine";
 import { annual, completeCash, deal, dealWorkspace, line, T } from "./deal-fixture";
 import { usd } from "./helpers";
 
@@ -63,14 +63,18 @@ async function householdYears(ws: HouseholdWorkspace) {
 }
 
 describe("deal search: achievable goal with an agreed deposit (A) and an offer (B)", () => {
-  it("returns up to three exact options that satisfy every constraint; simpler terms are recommended only within the threshold", async () => {
+  it("returns up to three exact options; the smallest change of terms that holds is recommended, more cash is conditional on the client", async () => {
     const d = deal();
     const r = ready(await search(dealWorkspace(), d));
     checkVariants(r, d, 0);
     expect(r.simplerVariantThresholdCents).toBe(usd(120));                              // max($100, 1% of the $12,000 offer)
-    const simplest = v(r, "simplest"), most = v(r, "most_cash");
-    expect(most.twoYearCashDeltaCents).toBeGreaterThan(simplest.twoYearCashDeltaCents + r.simplerVariantThresholdCents);
-    expect(r.recommendedVariantId).toBe(most.id);
+    const simplest = v(r, "simplest") as EngineDealVariant, most = v(r, "most_cash") as EngineDealVariant;
+    expect(r.recommendedVariantId).toBe(simplest.id);
+    expect(simplest.terms.priceCents).toBe(usd(12000));                                  // the offered price: only the schedule changes
+    expect(simplest.robustness).toMatchObject({ holds: true, basis: "room_policy" });
+    expect(most.label).toMatch(/^More cash, if the client agrees/);
+    expect(most.robustness.holds).toBe(false);                                           // $202 of room
+    for (const x of [simplest, most]) expect(x.comparisons.versusOfferedCents).toBe(x.comparisons.versusDeclineCents + usd(3616));   // offer as is: −$3,616
     expect(r.baseline.kind).toBe("decline_unpaid_terms");
     expect(r.cashCompleteness).toBe("project_only");
   });
@@ -93,8 +97,9 @@ describe("deal search: achievable goal with an agreed deposit (A) and an offer (
     const decCash = deal({ targets: [{ id: "dec31", kind: "project_available_cash", byDate: "2026-12-31", minimumCents: usd(5000) }] });
     const byDec = ready(await search(dealWorkspace(), decCash));
     checkVariants(byDec, decCash, 0);
-    expect(v(byJan, "simplest").terms.payments.every(p => p.date >= "2027-01-01")).toBe(true);    // all in January is simplest
-    expect(v(byDec, "simplest").terms.payments.some(p => p.date <= "2026-12-31")).toBe(true);     // cash by Dec 31 needs a December payment
+    expect(v(byJan, "simplest").terms).not.toEqual(v(byDec, "simplest").terms);
+    expect(v(byDec, "simplest").terms.payments.find(p => p.date <= "2026-12-31")!.amountCents)
+      .toBeGreaterThan(v(byJan, "simplest").terms.payments.find(p => p.date <= "2026-12-31")!.amountCents);   // cash by Dec 31 needs more in December
     for (const x of byDec.variants) expect(x.dateTargets[0].achievedCents!).toBeGreaterThanOrEqual(usd(5000));
   });
 
@@ -103,9 +108,11 @@ describe("deal search: achievable goal with an agreed deposit (A) and an offer (
     const show = (x: DealVariant) => [x.purpose, x.terms.priceCents / 100, x.terms.payments.map(p => `${p.date} ${p.amountCents / 100}`).join(" + "),
       (x.terms.additionalSep?.amountCents ?? 0) / 100, x.twoYearCashDeltaCents / 100];
     expect(r.variants.map(show)).toEqual([
-      ["simplest", 12000, "2027-01-04 12000", 33, 8268],
-      ["most_cash", 15000, "2026-12-15 9002 + 2027-01-04 5998", 0, 10390],
-      ["most_retirement", 15000, "2026-12-15 10250 + 2027-01-04 4750", 1000, 9571],
+      // Round 5 policy: the smallest change that holds is a new schedule at the offered price ($3,804 of room). Round 4 showed
+      // $12,000 in January + $33 SEP (+$8,268), which kept the 2027 credit with $0 of room; it is no longer offered as "simplest".
+      ["simplest", 12000, "2026-12-15 5400 + 2027-01-04 6600", 0, 8310],
+      ["most_cash", 15000, "2026-12-15 9002 + 2027-01-04 5998", 0, 10390],                  // conditional on the client; $202 of room
+      ["lowest_risk", 14500, "2026-12-15 5750 + 2027-01-04 8750", 0, 10037],
     ]);
     const nf = await search(dealWorkspace(), deal({ minCash: 12000, maxPrice: 13000 }));
     expect(nf.status === "no_feasible_terms" && nf.relaxations.map(x => [x.constraint, x.requiredCents])).toEqual([["minimum_cash", usd(9006)], ["price_max", usd(17500)]]);
@@ -169,6 +176,13 @@ describe("deal search: limits and explanations", () => {
       .then(x => v(ready(x), "most_cash").dateTargets[0].achievedCents!);
     const early = { ...completeCash(), snapshot: { date: "2026-09-30", balanceCents: usd(20000), sourceId: "demo-input" }, completeness: { confirmed: true, from: "2026-09-30", through: "2027-04-30" } };
     expect(await at({ ...early, includedFactIds: [] }) - await at({ ...early, includedFactIds: ["a1"] })).toBe(usd(3000));  // a1 after the snapshot: added once
+
+    // A fact dated ON the snapshot day: the included ids decide; without them the balance is not calculated.
+    const onDay = { ...early, snapshot: { date: "2026-10-02", balanceCents: usd(20000), sourceId: "demo-input" }, completeness: { confirmed: true, from: "2026-10-02", through: "2027-04-30" } };
+    const amb = await search(dealWorkspace(), { ...d, goal: { ...d.goal, dateTargets: [{ id: "hb", kind: "household_balance", byDate: "2027-04-30", minimumCents: 0 }] } }, { ...onDay, includedFactIds: [] });
+    expect(ready(amb).variants[0].dateTargets[0]).toMatchObject({ achievedCents: null, met: null });
+    expect(ready(amb).variants[0].dateTargets[0].explanation).toMatch(/day of your balance/);
+    expect(await at({ ...onDay, includedFactIds: ["a1"] })).toBe(await at({ ...early, includedFactIds: ["a1"] }) );  // same facts, a1 in the balance either way
 
     const paid = dealWorkspace();
     paid.retirement.contributions = [{ id: "sep-p", personId: "primary", taxYear: 2026, amountCents: usd(400), paidDate: "2026-11-20", sourceId: "demo-input", recordedAt: T }];

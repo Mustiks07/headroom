@@ -11,6 +11,7 @@ export { ENGINE_VERSION, RULES_VERSION } from "./rules";
 export { calculationFingerprint } from "./common";
 export * from "./household";
 export * from "./deal";
+export * from "./assist";
 export type { AgreedPlan, AgreedPlanChange, AgreedPlanOutcome } from "./agreed";
 
 export { AT_RISK_SHARE } from "./risk";

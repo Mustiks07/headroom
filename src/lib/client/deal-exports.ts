@@ -1,5 +1,8 @@
+import type { IssuedCalendarEvent } from "@/domain/assistance";
 import type { ActionPackage, DealVariant, ReadyDealSearch, Reminder } from "@/domain/deal-planning";
 import { sepPosition, type HouseholdWorkspace } from "@/domain/household-workspace";
+import type { DecisionContext } from "@/domain/decision-context";
+import { originalOfferFromLines } from "./workspace-commands";
 
 /**
  * Deterministic builders for the action package (round 4). No money is calculated here: every
@@ -10,10 +13,31 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD",
 export const money = (cents: number) => usd.format(cents / 100);
 const longDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
+/** Stored UIDs are limited to 200 characters (Reminder / IssuedCalendarEvent schemas). */
+export const MAX_CALENDAR_UID = 200;
+const UID_DOMAIN = "@headroom.plan";
+
+/** Deterministic 64-bit FNV-1a hex of a string (sync, same result in browser and server). */
+function fnv1a64(text: string): string {
+  let h = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(text)) { h ^= BigInt(byte); h = (h * 0x100000001b3n) & 0xffffffffffffffffn; }
+  return h.toString(16).padStart(16, "0");
+}
+
+/**
+ * Stable calendar UID from its parts. Short UIDs keep the readable form used since round 4 (so
+ * events already issued still match); a UID that would exceed the stored limit keeps a readable
+ * prefix plus a hash of the FULL readable form — still stable across exports and unique per parts.
+ */
+export function calendarUid(...parts: string[]): string {
+  const readable = parts.map(p => p.replace(/[^A-Za-z0-9._-]/g, "-")).join(".");
+  if (readable.length + UID_DOMAIN.length <= MAX_CALENDAR_UID) return `${readable}${UID_DOMAIN}`;
+  return `${readable.slice(0, 150)}.h${fnv1a64(readable)}${UID_DOMAIN}`;
+}
+
 /** Stable calendar UID per workspace + project + action (re-exports update the same event). */
 export function reminderUid(workspaceId: string, projectId: string, actionId: string): string {
-  const clean = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, "-");
-  return `${clean(workspaceId)}.${clean(projectId)}.${clean(actionId)}@headroom.plan`;
+  return calendarUid(workspaceId, projectId, actionId);
 }
 
 export interface ClientDraft { subject: string; body: string; includesHouseholdDetails: boolean; generatedAt: string }
@@ -112,6 +136,45 @@ export function termsAddUp(ws: HouseholdWorkspace, projectId: string, variant: D
   return variant.terms.payments.reduce((t, p) => t + p.amountCents, 0) === variant.terms.priceCents - received;
 }
 
+const PURPOSE_REASON: Record<DealVariant["purpose"], string> = {
+  simplest: "The smallest change to the offered terms that meets your goal.",
+  as_offered: "The offer as it stands already meets your goal.",
+  most_cash: "The most cash among the calculated options; it needs the client to agree to the changed terms.",
+  earliest_money: "Gets the money to you earliest among the calculated options.",
+  most_retirement: "Adds the most to retirement savings among the calculated options.",
+  lowest_risk: "Leaves the most room before a premium tax credit is lost.",
+};
+
+/**
+ * What the choice was compared with: baseline, horizon, the calculated options with the engine's own
+ * comparisons, and deterministic recommendation reasons (engine purpose + engine warnings). Copies
+ * engine figures; computes nothing.
+ */
+function originalOfferOf(ws: HouseholdWorkspace, projectId: string) {
+  const project = ws.projects.find(p => p.id === projectId);
+  if (!project) return null;
+  return project.originalOffer ?? originalOfferFromLines(project, ws.updatedAt, { kind: "existing_project", sourceId: null }, "captured");
+}
+
+export function buildDecisionContext(ws: HouseholdWorkspace, result: ReadyDealSearch, chosenVariantId: string): DecisionContext {
+  const clip = (t: string) => (t.length <= 400 ? t : `${t.slice(0, 399)}…`);
+  const recommended = result.variants.find(v => v.id === result.recommendedVariantId) ?? null;
+  const reasons: string[] = [];
+  if (recommended) reasons.push(`Recommended: ${PURPOSE_REASON[recommended.purpose]}`);
+  if (recommended && recommended.id !== chosenVariantId) reasons.push("You chose a different calculated option than the recommended one.");
+  reasons.push(...result.warnings.map(clip));
+  return {
+    baseline: { kind: result.baseline.kind, label: result.baseline.label.slice(0, 200), description: result.baseline.description.slice(0, 600) },
+    horizon: { ...result.horizon },
+    alternatives: result.variants.slice(0, 3).map(v => ({ variantId: v.id, label: v.label.slice(0, 200), purpose: v.purpose, priceCents: v.terms.priceCents,
+      twoYearCashDeltaCents: v.twoYearCashDeltaCents, comparisons: v.comparisons ?? null, holds: v.robustness?.holds ?? null,
+      chosen: v.id === chosenVariantId, recommended: v.id === result.recommendedVariantId })),
+    recommendedVariantId: result.recommendedVariantId,
+    recommendationReasons: reasons.slice(0, 8),
+    originalOffer: originalOfferOf(ws, result.projectId),
+  };
+}
+
 export function buildActionPackage(ws: HouseholdWorkspace, result: ReadyDealSearch, variantId: string,
   options: { includeHouseholdDetails?: boolean; now?: Date; id?: string } = {}): ActionPackage {
   const variant = result.variants.find(v => v.id === variantId);
@@ -132,6 +195,7 @@ export function buildActionPackage(ws: HouseholdWorkspace, result: ReadyDealSear
     reminders: buildReminders(ws, result.projectId, variant),
     specialistNote: buildSpecialistNote(ws, result, variant),
     status: "draft",
+    decisionContext: buildDecisionContext(ws, result, variant.id),
   };
 }
 
@@ -176,3 +240,89 @@ export function buildCalendar(ws: HouseholdWorkspace, pkg: ActionPackage, now = 
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";
 }
+
+/* ------------------------------------------------------------------ current agreed-plan calendar (round 5) */
+
+
+export interface PlanCalendarEvent { uid: string; date: string; title: string; description: string }
+
+/** Due date of the individual return for a tax year (no extension). SEP can be later only with a filed extension (IRS Pub. 560). */
+const RETURN_DUE: Record<number, string> = { 2026: "2027-04-15", 2027: "2028-04-17" };
+
+/**
+ * What is still relevant NOW: open expected payments of agreed projects, open package actions
+ * (except payment receipts, already covered), and remaining SEP-IRA goals. Received payments,
+ * paid SEP, cancelled lines and done/superseded actions are not included.
+ */
+export function currentPlanEvents(ws: HouseholdWorkspace): PlanCalendarEvent[] {
+  const events: PlanCalendarEvent[] = [];
+  const uid = calendarUid;
+  for (const p of ws.projects) {
+    if (p.status !== "agreed") continue;
+    for (const l of p.receipts) {
+      if (l.actual || l.cancelledAt || !l.expected) continue;
+      events.push({ uid: uid(ws.id, p.id, l.id, "receipt"), date: l.expected.date, title: `Expect ${money(l.expected.amountCents)} from “${p.title}”`,
+        description: "Agreed payment date. When it arrives, record the actual amount and date in Headroom." });
+    }
+  }
+  for (const pkg of ws.dealPlanning?.packages ?? []) {
+    if (pkg.status === "superseded") continue;
+    for (const r of pkg.reminders) {
+      const action = pkg.variant.actions.find(a => a.id === r.actionId);
+      if (r.status !== "open" || !r.date || action?.kind === "receive_payment") continue;
+      events.push({ uid: r.uid, date: r.date, title: r.title, description: "Action from your saved terms in Headroom. Planning reminder, not an official deadline notice." });
+    }
+  }
+  for (const year of [2026, 2027] as const) for (const person of ws.household.people) {
+    const s = sepPosition(ws, person.id, year);
+    if (s.targetCents === null || s.remainingCents <= 0) continue;
+    events.push({ uid: uid(ws.id, "sep", person.id, String(year)), date: RETURN_DUE[year],
+      title: `SEP-IRA: ${money(s.remainingCents)} of your ${year} goal still to contribute${person.role === "spouse" ? " (spouse)" : ""}`,
+      description: `${year} SEP-IRA contributions are due by the due date of your ${year} return; a later date applies only if you file an extension (IRS Publication 560). Record the contribution in Headroom when you make it.` });
+  }
+  return events.sort((a, b) => a.date.localeCompare(b.date) || a.uid.localeCompare(b.uid));
+}
+
+/**
+ * Calendar of the CURRENT plan. Events issued before keep their UID; a changed date/title gets
+ * SEQUENCE + 1; events that no longer apply are sent as STATUS:CANCELLED (SEQUENCE + 1) so that
+ * calendars honouring UID/SEQUENCE remove them on re-import. Returns the ICS text and the updated
+ * issued list, which the caller saves (see exportCurrentCalendar).
+ */
+export function buildCurrentCalendar(ws: HouseholdWorkspace, now = new Date()): { ics: string; issued: IssuedCalendarEvent[]; active: number; cancelled: number } {
+  const previous = new Map((ws.dealPlanning?.calendar?.issued ?? []).map(e => [e.uid, e]));
+  const current = currentPlanEvents(ws);
+  const at = now.toISOString();
+  const issued: IssuedCalendarEvent[] = [];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Headroom//Current plan 1.0//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Headroom plan"];
+  const vevent = (e: { uid: string; date: string; title: string; description: string }, sequence: number, status: "CONFIRMED" | "CANCELLED") => {
+    lines.push("BEGIN:VEVENT", `UID:${e.uid}`, `DTSTAMP:${stamp(now)}`, `DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${nextDay(e.date)}`,
+      `SEQUENCE:${sequence}`, `SUMMARY:${escapeText(status === "CANCELLED" ? `Cancelled: ${e.title}` : e.title)}`, `DESCRIPTION:${escapeText(e.description)}`,
+      `STATUS:${status}`, "TRANSP:TRANSPARENT");
+    if (status === "CONFIRMED") lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${escapeText(e.title)}`, "TRIGGER:-P1D", "END:VALARM");
+    lines.push("END:VEVENT");
+  };
+  let cancelled = 0;
+  for (const e of current) {
+    const prev = previous.get(e.uid);
+    const sequence = !prev ? 0 : prev.status === "cancelled" || prev.date !== e.date || prev.title !== e.title ? prev.sequence + 1 : prev.sequence;
+    vevent(e, sequence, "CONFIRMED");
+    issued.push({ uid: e.uid, sequence, date: e.date, title: e.title.slice(0, 300), status: "active", issuedAt: at });
+  }
+  const currentUids = new Set(current.map(e => e.uid));
+  for (const prev of previous.values()) {
+    if (currentUids.has(prev.uid)) continue;
+    const sequence = prev.status === "cancelled" ? prev.sequence : prev.sequence + 1;
+    // Keep sending the cancellation for a while so a later import still removes it.
+    const ageDays = (now.getTime() - new Date(`${prev.date}T00:00:00Z`).getTime()) / 86_400_000;
+    if (ageDays > 60) continue;
+    vevent({ uid: prev.uid, date: prev.date, title: prev.title, description: "This plan action no longer applies (paid, moved or cancelled in Headroom)." }, sequence, "CANCELLED");
+    issued.push({ ...prev, sequence, status: "cancelled", issuedAt: at });
+    cancelled++;
+  }
+  lines.push("END:VCALENDAR");
+  return { ics: lines.map(fold).join("\r\n") + "\r\n", issued: issued.slice(0, 300), active: current.length, cancelled };
+}
+
+/** Honest note for the export button: downloaded files never update by themselves. */
+export const CALENDAR_IMPORT_NOTE = "Downloaded calendar files don't update by themselves. Download again after changes: Apple Calendar and Outlook update or cancel events with the same ID; Google Calendar's file import may add duplicates and ignore cancellations, so delete outdated events there yourself.";

@@ -62,26 +62,60 @@ function looksLikeBankStatement(lines: string[]): boolean {
  * Deterministic reader for supported CSV/TXT exports and pasted text. It proposes only
  * whitelisted figures with a redacted source line; the user must confirm each one.
  */
-type DocumentKind = "pay stub" | "Marketplace notice" | "project offer" | "W-2" | null;
+type DocumentKind = "profit and loss statement" | "pay stub" | "Marketplace notice" | "project offer" | "invoice" | "payment confirmation" | "SEP contribution confirmation" | "W-2" | "prior-year tax return" | null;
 
 /** A coarse, explainable guess used only to label sources and add the right caveat. */
 function documentKind(text: string): DocumentKind {
+  if (/form\s+1040|schedule\s+c\b.*\b20(1\d|2[0-5])\b|tax\s+return/i.test(text)) return "prior-year tax return";
   if (/\bw-?2\b|wages,?\s+tips/i.test(text)) return "W-2";
-  if (/gross\s+pay|net\s+pay|pay\s+period|pay\s+date|earnings\s+statement/i.test(text)) return "pay stub";
+  if (/profit\s+(and|&)\s+loss|\bp\s*&\s*l\b|income\s+statement|total\s+expenses/i.test(text)) return "profit and loss statement";
+  if (/gross\s+pay|net\s+pay|pay\s+period|earnings\s+statement/i.test(text)) return "pay stub";
   if (/marketplace|healthcare\.gov|premium\s+tax\s+credit|\baptc\b|slcsp|second\s+lowest/i.test(text)) return "Marketplace notice";
+  if (/sep(-ira)?\s+contribution/i.test(text) && /confirm|receipt|deposit|contribution\s+date/i.test(text)) return "SEP contribution confirmation";
+  if (/payment\s+(received|advice|confirmation)|amount\s+received|deposit(ed)?\s+amount/i.test(text)) return "payment confirmation";
+  if (/\binvoice\b|amount\s+due|due\s+date/i.test(text)) return "invoice";
   if (/proposal|statement\s+of\s+work|project\s+(fee|price|amount|total)|contract\s+(fee|amount|value)|offer(ed)?\s+(amount|fee)/i.test(text)) return "project offer";
   return null;
 }
 
+const OPPORTUNITY_FIELD = /^opportunity\./;
+
+const KIND_CODE: Record<Exclude<DocumentKind, null>, string> = {
+  "profit and loss statement": "profit_and_loss", "pay stub": "pay_stub", "Marketplace notice": "marketplace_statement", "project offer": "client_offer",
+  invoice: "invoice", "payment confirmation": "payment_confirmation", "SEP contribution confirmation": "sep_confirmation", "W-2": "w2",
+  "prior-year tax return": "prior_year_tax_return",
+};
+
+/** Contract document kind (assistance.ts DOCUMENT_KINDS) for a text/CSV document. */
+export function documentKindCode(text: string): string {
+  if (looksLikeBankStatement(text.replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean))) return "bank_statement";
+  const k = documentKind(text);
+  return k ? KIND_CODE[k] : "unknown";
+}
+
+/** "January 1 - September 30, 2026", "through 2026-09-30", "as of …", "period ending …" → the end date (YYYY-MM-DD). */
+export function detectAsOfDate(text: string): string | null {
+  const range = /(?:[A-Za-z]{3,9}\.?\s+\d{1,2},?\s*(?:\d{4})?|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})\s*(?:-|–|to|through)\s*([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/i.exec(text);
+  const labelled = /(?:through|as\s+of|period\s+end(?:ing|ed)?|ending)[:\s]+([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/i.exec(text);
+  const printed = (range ?? labelled)?.[1];
+  return printed ? parseDate(printed) : null;
+}
+
 const KIND_NOTES: Record<Exclude<DocumentKind, null>, string> = {
+  "profit and loss statement": "Profit and loss: net profit covers only the period shown. Add the rest of the year's expected receipts and expenses separately; it is never multiplied up to a full year.",
   "pay stub": "Pay stub: year-to-date figures cover only part of the year. Decide for each one whether it is a starting point or your full-year forecast.",
   "Marketplace notice": "Marketplace notice: monthly premium, benchmark and advance credit amounts apply to the months shown on the notice.",
   "project offer": "Project offer: the fee is revenue, not profit. Expenses and the date you actually receive the money matter.",
+  invoice: "Invoice: an invoice is not a payment. Record the payment when the money actually arrives.",
+  "payment confirmation": "Payment confirmation: choose which expected payment it belongs to. Transfers between your own accounts are not income.",
+  "SEP contribution confirmation": "SEP confirmation: choose the tax year the contribution is for; it is recorded once.",
   "W-2": "W-2: a final W-2 only exists for a completed year. Don't carry a prior-year W-2 into 2026 or 2027 without deciding it is still right.",
+  "prior-year tax return": "Prior-year tax return: it describes a past year. It doesn't confirm this year's income; use it only as a reference for your forecast.",
 };
 
 export function extractFromText(text: string, documentId: string, rawLabel: string): ExtractionResult {
   const kind = documentKind(text);
+  const isProfitAndLoss: boolean = kind === "profit and loss statement";
   const label = kind ? `${rawLabel} (looks like a ${kind})` : rawLabel;
   const warnings: string[] = [];
   const lines = text.replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
@@ -101,6 +135,8 @@ export function extractFromText(text: string, documentId: string, rawLabel: stri
     if (!parts) return;
     const match = LABELS.find(([re]) => re.test(parts.label));
     if (!match) return;
+    // A P&L's expenses are already inside its net profit; they are not a project's expenses.
+    if (isProfitAndLoss && OPPORTUNITY_FIELD.test(match[1])) return;
     if (parts.value === null) {
       warnings.push(`Line ${index + 1}: more than one value column was found. Use one amount per row and quote CSV amounts containing commas.`);
       return;

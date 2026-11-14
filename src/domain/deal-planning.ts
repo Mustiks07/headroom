@@ -13,6 +13,8 @@
 import { z } from "zod";
 import { CentsSchema, TaxYearSchema, type BlockedComparison, type TaxYear } from "./contracts";
 import type { HouseholdWorkspace } from "./household-workspace";
+import { DecisionRecordSchema, IssuedCalendarEventSchema } from "./assistance";
+import { DecisionContextSchema, VariantComparisonsSchema, VariantRobustnessSchema } from "./decision-context";
 
 export const DEAL_PLANNING_VERSION = "1.0" as const;
 
@@ -181,6 +183,25 @@ export const DealVariantSchema = z.object({
   differenceFromBestCents: CentsSchema,
   /** The variant was re-checked with the existing exact year calculation. */
   verifiedExact: z.boolean(),
+  /** Round 5 (additive, engine output kept when stored): the same option against both baselines. */
+  comparisons: VariantComparisonsSchema.optional(),
+  /** Round 5 (additive): whether the option holds across declared ranges / the room policy. */
+  robustness: VariantRobustnessSchema.optional(),
+  /** Round 5 (additive): whether the client must agree (new price and/or new dates). The family's own SEP needs no client agreement. */
+  clientAgreement: z.object({
+    required: z.boolean(),
+    changes: z.array(z.enum(["price", "dates"])).max(2),
+    note: z.string().max(400).nullable(),
+  }).optional(),
+  /** Round 5 (additive): money from this project by date — separate from the two-year total and from retirement savings. */
+  moneyByDate: z.array(z.object({
+    date: DateSchema,
+    /** Received by this date (including a deposit already received). */
+    receivedCents: CentsSchema,
+    /** Free after expenses, additional SEP and the tax reserve. */
+    availableCents: CentsSchema,
+    event: z.string().max(200),
+  })).max(12).optional(),
 });
 
 export interface DealSearchMeta {
@@ -272,6 +293,8 @@ export const ActionPackageSchema = z.object({
   specialistNote: z.string().max(5000).nullable(),
   /** Only the user moves this forward; "client_agreed" requires the user's explicit confirmation. */
   status: z.enum(["draft", "terms_shared_by_user", "client_agreed", "superseded"]),
+  /** Round 5 (additive): baseline, horizon, the other calculated options and the recommendation reasons at choice time. */
+  decisionContext: DecisionContextSchema.optional(),
 });
 
 export const DealPlanningStateSchema = z.object({
@@ -280,12 +303,18 @@ export const DealPlanningStateSchema = z.object({
   termSpaces: z.array(DealTermsSpaceSchema).max(20),
   cashContext: CashContextSchema.nullable(),
   packages: z.array(ActionPackageSchema).max(30),
+  /** Round 5 (additive): historical decision records (see assistance.ts). */
+  decisionRecords: z.array(DecisionRecordSchema).max(30).optional(),
+  /** Round 5 (additive): calendar events already exported, so later exports can update or cancel them. */
+  calendar: z.object({ issued: z.array(IssuedCalendarEventSchema).max(300) }).optional(),
 }).superRefine((s, ctx) => {
   const unique = (ids: string[], path: string, what: string) => { if (new Set(ids).size !== ids.length) ctx.addIssue({ code: "custom", path: [path], message: `${what} must be unique.` }); };
   unique(s.goals.map(g => g.id), "goals", "Goal ids");
   unique(s.termSpaces.map(t => t.projectId), "termSpaces", "Term spaces per project");
   unique(s.packages.map(p => p.id), "packages", "Package ids");
   unique(s.packages.flatMap(p => p.reminders.map(r => `${p.id}:${r.uid}`)), "packages", "Reminder UIDs within a package");
+  unique((s.decisionRecords ?? []).map(r => r.id), "decisionRecords", "Decision record ids");
+  unique((s.calendar?.issued ?? []).map(e => e.uid), "calendar", "Issued calendar UIDs");
 });
 
 export type DateTarget = z.infer<typeof DateTargetSchema>;

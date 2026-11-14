@@ -4,6 +4,7 @@ import {
 import type { HouseholdWorkspace, WorkspaceEvent } from "@/domain/household-workspace";
 import { engineWorkspaceFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { commitWorkspaceChange, newWorkspaceEvent, type WorkspaceRepository, type WorkspaceSaveOutcome } from "./workspace-repository";
+import { ensureOriginalOffer } from "./workspace-commands";
 
 /**
  * Persistence operations for round 4 deal planning. Every change is one atomic workspace save
@@ -57,7 +58,9 @@ export async function setPackageStatus(repo: WorkspaceRepository, ws: HouseholdW
   const pkg = ws.dealPlanning?.packages.find(p => p.id === packageId);
   if (!pkg) throw new Error("This package is not in the plan.");
   if (pkg.status === "superseded") throw new Error("These terms were replaced by a newer choice.");
-  return commitWorkspaceChange(repo, ws, withDeal(ws, dp => { dp.packages.find(p => p.id === packageId)!.status = status; }),
+  const next = withDeal(ws, dp => { dp.packages.find(p => p.id === packageId)!.status = status; });
+  appendDecisionRecord(next, ws, pkg, status); // historical record with the decision-time snapshot
+  return commitWorkspaceChange(repo, ws, next,
     event ?? newWorkspaceEvent("deal_status_changed", status === "client_agreed" ? `You recorded that the client agreed to: ${pkg.variant.label}.` : `You recorded that you shared the terms: ${pkg.variant.label}.`, { projectId: pkg.projectId }));
 }
 
@@ -87,4 +90,46 @@ export async function packageCurrency(ws: HouseholdWorkspace, pkg: ActionPackage
   if (!fresh) return { current: false, reason: "The goal or allowed terms for this project were removed." };
   if (!isPackageCurrent(pkg, fresh)) return { current: false, reason: "Facts, the goal, the allowed terms or the cash picture changed since these terms were calculated. Search again before using or exporting them." };
   return { current: true, reason: null };
+}
+
+/* ------------------------------------------------------------------ decision records and current calendar (round 5) */
+
+/**
+ * Add the historical record of a decision to `next` (the workspace AFTER the status edit), using
+ * `before` (the decision-time workspace) as its own snapshot. Idempotent per package + status.
+ * The record keeps its original fingerprint and figures; later facts never rewrite it.
+ */
+export function appendDecisionRecord(next: HouseholdWorkspace, before: HouseholdWorkspace, pkg: ActionPackage,
+  status: "terms_shared_by_user" | "client_agreed", at = new Date().toISOString()): void {
+  next.dealPlanning ??= emptyDealPlanning();
+  const id = `rec-${pkg.id}-${status === "client_agreed" ? "agreed" : "shared"}`.slice(0, 120);
+  const records = next.dealPlanning.decisionRecords ??= [];
+  if (records.some(r => r.id === id)) return;
+  const dp = before.dealPlanning;
+  const goal = dp?.goals.find(g => g.id === pkg.goalId);
+  const space = dp?.termSpaces.find(t => t.projectId === pkg.projectId);
+  if (!goal || !space) return;
+  // Keep the client's first offer: captured from the decision-time lines if it was never recorded.
+  ensureOriginalOffer(next, pkg.projectId, at, { kind: "existing_project", sourceId: null }, "captured", before.projects.find(p => p.id === pkg.projectId));
+  const originalOffer = next.projects.find(p => p.id === pkg.projectId)?.originalOffer ?? null;
+  const snapshot = structuredClone(before) as Record<string, unknown>;
+  delete snapshot.dealPlanning;
+  records.push({ id, packageId: pkg.id, projectId: pkg.projectId, status, recordedAt: at, workspaceRevision: before.revision,
+    searchFingerprint: pkg.searchFingerprint, engineVersion: pkg.engineVersion, rulesVersion: pkg.rulesVersion,
+    workspaceSnapshot: snapshot, goal: structuredClone(goal), termSpace: structuredClone(space),
+    cashContext: dp?.cashContext ? structuredClone(dp.cashContext) : null, variant: structuredClone(pkg.variant),
+    ...(pkg.decisionContext ? { decisionContext: { ...structuredClone(pkg.decisionContext), originalOffer: pkg.decisionContext.originalOffer ?? originalOffer } } : {}) });
+  next.dealPlanning.decisionRecords = records.slice(-30);
+}
+
+/**
+ * Download the CURRENT plan calendar and remember what was issued (one atomic save), so the next
+ * download updates moved events and cancels ones that no longer apply. Returns the .ics Blob.
+ */
+export async function exportCurrentCalendar(repo: WorkspaceRepository, ws: HouseholdWorkspace, now = new Date()): Promise<{ blob: Blob; saved: HouseholdWorkspace; active: number; cancelled: number }> {
+  const { buildCurrentCalendar } = await import("./deal-exports");
+  const { ics, issued, active, cancelled } = buildCurrentCalendar(ws, now);
+  const next = withDeal(ws, dp => { dp.calendar = { issued }; });
+  const { saved } = await commitWorkspaceChange(repo, ws, next, newWorkspaceEvent("deal_planning_updated", `Downloaded the plan calendar (${active} current, ${cancelled} cancelled).`));
+  return { blob: new Blob([ics], { type: "text/calendar;charset=utf-8" }), saved, active, cancelled };
 }

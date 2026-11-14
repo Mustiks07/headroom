@@ -1,3 +1,4 @@
+import { appendDecisionRecord } from "@/lib/client/deal-state";
 import type { CaseInput, MoneyFact, ScenarioResult, TaxYear } from "@/domain/contracts";
 import { dealSearchFingerprint } from "@/domain/deal-planning";
 import { engineWorkspaceFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
@@ -215,6 +216,8 @@ export async function recordClientAgreement(w0: HouseholdWorkspace, packageId: s
   }
   pkg.status = "client_agreed";
   const at = now();
+  // Claude 3 seam (round 5): keep the decision-time snapshot as a historical record for its own export.
+  appendDecisionRecord(w, w0, w0.dealPlanning!.packages.find(x => x.id === packageId)!, "client_agreed", at);
   const event: WorkspaceEvent = { id: eventId, at, kind: "deal_status_changed",
     description: `You recorded that the client agreed to “${p.title}”: ${v.label}.`, refs: { projectId: p.id }, previousFingerprint: w0.calculation?.fingerprint ?? null, nextFingerprint: null };
   return { workspace: { ...withEvent(w, event), updatedAt: at }, event };

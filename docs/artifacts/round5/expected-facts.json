@@ -1,0 +1,90 @@
+{
+  "profitAndLoss": {
+    "documentKind": "profit_and_loss",
+    "facts": [
+      {
+        "field": "income.scheduleCProfit",
+        "value": {
+          "kind": "money",
+          "amountCents": 8800000,
+          "period": "year_to_date"
+        },
+        "valueAsPrinted": "$88,000.00",
+        "taxYear": 2026,
+        "asOfDate": "2026-09-30",
+        "personCandidate": null,
+        "excerpt": "Net profit YTD: $88,000.00"
+      }
+    ],
+    "warnings": [
+      "Profit and loss: net profit covers only the period shown. Add the rest of the year's expected receipts and expenses separately; it is never multiplied up to a full year.",
+      "Year-to-date amounts are not full-year forecasts. Add the payments you still expect this year before using them."
+    ]
+  },
+  "clientOffer": {
+    "documentKind": "client_offer",
+    "facts": [
+      {
+        "field": "opportunity.grossRevenueCents",
+        "value": {
+          "kind": "money",
+          "amountCents": 1200000,
+          "period": "one_time"
+        },
+        "valueAsPrinted": "$12,000.00",
+        "taxYear": 2026,
+        "asOfDate": null,
+        "personCandidate": null,
+        "excerpt": "Project fee: $12,000.00"
+      },
+      {
+        "field": "opportunity.plannedReceiptDate",
+        "value": {
+          "kind": "date",
+          "date": "2026-12-20"
+        },
+        "valueAsPrinted": "2026-12-20",
+        "taxYear": 2026,
+        "asOfDate": null,
+        "personCandidate": null,
+        "excerpt": "Payment date: 2026-12-20"
+      }
+    ],
+    "warnings": [
+      "Project offer: the fee is revenue, not profit. Expenses and the date you actually receive the money matter."
+    ]
+  },
+  "paymentConfirmation": {
+    "documentKind": "payment_confirmation",
+    "facts": [
+      {
+        "field": "project.paymentReceived",
+        "value": {
+          "kind": "money",
+          "amountCents": 300000,
+          "period": "unknown"
+        },
+        "valueAsPrinted": "$3,000.00",
+        "taxYear": 2026,
+        "asOfDate": null,
+        "personCandidate": null,
+        "excerpt": "Payment received: $3,000.00"
+      },
+      {
+        "field": "project.paymentReceivedDate",
+        "value": {
+          "kind": "date",
+          "date": "2026-12-16"
+        },
+        "valueAsPrinted": "2026-12-16",
+        "taxYear": 2026,
+        "asOfDate": null,
+        "personCandidate": null,
+        "excerpt": "Date received: 2026-12-16"
+      }
+    ],
+    "warnings": [
+      "Payment confirmation: choose which expected payment it belongs to. Transfers between your own accounts are not income."
+    ]
+  }
+}
