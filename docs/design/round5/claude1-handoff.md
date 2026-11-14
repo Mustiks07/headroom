@@ -1,4 +1,6 @@
 # Claude 1 handoff — selected Headroom direction
+> **WITHDRAWN: the user rejected this visual direction on November 15, 2026.** Do not implement the mark, palette, typography or screen compositions below as a selected design. Continue functional round5 work. This file is retained as history; its visual implementation order is no longer active. Current colors are not a constraint for the new exploration.
+
 Date: 15 November 2026. This folder is a proposal and asset handoff. It changes no production UI, release, README or user-provided final deck.
 
 Start with [design-direction.md](design-direction.md), [design-tokens.json](design-tokens.json) and the selected images **02–06**. Image **01** explains the three alternatives; choose its **01 Clearance** mark. File **04-fact-review-desktop-concept-v1.png** is superseded and must not be presented as the final design.

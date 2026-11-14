@@ -64,7 +64,7 @@ Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [C
 - [Business assumptions and pitch evidence](docs/BUSINESS.md)
 - [Demand, alternatives, first-Cup evidence and modeled unit economics](docs/research/round5-business-research.md)
 - [Participant repository comparison and paid-value research](docs/research/README.md)
-- [Proposed visual system and generated design concepts](docs/design/round5/design-direction.md)
+- [Archived visual exploration — not selected for implementation](docs/design/round5/design-direction.md)
 - [Official sources and research boundaries](docs/SOURCES.md)
 
 ## Calculation boundaries

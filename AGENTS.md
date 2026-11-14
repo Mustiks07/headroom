@@ -14,7 +14,7 @@ Current round: read `docs/handoffs/integration-round4.md`, `docs/tasks/ROUND5_SH
 
 The user wants a strong, complete, checked result. Public app, README, deck and demo must match the current build. Preserve user-provided final materials; do not replace them with weaker generated versions without agreement. Inspect the actual artifacts judges will open before final publication.
 
-Round 5 research/design addendum: `docs/tasks/ROUND5_RESEARCH_ADDENDUM.md`. Continue existing branches; do not restart completed work. The selected design proposal lives under `docs/design/round5`; its raster screens are references, not implemented UI. Source-backed business/competitor reviews live under `docs/research` and distinguish observed results from hypotheses.
+Round 5 research/design addendum: `docs/tasks/ROUND5_RESEARCH_ADDENDUM.md`. Continue existing branches; do not restart completed work. **Design correction, November 15: the user rejected the round5 visual direction. `docs/design/round5` is an archived exploration, not a selected system or instruction to implement. Its palette, logo, typography and layouts are not requirements.** Continue the approved functional work while a new visual direction is developed. Source-backed business/competitor reviews live under `docs/research` and distinguish observed results from hypotheses.
 
 ## Shared decisions
 
