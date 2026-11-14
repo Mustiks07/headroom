@@ -1,0 +1,16 @@
+{
+  "name": "Federal default standard age curve — verified subset only",
+  "source": "https://www.cms.gov/cciio/resources/regulations-and-guidance/downloads/final-guidance-regarding-age-curves-and-state-reporting-12-16-16.pdf",
+  "source_sha256": "5563e6d8fd19fcd397037c5c8e83c9a891b2cada7eb3e1473c21da60eacfc060",
+  "applies_to": "Plan years 2018+, states without a state-specific age curve. Tennessee county files in this folder price exactly with these ratios at ages 0-14, 21 and 40 (checked for every listed plan).",
+  "verification": {
+    "0-14": "CMS curve (docs/SOURCES.md) and data: Child 0-14 / Adult 21 = 0.765 for every plan in davidson_tn_silver_2026.json and _2027.json",
+    "21": "Reference age (1.000)",
+    "38": "CMS curve, recorded in docs/SOURCES.md for the synthetic family",
+    "39": "CMS curve, recorded in docs/SOURCES.md for the synthetic family",
+    "40": "CMS curve and data: Adult 40 / Adult 21 = 1.278 for every listed plan"
+  },
+  "not_included": "Every other age. The full curve was not re-read from the primary source in round 5 (cms.gov not reachable from the build session), so other ages are NOT estimated: the resolver asks for the Marketplace benchmark instead.",
+  "factors": { "0-14": 0.765, "21": 1.0, "38": 1.246, "39": 1.262, "40": 1.278 },
+  "child_rule": "At most the three oldest children under age 21 are charged in a family policy (45 CFR 147.102(c)(1)); applies only to children; not needed for the verified ages above unless a family lists more than three children under 21."
+}
