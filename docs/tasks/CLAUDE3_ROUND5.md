@@ -26,6 +26,8 @@ Typed facts: valueAsPrinted, deterministic cents/date parsing, kind, document/co
 
 Поочерёдные документы могут дополнять один draft. Дедуп по content+field+period/target, не по одной сумме. Два разных документа с одной суммой не автоматически duplicate; две разные суммы одного периода — conflict. Одно confirmed group apply атомарно записывает facts+sources+event, а не оставляет половину household обновлённой.
 
+Для insurance assistance согласовать с Claude 2 typed lookup response и с Claude 1 location picker. Использовать официальные публичные CMS/Marketplace данные либо корректно атрибутированное значение документа, cache/version/source date. Нет точного адресного ответа — вернуть candidate/ambiguous/unavailable, не “success” со средней ценой. Внешние ключи/API limits отдельно в deployment docs; отсутствие lookup не блокирует ввод подтверждённой суммы из документа. Не отправлять адрес/семейные сведения в произвольный сервис и не давать LLM выбирать endpoint.
+
 ## 3. Естественный язык как предложение команд
 
 Серверный endpoint для start/offer/update/explain с runtime validation и лимитами. Whitelist команд: add offered project, update expected payment, record receipt, correct fact with reason, record SEP, update supported forecast, change goal/terms. Model output — typed proposal, не произвольный patch/SQL/code/URL и не вызов действий.

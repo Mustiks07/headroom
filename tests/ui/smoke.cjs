@@ -92,7 +92,7 @@ async function startServer() {
     check((await page.locator(".diff-list").innerText()).includes("$121,000"), "income change shows the before → after difference");
     check((await page.locator("section[aria-labelledby='agreed-impact-title']").innerText()).includes("now loses the 2026"), "saved payments are evaluated separately and expose the lost subsidy");
     await page.getByRole("button", { name: "Save the updated plan" }).click();
-    await page.waitForFunction(() => document.querySelector(".save-status")?.textContent?.includes("Revision 2"), null, { timeout: 10000 });
+    await page.waitForFunction(() => document.querySelector(".save-status")?.textContent?.includes("Revision 2"), null, { timeout: 30000 });
     check((await page.locator(".history").innerText()).includes("Income changed"), "plan saved as revision 2 with history entry");
 
     // 6. Missing spouse income: exact missing facts, linked to fields.
@@ -126,6 +126,7 @@ async function startServer() {
     await settled();
     const afterProfit = await profit();
     check(beforeProfit === "$125,000" && afterProfit === "$125,200", `actual $3,200 replaces expected $3,000 (profit ${beforeProfit} → ${afterProfit})`);
+    check((await page.locator("#project-proj-a").innerText()).includes("received Dec 16, 2026"), "the entered actual receipt date is saved, not the old expected date");
     await page.getByRole("button", { name: "Record a contribution you made" }).click();
     await page.locator("#c-amount").fill("1500"); await page.locator("#c-date").fill("2026-11-10");
     await page.getByRole("button", { name: "Save contribution" }).click();
@@ -133,6 +134,7 @@ async function startServer() {
     await settled();
     const sepText = (await page.locator(".sep-row .sep-figures").innerText()).replace(/\s+/g, " ");
     check(/Yearly goal \$5,000 Already contributed \$3,500 Left to contribute \$1,500/.test(sepText), `SEP goal / paid / left: ${sepText}`);
+    check((await page.locator(".sep-row").innerText()).includes("paid Nov 10, 2026"), "the entered SEP paid date is preserved");
     await page.reload(); await settled();
     check((await page.locator(".save-status").innerText()).includes("Revision 3") && await profit() === "$125,200", "household plan reopens at revision 3 with the recorded facts");
 

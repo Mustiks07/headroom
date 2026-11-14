@@ -62,6 +62,7 @@ Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [C
 - [Finite acceptance and release checks](docs/ACCEPTANCE.md)
 - [Deployment and service configuration](docs/DEPLOYMENT.md)
 - [Business assumptions and pitch evidence](docs/BUSINESS.md)
+- [Demand, alternatives, first-Cup evidence and modeled unit economics](docs/research/round5-business-research.md)
 - [Official sources and research boundaries](docs/SOURCES.md)
 
 ## Calculation boundaries
