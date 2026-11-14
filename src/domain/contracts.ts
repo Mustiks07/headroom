@@ -220,7 +220,8 @@ export interface PlanEvent {
   id: string;
   planId: string;
   occurredAt: string;
-  kind: "income_changed" | "coverage_changed" | "opportunity_changed" | "action_confirmed";
+  /** "rules_updated" (additive, round 2): the plan was recalculated with a newer engine/rules version. */
+  kind: "income_changed" | "coverage_changed" | "opportunity_changed" | "action_confirmed" | "rules_updated";
   description: string;
   previousFingerprint: string;
   nextFingerprint: string | null;

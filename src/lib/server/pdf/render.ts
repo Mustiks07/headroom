@@ -97,8 +97,9 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
         for (const [k, v] of block.rows) {
           const kl = wrap(k, regular, size, keyW), vl = wrap(v, bold, size, valW);
           const rows = Math.max(kl.length, vl.length);
-          ensure(rows * 13 + 4);
+          ensure(Math.min(rows, 4) * 13 + 4);
           for (let i = 0; i < rows; i++) {
+            ensure(13);
             if (kl[i]) text(kl[i], MARGIN, size, regular, MUTED);
             if (vl[i]) text(vl[i], MARGIN + keyW + 8, size, bold);
             y -= 13;
@@ -112,8 +113,8 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
         const size = 9.5;
         for (const item of block.items) {
           const lines = wrap(item, regular, size, WIDTH - 14);
-          ensure(lines.length * 13);
-          lines.forEach((l, i) => { if (i === 0) text("-", MARGIN + 2, size); text(l, MARGIN + 14, size); y -= 13; });
+          ensure(Math.min(lines.length, 3) * 13);
+          lines.forEach((l, i) => { ensure(13); if (i === 0) text("-", MARGIN + 2, size); text(l, MARGIN + 14, size); y -= 13; });
           y -= 2;
         }
         y -= 4;
@@ -122,21 +123,33 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
       case "table": {
         const size = 8.5, pad = 4, lineH = 11;
         const widths = block.columns.map(c => c.width * WIDTH);
+        const bottom = MARGIN + 20;
         const drawRow = (cells: string[], font: PDFFont, header: boolean) => {
           const wrapped = cells.map((c, i) => wrap(c, font, size, widths[i] - pad * 2));
-          const h = Math.max(...wrapped.map(w => w.length)) * lineH + pad;
-          if (y - h < MARGIN + 20) { newPage(); if (!header) drawRow(block.columns.map(c => c.title), bold, true); }
-          let x = MARGIN;
-          wrapped.forEach((lines, i) => {
-            lines.forEach((l, li) => {
-              const w = font.widthOfTextAtSize(l, size);
-              const lx = block.columns[i].align === "right" ? x + widths[i] - pad - w : x + pad;
-              page.drawText(l, { x: lx, y: y - li * lineH, size, font, color: header ? MUTED : INK });
+          const total = Math.max(...wrapped.map(w => w.length));
+          let offset = 0;
+          // A row taller than the remaining space continues on the next page (with the header repeated).
+          while (offset < total) {
+            let fit = Math.floor((y - bottom - pad) / lineH);
+            if (fit < Math.min(2, total - offset)) {
+              newPage();
+              if (!header) drawRow(block.columns.map(c => c.title), bold, true);
+              fit = Math.floor((y - bottom - pad) / lineH);
+            }
+            const n = Math.min(fit, total - offset);
+            let x = MARGIN;
+            wrapped.forEach((lines, i) => {
+              lines.slice(offset, offset + n).forEach((l, li) => {
+                const w = font.widthOfTextAtSize(l, size);
+                const lx = block.columns[i].align === "right" ? x + widths[i] - pad - w : x + pad;
+                page.drawText(l, { x: lx, y: y - li * lineH, size, font, color: header ? MUTED : INK });
+              });
+              x += widths[i];
             });
-            x += widths[i];
-          });
-          y -= h;
-          page.drawLine({ start: { x: MARGIN, y: y + lineH - 3 }, end: { x: MARGIN + WIDTH, y: y + lineH - 3 }, thickness: 0.4, color: RULE });
+            y -= n * lineH + pad;
+            offset += n;
+            page.drawLine({ start: { x: MARGIN, y: y + lineH - 3 }, end: { x: MARGIN + WIDTH, y: y + lineH - 3 }, thickness: 0.4, color: RULE });
+          }
         };
         ensure(lineH * 3);
         drawRow(block.columns.map(c => c.title), bold, true);

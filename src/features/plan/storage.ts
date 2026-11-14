@@ -1,10 +1,10 @@
 "use client";
 
 import { CaseInputSchema, CONTRACT_VERSION, type CaseInput, type PlanRepository, type ReadyComparison, type SavedPlan } from "@/domain/contracts";
-import { createPlanRepository, HeadroomError, PlanConflictError } from "@/lib/client/api";
+import { CloudSaveFailedError, createPlanRepository, HeadroomError, PartialClearError, PlanConflictError, type HeadroomPlanRepository } from "@/lib/client/api";
 
-let repo: PlanRepository | null = null;
-export function planRepository(): PlanRepository {
+let repo: HeadroomPlanRepository | null = null;
+export function planRepository(): HeadroomPlanRepository {
   if (!repo) repo = createPlanRepository();
   return repo;
 }
@@ -37,6 +37,7 @@ export function storageText(mode: StorageMode): string {
 
 export function describeStorageError(e: unknown): string {
   // Typed errors from the storage adapter (Claude 3) carry English UI copy and a stable code.
+  if (e instanceof CloudSaveFailedError || e instanceof PartialClearError) return e.message;
   if (e instanceof PlanConflictError) return "This plan was changed somewhere else (maybe another tab). Reload to see the latest version — your edits here are kept until you leave.";
   if (e instanceof HeadroomError) {
     if (e.code === "STALE_RESULT") return "These results are out of date for the current inputs. Recalculate, then save again.";
@@ -52,10 +53,13 @@ function newId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `plan-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export async function saveNewPlan(input: CaseInput, comparison: ReadyComparison, chosenScenarioId: string): Promise<SavedPlan> {
+export function draftPlan(input: CaseInput, comparison: ReadyComparison, chosenScenarioId: string, completedActionIds: string[] = []): SavedPlan {
   const now = new Date().toISOString();
-  const plan: SavedPlan = { id: newId(), revision: 0, createdAt: now, updatedAt: now, input, comparison, chosenScenarioId, completedActionIds: [] };
-  return planRepository().save(plan, null);
+  return { id: newId(), revision: 0, createdAt: now, updatedAt: now, input, comparison, chosenScenarioId, completedActionIds };
+}
+
+export async function saveNewPlan(input: CaseInput, comparison: ReadyComparison, chosenScenarioId: string): Promise<SavedPlan> {
+  return planRepository().save(draftPlan(input, comparison, chosenScenarioId), null);
 }
 
 export function eventId() { return newId(); }

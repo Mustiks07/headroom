@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Calculator, ChevronDown, FlaskConical, Pencil, RotateCcw } from "lucide-react";
-import type { CaseInput, ComparisonResult, ReadyRiskAssessment, RiskAssessment } from "@/domain/contracts";
+import type { CaseInput, ComparisonResult, ReadyRiskAssessment, RiskAssessment, SavedPlan } from "@/domain/contracts";
 import { assessCurrentRisk, calculateComparison } from "@/lib/engine";
 import {
   SCOPE_EXCLUSIONS, adults, blankDraft, buildCaseInput, draftFromCase, fieldId, invalidProblems, normalizePath, pruneInvalid,
@@ -21,8 +21,9 @@ import { BlockedResult, ErrorNotice, ProblemsList } from "@/features/results/Blo
 import { RiskResult } from "@/features/results/RiskPanel";
 import { ComparisonView, DecisionOverview } from "@/features/results/ComparisonView";
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
+import { StorageFallback } from "@/features/plan/StorageFallback";
 import {
-  DRAFT_KEY, describeStorageError, downloadJson, fileStamp, inputFile, saveNewPlan, takeStashedInput,
+  DRAFT_KEY, describeStorageError, downloadJson, draftPlan, fileStamp, inputFile, saveNewPlan, takeStashedInput,
 } from "@/features/plan/storage";
 import { IDLE_RUN, isStale, type Run } from "./useRuns";
 
@@ -61,6 +62,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveFailure, setSaveFailure] = useState<{ error: unknown; plan: SavedPlan } | null>(null);
   const [restoredNote, setRestoredNote] = useState<string | null>(null);
   // Sample households open on the result; the full form is one explicit click away.
   const [formOpen, setFormOpen] = useState(mode === "own");
@@ -103,6 +105,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
     setDraft(prev => { const next = structuredClone(prev); mutate(next); pruneInvalid(next); return next; });
     setVersion(v => v + 1);
     setSaveError(null);
+    setSaveFailure(null);
   }, []);
 
   /* ----- calculations ----- */
@@ -196,14 +199,16 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   async function onUse(scenarioId: string) {
     const o = comparison.outcome;
     if (!o || o.kind !== "done" || o.result.status !== "ready" || isStale(comparison, version)) return;
-    setSaving(scenarioId); setSaveError(null);
+    setSaving(scenarioId); setSaveError(null); setSaveFailure(null);
     try {
       const saved = await saveNewPlan(o.input, o.result, scenarioId);
       if (mode === "own") { try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }
       router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`);
     } catch (e) {
       setSaveError(describeStorageError(e));
+      setSaveFailure({ error: e, plan: draftPlan(o.input, o.result, scenarioId) });
       setSaving(null);
+      requestAnimationFrame(() => document.getElementById("save-error")?.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
   }
 
@@ -284,6 +289,10 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
     </>}
   </>;
 
+  const saveNotice = saveError && <div id="save-error" className="notice warn" role="alert">{saveError}
+    {saveFailure && <StorageFallback error={saveFailure.error} plan={saveFailure.plan}
+      onSaved={saved => router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`)} />}</div>;
+
   return <InvalidInputsProvider draft={draft} update={update}>
     <div className="workspace shell">
       {mode === "demo" ? <>
@@ -295,7 +304,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
         <div className="result-first">
           <div className="rf-main" aria-live="polite">
             <h1 className="rf-title">{draft.opportunity.title}</h1>
-            {saveError && <p className="notice warn" role="alert">{saveError}</p>}
+            {saveNotice}
             {invalidCount > 0 && <ProblemsList title="Fix these amounts to update the result" problems={invalidProblems(draft)} draft={draft} onGoTo={goTo} />}
             <DemoResult risk={risk} comparison={comparison} riskReady={riskReady} riskStale={riskStale} compStale={compStale} draft={draft}
               onGoTo={goTo} onShowCalc={setDrawer} onUse={onUse} saving={saving} onRetry={() => { void runRisk(); void runComparison(); }} />
@@ -327,7 +336,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
             {/* Wait for the browser draft so inputs start from the restored values. */}
             {loaded ? form : <Loading text="Opening your figures…" />}
             {step === "compare" && <div id="compare-area" className="result-area" aria-live="polite">
-              {saveError && <p className="notice warn" role="alert">{saveError}</p>}
+              {saveNotice}
               <ComparisonArea run={comparison} stale={compStale} draft={draft} onGoTo={goTo} onShowCalc={setDrawer} onDownload={downloadData}
                 onUse={onUse} saving={saving} onRetry={runComparison} risk={riskReady} />
             </div>}

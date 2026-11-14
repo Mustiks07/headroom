@@ -1,16 +1,20 @@
-import type { PlanEvent, PlanRepository, SavedPlan } from "@/domain/contracts";
+import type { PlanEvent, SavedPlan } from "@/domain/contracts";
+import type { RevisionedPlanRepository } from "./local-repository";
 import { PlanConflictError, StorageUnavailableError } from "./errors";
 import { apiFetch, errorFromResponse, readJson } from "./http";
 
 /** PlanRepository backed by /api/plans. The server derives ownership from the bearer token. */
-export function createCloudPlanRepository(getToken: () => Promise<string>): PlanRepository {
+export function createCloudPlanRepository(getToken: () => Promise<string>): RevisionedPlanRepository {
   const call = async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await apiFetch(path, { ...init, token,
       headers: init.body ? { "Content-Type": "application/json" } : undefined });
-    if (response.status === 503) {
-      throw new StorageUnavailableError("Cloud save is unavailable right now. Your entries are still on this page.",
-        "CLOUD_UNAVAILABLE", 503);
+    // Server/database/session failures are cloud outages for the caller, not data answers.
+    if (response.status >= 500 || response.status === 401) {
+      const error = await errorFromResponse(response);
+      throw new StorageUnavailableError(response.status === 401
+        ? "The cloud guest session has expired or is invalid."
+        : "Cloud save is unavailable right now.", error.code, response.status);
     }
     return response;
   };
@@ -47,6 +51,9 @@ export function createCloudPlanRepository(getToken: () => Promise<string>): Plan
     },
     async listEvents(planId) {
       return (await readJson<{ events: PlanEvent[] }>(await call(`/api/plans/${id(planId)}/events`))).events;
+    },
+    async listRevisions(planId) {
+      return (await readJson<{ revisions: SavedPlan[] }>(await call(`/api/plans/${id(planId)}/revisions`))).revisions;
     },
     async clear() {
       const response = await call("/api/data", { method: "DELETE" });

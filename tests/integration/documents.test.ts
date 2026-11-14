@@ -82,6 +82,9 @@ describe("document import", () => {
   it("requires explicit consent before a document goes to a configured provider", async () => {
     vi.stubEnv("AI_PROVIDER", "anthropic");
     vi.stubEnv("AI_API_KEY", "sk-ant-test-not-a-real-key");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://abcdefgh.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_testvalue");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_testvalue");
     const pdf = await PDFDocument.create();
     pdf.addPage();
     const response = await upload(new Uint8Array(await pdf.save()) as BlobPart, "w2.pdf", "application/pdf");
