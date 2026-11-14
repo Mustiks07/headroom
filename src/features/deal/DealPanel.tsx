@@ -153,12 +153,17 @@ function searchedText(r: ReadyDealSearch | NoFeasibleTerms) {
 
 function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: HouseholdWorkspace; result: ReadyDealSearch; stale: boolean; onChoose: (v: DealVariant) => void; onGoToForecast: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<"settled" | "by_date">("settled");
   return <div className="deal-result">
+    <div className="horizon" role="radiogroup" aria-label="Which money to show">
+      {([["settled", "After tax settlements"], ["by_date", "By your date"]] as const).map(([k, label]) =>
+        <label key={k} className={view === k ? "on" : ""}><input type="radio" name="horizon" checked={view === k} onChange={() => setView(k)} />{label}</label>)}
+    </div>
     <p className="baseline-note"><strong>Compared with: {result.baseline.label}.</strong> {humanizeDates(result.baseline.description)} Cash is what your family keeps after both tax years settle (through {shortDate(result.horizon.settlementThrough)}) — not a bank balance.</p>
     {result.cashCompleteness === "household_incomplete" && <p className="notice warn small">Your balance goal can&apos;t be confirmed because the cash picture isn&apos;t marked complete. Only this project&apos;s money is shown; Headroom doesn&apos;t say whether your household will cover every bill.</p>}
     <div className={`variant-grid ${stale ? "is-stale" : ""}`}>
       {[...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId)).map(v => <VariantCard key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
-        onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} />)}
+        onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} view={view} />)}
     </div>
     <p className="hint">Searched {searchedText(result)}. {result.search.exhaustiveWithinSpace ? "Every combination within your limits was checked." : humanizeDates(result.search.note)}
       {result.simplerVariantThresholdCents > 0 && ` A simpler option is preferred when the more complex one adds less than ${money(result.simplerVariantThresholdCents)}.`}</p>
@@ -166,29 +171,38 @@ function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: Househo
   </div>;
 }
 
-function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disabled, result, onGoToForecast }: {
+function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disabled, result, onGoToForecast, view }: {
   ws: HouseholdWorkspace; v: DealVariant; recommended: boolean; expanded: boolean; onToggle: () => void; onChoose: () => void; disabled: boolean;
-  result: ReadyDealSearch; onGoToForecast: () => void;
+  result: ReadyDealSearch; onGoToForecast: () => void; view: "settled" | "by_date";
 }) {
   const goalMet = v.constraints.every(c => c.satisfied) && v.dateTargets.every(t => t.met !== false);
   // Round 5 engine fields (Claude 2): cash vs declining AND vs the offer as it stands; robustness of the pick.
+  const byDate = v.dateTargets.find(t => t.achievedCents !== null) ?? null;
   const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null } }).comparisons;
   const rob = (v as { robustness?: { holds: boolean; basis: string; roomCents: number | null } }).robustness;
   return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"}`} aria-labelledby={`v-${v.id}`}>
     <header><p className="tile-k">{PURPOSE[v.purpose]}</p>{recommended && <span className="pill good"><Star size={13} aria-hidden="true" /> Our pick</span>}</header>
     <h3 id={`v-${v.id}`} className="variant-title">{humanizeDates(v.label)}</h3>
-    <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
-    <p className="tile-sub">cash after both tax years · {result.baseline.kind === "accept_as_offered" ? "vs. accepting as offered" : "vs. declining these terms"}</p>
+    {view === "settled" ? <>
+      <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
+      <p className="tile-sub">Extra cash after both tax settlements · {result.baseline.kind === "accept_as_offered" ? "compared with accepting as offered" : "compared with declining this project"} · 2026–2027 tax years, final settlement in {result.horizon.settlementThrough.slice(0, 4)}</p>
+    </> : byDate && byDate.achievedCents !== null ? <>
+      <p className="tile-big num">{money(byDate.achievedCents)}</p>
+      <p className="tile-sub">{humanizeDates(byDate.explanation)}</p>
+    </> : <>
+      <p className="tile-big num">—</p>
+      <p className="tile-sub">No “money by a date” goal is set. Add one in your goal to compare this view; project money by date is listed under “Money by date &amp; details”.</p>
+    </>}
     {v.retirementAddedCents > 0 && <p className="tile-line">+ <strong className="num">{money(v.retirementAddedCents)}</strong> into retirement (not counted as cash)</p>}
     {cmp && cmp.versusOfferedCents !== null && v.purpose !== "as_offered" && <p className="tile-line"><span className={`num ${signClass(cmp.versusOfferedCents)}`}>{signedMoney(cmp.versusOfferedCents)}</span> compared with the offer as it stands</p>}
-    {v.purpose !== "as_offered" && <p className="tile-line small"><strong>Needs the client&apos;s agreement</strong> to the changed price or payment dates.</p>}
+    {v.purpose !== "as_offered" && <p className="tile-line small"><span className="client-agreement">Client agreement needed</span> for the changed price or payment dates. Proposed payments, not money received.</p>}
     {rob && !rob.holds && <p className="notice warn small">Little room: {rob.roomCents !== null ? `about ${money(rob.roomCents)} of extra 2026–2027 profit could break this` : "a small change in income could break this"}{rob.basis === "declared_ranges" ? " within the income ranges you entered" : ""}. Check the details before you choose.</p>}
     <dl className="terms">
       <div><dt>Ask for</dt><dd className="num">{money(v.terms.priceCents)}</dd></div>
       <div><dt>Payments</dt><dd>{v.terms.payments.map(p => `${money(p.amountCents)} on ${shortDate(p.date)}`).join(" · ") || "—"}</dd></div>
       {v.terms.additionalSep && <div><dt>Extra SEP-IRA</dt><dd>{money(v.terms.additionalSep.amountCents)} for {v.terms.additionalSep.year} ({personName(ws.household, v.terms.additionalSep.personId)})</dd></div>}
     </dl>
-    {v.dateTargets.map(t => <p key={t.targetId} className={`target ${t.met ? "met" : t.met === false ? "missed" : ""}`}>
+    {view === "settled" && v.dateTargets.map(t => <p key={t.targetId} className={`target ${t.met ? "met" : t.met === false ? "missed" : ""}`}>
       {t.met ? <CheckCircle2 size={14} aria-hidden="true" /> : <XCircle size={14} aria-hidden="true" />} {humanizeDates(t.explanation)}{t.achievedCents !== null ? ` (${money(t.achievedCents)})` : ""}</p>)}
     {v.aca.some(a => a.creditLost) && <p className="target missed"><XCircle size={14} aria-hidden="true" /> Loses the {v.aca.filter(a => a.creditLost).map(a => a.year).join(" and ")} premium tax credit</p>}
     {v.differenceFromBestCents !== 0 && <p className="hint">{money(Math.abs(v.differenceFromBestCents))} less cash than the option with the most cash{v.purpose === "simplest" || v.purpose === "as_offered" ? " — with fewer changes to ask for" : ""}.</p>}

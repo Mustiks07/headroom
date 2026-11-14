@@ -1,30 +1,39 @@
 import Link from "next/link";
 import { TrackVisit } from "@/features/start/TrackVisit";
-import { ArrowRight, Briefcase, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
+import { ArrowRight, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { samples } from "@/features/samples";
 import { ContinuePlan } from "@/features/start/ContinuePlan";
+import { HeroEntry } from "@/features/start/HeroEntry";
 
 export default function Home() {
   return <>
-    <SiteHeader />
+    <SiteHeader stage />
     <main id="main">
-      <section className="hero shell">
-        <p className="eyebrow">For self-employed people with Marketplace health insurance</p>
-        <h1>Know what a client offer leaves your family — and find terms that work.</h1>
-        <p className="intro">Bring the offer and your figures. Review the facts, compare the terms, and keep the plan up to date as payments arrive.</p>
+      <section className="hero" aria-labelledby="hero-title">
+        <div className="shell hero-inner">
+          <h1 id="hero-title">Before you say yes.</h1>
+          <p className="hero-lead">See what a client offer leaves you after tax and health insurance.</p>
+          <div className="hero-entry"><HeroEntry /></div>
+          <div className="hero-scene" aria-hidden="true">
+            <picture>
+              <source type="image/webp" srcSet="/brand/hero-scene-640.webp 640w, /brand/hero-scene-1024.webp 1024w, /brand/hero-scene-1536.webp 1536w" sizes="(max-width: 800px) 92vw, 960px" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/hero-scene-1024.webp" alt="" width={1536} height={1024} decoding="async" fetchPriority="high" />
+            </picture>
+            <div className="offer-paper"><span>Client offer</span><strong>$12,000</strong></div>
+          </div>
+        </div>
+      </section>
+    <div className="after-stage">
+      <ol className="shell flow-strip" aria-label="How it works">
+        <li>Your offer</li><li>Your facts</li><li>Your next move</li>
+      </ol>
+      <div className="shell after-entry">
         <ContinuePlan />
         <TrackVisit />
-        <div className="entry-grid">
-          <Link href="/start?intent=offer" className="entry primary-entry"><Briefcase size={20} aria-hidden="true" /><strong>Check a client offer</strong>
-            <span>What it adds after taxes and your health-insurance subsidy — and which price or payment dates would work better.</span><span className="go">Start <ArrowRight size={15} /></span></Link>
-          <Link href="/start?intent=year" className="entry"><ShieldCheck size={20} aria-hidden="true" /><strong>Check my year&apos;s income</strong>
-            <span>Whether this year&apos;s income keeps your subsidy, and how much room is left. No offer needed.</span><span className="go">Start <ArrowRight size={15} /></span></Link>
-          <Link href="/demo" className="entry"><Layers size={20} aria-hidden="true" /><strong>Try a sample</strong>
-            <span>A synthetic family, calculated live. Change any figure.</span><span className="go">Open <ArrowRight size={15} /></span></Link>
-        </div>
-        <p className="muted small">No account, no card. Your figures stay in this browser unless you save to a private guest session.</p>
-      </section>
+        <p className="small muted">Not about an offer? <Link className="text-link" href="/start?intent=year">Check my year&apos;s income</Link> — whether this year keeps your subsidy, no project needed. The $12,000 above is illustrative.</p>
+      </div>
 
       <section className="shell band" aria-labelledby="why">
         <div className="why-grid">
@@ -89,6 +98,7 @@ export default function Home() {
           <p className="muted">Checking your risk is free. A year of plan updates, scenarios and accountant-ready exports is $99. In this demo, everything is unlocked.</p></div>
         <Link href="/pricing" className="btn ghost">See what&apos;s included</Link>
       </section>
+    </div>
     </main>
     <SiteFooter />
   </>;

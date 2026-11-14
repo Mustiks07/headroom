@@ -25,7 +25,7 @@ Free ACA calculators and cliff estimators; planning software that already models
 
 ## Landing copy
 
-0. *(live)* **Know what a client offer leaves your family — and find terms that work.** / Bring the offer and your figures. Review the facts, compare the terms, and keep the plan up to date as payments arrive. Entry points: Check a client offer · Check my year's income · Try a sample.
+0. *(live, design C)* **Before you say yes.** / See what a client offer leaves you after tax and health insurance. One entry tray: paste the offer → **Check my offer**; Add document · Enter figures · Try an example; “Check my year's income” below for the no-offer path.
 1. **Know what your next contract leaves for your household.** / Compare price, payment timing and retirement contributions using your income records, cash limits and Marketplace coverage. *(research headline)*
 2. **Before you say yes to the next project, see what it does to your health-insurance subsidy.** / Headroom checks the offer against your family's income and Marketplace plan, then shows prices and payment dates that keep more of it.
 
@@ -47,11 +47,11 @@ Placeholders in [brackets] must be filled with verified evidence or screenshots 
 
 1. **A client offer can cost a freelance family its health-insurance subsidy.** Problem in one sentence + [sourced IRS/KFF fact from the research memo].
 2. **Who this happens to.** Segment above; "not yet interviewed" unless interviews exist.
-3. **Start with the offer.** [r5-landing.png, r5-start-paste.png] Upload / paste / enter figures as equal ways in.
-4. **Only the questions that matter.** [r5-own-deal-readiness.png] 1–3 questions with a reason and "I don't know yet"; unknown never becomes $0.
-5. **Terms that keep the money you need.** [r5-variants.png] One pick first; two labelled comparisons; client agreement shown; approximate search disclosed.
+3. **Start with the offer.** [c-home-d.png, c-review-d.png] Upload / paste / enter figures as equal ways in.
+4. **Only the questions that matter.** [readiness panel in Find terms] 1–3 questions with a reason and "I don't know yet"; unknown never becomes $0.
+5. **Terms that keep the money you need.** [c-variants-d.png, c-variants-bydate-d.png] One pick first; two labelled comparisons; client agreement shown; approximate search disclosed.
 6. **Why this option.** ["Why these options?" panel] Built only from the calculated packet.
-7. **Agreement and records.** [r5-records.png, r5-decision-record-pdf-1.png] Historical record kept separately from today's estimate; current calendar.
-8. **The plan stays current.** [r5-what-changed-preview.png] Sentence → preview → Apply → one revision.
+7. **Agreement and records.** [c-package-d.png, c-records-d.png, c-pdf-1.png] Historical record kept separately from today's estimate; current calendar.
+8. **The plan stays current.** [c-whatchanged-d.png] Sentence → preview → Apply → one revision.
 9. **Business model.** $29 / $49 / $99 packaging hypotheses; unit economics from `docs/research/round5-unit-economics.md` marked as scenarios, not measurements.
 10. **Built to be checked.** Scope limits, versions, sources, tests; live URL after verification.
