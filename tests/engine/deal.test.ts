@@ -105,7 +105,9 @@ describe("deal search: achievable goal with an agreed deposit (A) and an offer (
     expect(r.variants.map(show)).toEqual([
       ["simplest", 12000, "2027-01-04 12000", 33, 8268],
       ["most_cash", 15000, "2026-12-15 9002 + 2027-01-04 5998", 0, 10390],
-      ["most_retirement", 15000, "2026-12-15 10250 + 2027-01-04 4750", 1000, 9571],
+      // Round 5: the simplest keeps the 2027 credit with $0 of room and most-cash the 2026 one with $202, so the third place
+      // goes to the sturdiest option found in the limits ($3,214 of room for $353 less cash), not to most-retirement.
+      ["lowest_risk", 14500, "2026-12-15 5750 + 2027-01-04 8750", 0, 10037],
     ]);
     const nf = await search(dealWorkspace(), deal({ minCash: 12000, maxPrice: 13000 }));
     expect(nf.status === "no_feasible_terms" && nf.relaxations.map(x => [x.constraint, x.requiredCents])).toEqual([["minimum_cash", usd(9006)], ["price_max", usd(17500)]]);
@@ -169,6 +171,13 @@ describe("deal search: limits and explanations", () => {
       .then(x => v(ready(x), "most_cash").dateTargets[0].achievedCents!);
     const early = { ...completeCash(), snapshot: { date: "2026-09-30", balanceCents: usd(20000), sourceId: "demo-input" }, completeness: { confirmed: true, from: "2026-09-30", through: "2027-04-30" } };
     expect(await at({ ...early, includedFactIds: [] }) - await at({ ...early, includedFactIds: ["a1"] })).toBe(usd(3000));  // a1 after the snapshot: added once
+
+    // A fact dated ON the snapshot day: the included ids decide; without them the balance is not calculated.
+    const onDay = { ...early, snapshot: { date: "2026-10-02", balanceCents: usd(20000), sourceId: "demo-input" }, completeness: { confirmed: true, from: "2026-10-02", through: "2027-04-30" } };
+    const amb = await search(dealWorkspace(), { ...d, goal: { ...d.goal, dateTargets: [{ id: "hb", kind: "household_balance", byDate: "2027-04-30", minimumCents: 0 }] } }, { ...onDay, includedFactIds: [] });
+    expect(ready(amb).variants[0].dateTargets[0]).toMatchObject({ achievedCents: null, met: null });
+    expect(ready(amb).variants[0].dateTargets[0].explanation).toMatch(/day of your balance/);
+    expect(await at({ ...onDay, includedFactIds: ["a1"] })).toBe(await at({ ...early, includedFactIds: ["a1"] }) );  // same facts, a1 in the balance either way
 
     const paid = dealWorkspace();
     paid.retirement.contributions = [{ id: "sep-p", personId: "primary", taxYear: 2026, amountCents: usd(400), paidDate: "2026-11-20", sourceId: "demo-input", recordedAt: T }];

@@ -16,7 +16,7 @@
  *    before every constraint is checked. Not claimed: a global optimum between lattice points outside the
  *    refinement window, or SEP gains from applicable-figure steps smaller than the restore-the-credit amount.
  */
-import type { BlockedComparison, CaseInput, ScenarioKind, ScenarioResult, TaxYear } from "@/domain/contracts";
+import type { BlockedComparison, CaseInput, ScenarioKind, ScenarioResult, TaxYear, YearResult } from "@/domain/contracts";
 import {
   CashContextSchema, cashCompletenessFor, dealSearchFingerprint, DealGoalSchema, DealTermsSpaceSchema,
   type CashContext, type DatedFlow, type DateTarget, type DealGoal, type DealSearchMeta, type DealSearchResult, type DealTermsSpace,
@@ -31,11 +31,15 @@ import { formatUsd } from "../money";
 import { EngineStop, type YearModel } from "../model";
 import { ENGINE_VERSION, RULES_VERSION } from "../rules";
 import { profitHeadroomDollars } from "../search";
-import { evaluateYear, solveCredit } from "../year";
+import { evaluateYear, solveCredit, toYearResult } from "../year";
 
 /** Label of the search layer (documentation; fingerprints use ENGINE_VERSION per the contract). */
 export const DEAL_SEARCH_VERSION = "headroom-deal-1.0.0";
 const MAX_PRICE_POINTS = 60, MAX_SPLIT_POINTS = 60;
+/** An option whose credit survives less than this much extra other profit (dollars) is called fragile. */
+export const FRAGILE_ROOM_DOLLARS = 1_000;
+/** A sturdier option keeps at least this much room when one exists in the limits. */
+export const ROBUST_ROOM_DOLLARS = 5_000;
 
 type YI = 0 | 1;
 interface Slot { windowId: string; date: string; yi: YI; maxBps: number }
@@ -206,6 +210,12 @@ function dateTarget(env: DateEnv, c: Candidate, decl: [YearEval, YearEval], t: D
   }
   const S = cash.snapshot.date, inc = new Set(cash.includedFactIds);
   const after = (date: string, id: string) => date > S && date <= D && !inc.has(id);
+  // A fact dated ON the snapshot day may or may not be in that balance: the included ids decide, never the time of day.
+  const sameDay = [
+    ...env.p.cc.ws.projects.flatMap(pr => [...pr.receipts, ...pr.expenses].filter(l => l.actual?.date === S && !inc.has(l.id)).map(l => `${formatUsd(l.actual!.amountCents)} for "${pr.title}"`)),
+    ...env.p.cc.ws.retirement.contributions.filter(sc => sc.paidDate === S && !inc.has(sc.id)).map(sc => `the ${formatUsd(sc.amountCents)} SEP-IRA contribution`),
+  ];
+  if (sameDay.length) return res(null, `Household balance on ${D} is not calculated yet: ${sameDay.join(" and ")} happened on the day of your balance (${S}). Say whether the balance already includes ${sameDay.length === 1 ? "it" : "them"}.`);
   let v = cash.snapshot.balanceCents + cash.flows.filter(f => f.date > S && f.date <= D).reduce((a, f) => a + f.amountCents, 0);
   for (const pr of env.p.cc.ws.projects) for (const [lines, sign] of [[pr.receipts, 1], [pr.expenses, -1]] as const) for (const l of lines) {
     if (l.actual) { if (after(l.actual.date, l.id)) v += sign * l.actual.amountCents; continue; }
@@ -299,6 +309,18 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
   const feasible = all.filter(meets);
 
   // ---------------------------------------------------------------- choose --
+  /** Smallest extra other profit (whole dollars) that would lose a credit this option keeps; Infinity if no credit is at stake. */
+  const roomMemo = new Map<Candidate, number>();
+  const roomsOf = (c: Candidate): [number, number] => ([0, 1] as const).map(yi => {
+    if (c.years[yi].ptc === 0) return Infinity;
+    try { return profitHeadroomDollars(models[yi], { profitDelta: c.payments.filter(q => q.yi === yi).reduce((a, q) => a + q.amountCents, 0) - p.openExpenses[yi], additionalSep: c.sepYear === yi ? c.sep : 0 }) ?? Infinity; } catch { return Infinity; }
+  }) as [number, number];
+  const roomOf = (c: Candidate): number => {
+    if (roomMemo.has(c)) return roomMemo.get(c)!;
+    const r = Math.min(...roomsOf(c));
+    roomMemo.set(c, r);
+    return r;
+  };
   const materiality = Math.max(10000, Math.round(p.offeredPrice / 100));
   const isOffered = (c: Candidate) => c.price === p.offeredPrice && c.payments.every(q => q.windowId === "offered");
   const complexity = (c: Candidate) => [isOffered(c) ? 0 : 1, c.payments.length, c.payments.some(q => q.yi === 1) ? 1 : 0, c.sep > 0 ? 1 : 0, c.price];
@@ -312,17 +334,19 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     const val = (c: Candidate) => (target ? dateTarget(env, c, decl, target).achievedCents ?? -Infinity : -Infinity);
     const earliest = target && [...feasible].sort((a, b) => val(b) - val(a) || b.cashDelta - a.cashDelta)[0];
     const mostRet = [...feasible].sort((a, b) => b.sep - a.sep || b.cashDelta - a.cashDelta)[0];
-    if (earliest && val(earliest) > Math.max(val(simplest), val(mostCash))) picks.push({ purpose: "earliest_money", c: earliest });
+    // Robustness: when a shown option keeps a credit by less than FRAGILE_ROOM of extra profit, the third place goes to
+    // the most-cash option that keeps at least ROBUST_ROOM (else the largest room found), if it is really in the limits.
+    const shownRoom = Math.min(roomOf(simplest), roomOf(mostCash));
+    const pool = [...feasible].sort((a, b) => b.cashDelta - a.cashDelta).slice(0, 80);
+    const robust = shownRoom < FRAGILE_ROOM_DOLLARS
+      ? pool.find(c => roomOf(c) >= ROBUST_ROOM_DOLLARS) ?? [...pool].sort((a, b) => roomOf(b) - roomOf(a) || b.cashDelta - a.cashDelta)[0]
+      : undefined;
+    if (robust && roomOf(robust) >= shownRoom + FRAGILE_ROOM_DOLLARS) picks.push({ purpose: "lowest_risk", c: robust });
+    else if (earliest && val(earliest) > Math.max(val(simplest), val(mostCash))) picks.push({ purpose: "earliest_money", c: earliest });
     else if (mostRet.sep > Math.max(simplest.sep, mostCash.sep)) picks.push({ purpose: "most_retirement", c: mostRet });
     else {
-      // Lowest risk: the largest smallest distance (in extra profit) to losing a credit, among the 20 best by cash.
-      const margin = (c: Candidate) => Math.min(...([0, 1] as const).map(yi => {
-        if (c.years[yi].ptc === 0) return Infinity;
-        try { return profitHeadroomDollars(models[yi], { profitDelta: c.payments.filter(q => q.yi === yi).reduce((a, q) => a + q.amountCents, 0) - p.openExpenses[yi], additionalSep: c.sepYear === yi ? c.sep : 0 }) ?? Infinity; } catch { return Infinity; }
-      }));
-      const pool = [...feasible].sort((a, b) => b.cashDelta - a.cashDelta).slice(0, 20);
-      const safest = pool.sort((a, b) => margin(b) - margin(a))[0];
-      if (safest && Number.isFinite(margin(safest)) && margin(safest) > Math.max(margin(simplest), margin(mostCash))) picks.push({ purpose: "lowest_risk", c: safest });
+      const safest = pool.slice(0, 20).sort((a, b) => roomOf(b) - roomOf(a))[0];
+      if (safest && Number.isFinite(roomOf(safest)) && roomOf(safest) > Math.max(roomOf(simplest), roomOf(mostCash))) picks.push({ purpose: "lowest_risk", c: safest });
     }
   }
 
@@ -340,8 +364,28 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
   }
   const best = variants.length ? Math.max(...variants.map(v => v.twoYearCashDeltaCents)) : 0;
   for (const v of variants) v.differenceFromBestCents = best - v.twoYearCashDeltaCents;
+  // Room of each exact option; fragile options are named, and a fragile simple option is not recommended over a sturdier one.
+  const rooms = new Map<string, number>();
+  for (const v of variants) {
+    const cand: Candidate = { price: v.terms.priceCents, remainder: v.terms.priceCents - p.received, x: 0, payments: v.terms.payments.map(q => ({ ...q, windowId: "", yi: yearOf(q.date) })),
+      sepYear: v.terms.additionalSep ? (v.terms.additionalSep.year === 2026 ? 0 : 1) : null, sep: v.terms.additionalSep?.amountCents ?? 0, cashDelta: v.twoYearCashDeltaCents,
+      years: v.aca.map(a => ({ spendable: 0, ptc: a.ptcCents, magi: a.magiCents, room: 0 })) as [YearEval, YearEval] };
+    const byYear = roomsOf(cand), room = Math.min(...byYear);
+    rooms.set(v.id, room);
+    if (Number.isFinite(room) && (room < FRAGILE_ROOM_DOLLARS || v.purpose === "lowest_risk")) {
+      const atStake = v.aca.filter((a, yi) => byYear[yi] === room).map(a => `${a.year}: ${formatUsd(a.ptcCents)}`).join(", ");
+      v.label = clip(`${v.label}; room before a credit is lost: ${formatUsd(room * 100)}`, 200);
+      if (room < FRAGILE_ROOM_DOLLARS) warnings.push(`"${PURPOSE_LABEL[v.purpose]}" keeps the premium tax credit (${atStake}) with only ${formatUsd(room * 100)} of extra profit to spare.`);
+    }
+  }
+  const robustV = variants.find(v => v.purpose === "lowest_risk");
+  if (robustV) {
+    const most = variants.find(v => v.purpose === "most_cash");
+    warnings.push(`A sturdier option is shown: ${formatUsd((rooms.get(robustV.id) ?? 0) * 100)} of room before a credit is lost, for ${formatUsd(robustV.differenceFromBestCents)} less cash than ${most ? "the most-cash option" : "the best option"}. Found within your price, date and SEP limits; not a guarantee.`);
+  }
   const simple = variants.find(v => v.purpose === "simplest" || v.purpose === "as_offered");
-  const recommended = simple && simple.differenceFromBestCents < materiality ? simple : variants.find(v => v.purpose === "most_cash") ?? variants[0];
+  const simpleFragile = simple && (rooms.get(simple.id) ?? Infinity) < FRAGILE_ROOM_DOLLARS && robustV;
+  const recommended = simple && simple.differenceFromBestCents < materiality && !simpleFragile ? simple : variants.find(v => v.purpose === "most_cash") ?? variants[0];
 
   // ---------------------------------------------------------------- meta --
   const workspaceFp = await engineWorkspaceFingerprint(p.cc.ws);
@@ -649,4 +693,56 @@ export async function evaluateDecisionSensitivity(ws: HouseholdWorkspace, goalRa
   } catch (e) { if (!(e instanceof EngineStop)) throw e; }
   const numeric = items.filter(i => i.thresholdCents !== null && i.currentCents !== null && i.direction === "increase").sort((a, b) => (a.thresholdCents! - a.currentCents!) - (b.thresholdCents! - b.currentCents!));
   return { status: "ready", variantId: variant.id, searchFingerprint, items, firstChange: numeric[0]?.outcomeChange ?? items.find(i => i.checked === "condition")?.outcomeChange ?? null };
+}
+
+// =====================================================================================================
+/** Exact result of given terms (no search): the chosen terms, the baseline and the offer as it stands. */
+export interface ExactTerms {
+  status: "ready";
+  projectId: string;
+  title: string;
+  receivedCents: number;
+  offeredPriceCents: number;
+  /** Baseline years (decline unpaid terms) and the evaluated terms' years, from the same models. */
+  decline: [YearResult, YearResult];
+  chosen: [YearResult, YearResult];
+  /** Two-year cash change of the terms relative to the goal's baseline. */
+  cashDeltaCents: number;
+  /** The offer exactly as it stands, relative to the same baseline (null if it cannot be calculated). */
+  offered: { cashDeltaCents: number; years: [YearResult, YearResult] } | null;
+  baselineKind: DealGoal["baseline"];
+  retirementCents: number;
+  dueDates: [string, string];
+}
+
+/**
+ * Evaluate given terms exactly with the existing year engine: used to explain a choice and to
+ * re-verify a recorded decision on its own snapshot. Payments must cover exactly the unpaid remainder.
+ */
+export function evaluateTermsExact(ws: HouseholdWorkspace, goal: DealGoal, terms: DealVariant["terms"]): ExactTerms | BlockedComparison {
+  const prep = prepareDeal(ws, goal.projectId);
+  if ("status" in prep) return prep;
+  const p = prep;
+  if (terms.payments.reduce((a, q) => a + q.amountCents, 0) !== terms.priceCents - p.received) {
+    return { status: "needs_data", code: "STALE_VARIANT", message: "These terms no longer match the payments already recorded.", fields: [{ path: "terms.payments", reason: "Received amounts changed." }] };
+  }
+  const plan = (payments: Array<{ date: string; amountCents: number }>, sep: [number, number]): Plan => ({ kind: "accept_now", label: "", revenue: payments.reduce((a, q) => a + q.amountCents, 0),
+    receipts: [...payments].sort((a, b) => a.date.localeCompare(b.date)).map(q => ({ date: q.date, amount: q.amountCents })),
+    expenses: p.openExpenses.flatMap((amount, i) => (amount > 0 ? [{ yearIndex: i as YI, amount }] : [])), sep, reasons: [], assumptions: [], actions: [] });
+  const sep: [number, number] = !terms.additionalSep ? [0, 0] : terms.additionalSep.year === 2026 ? [terms.additionalSep.amountCents, 0] : [0, terms.additionalSep.amountCents];
+  try {
+    const d = run(p.models, p.ctx.decline), c = run(p.models, plan(terms.payments, sep));
+    let o: ReturnType<typeof run> | null = null;
+    try { o = run(p.models, plan(p.offered, [0, 0])); } catch (e) { if (!(e instanceof EngineStop)) throw e; }
+    const cash = (ycs: ReturnType<typeof run>) => ycs[0].spendable + ycs[1].spendable;
+    const shift = goal.baseline === "accept_as_offered" && o ? cash(o) - cash(d) : 0;
+    if (goal.baseline === "accept_as_offered" && !o) return { status: "unsupported", code: "OFFER_NOT_CALCULABLE", message: "The offered terms cannot be calculated, so they cannot be the baseline.", fields: [{ path: "goal.baseline", reason: "Use declining as the baseline." }] };
+    const yr = (ycs: ReturnType<typeof run>) => [toYearResult(p.models[0], ycs[0]), toYearResult(p.models[1], ycs[1])] as [YearResult, YearResult];
+    return { status: "ready", projectId: goal.projectId, title: p.cc.candidate.title, receivedCents: p.received, offeredPriceCents: p.offeredPrice,
+      decline: yr(d), chosen: yr(c), cashDeltaCents: cash(c) - cash(d) - shift,
+      offered: o ? { cashDeltaCents: cash(o) - cash(d) - shift, years: yr(o) } : null, baselineKind: goal.baseline, retirementCents: sep[0] + sep[1], dueDates: p.due };
+  } catch (e) {
+    if (e instanceof EngineStop) return { status: e.kind === "unsupported" ? "unsupported" : "needs_data", code: e.code, message: e.message, fields: [{ path: "terms", reason: e.message }] };
+    throw e;
+  }
 }
