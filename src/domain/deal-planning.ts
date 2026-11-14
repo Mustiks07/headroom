@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { CentsSchema, TaxYearSchema, type BlockedComparison, type TaxYear } from "./contracts";
 import type { HouseholdWorkspace } from "./household-workspace";
+import { DecisionRecordSchema, IssuedCalendarEventSchema } from "./assistance";
 
 export const DEAL_PLANNING_VERSION = "1.0" as const;
 
@@ -280,12 +281,18 @@ export const DealPlanningStateSchema = z.object({
   termSpaces: z.array(DealTermsSpaceSchema).max(20),
   cashContext: CashContextSchema.nullable(),
   packages: z.array(ActionPackageSchema).max(30),
+  /** Round 5 (additive): historical decision records (see assistance.ts). */
+  decisionRecords: z.array(DecisionRecordSchema).max(30).optional(),
+  /** Round 5 (additive): calendar events already exported, so later exports can update or cancel them. */
+  calendar: z.object({ issued: z.array(IssuedCalendarEventSchema).max(300) }).optional(),
 }).superRefine((s, ctx) => {
   const unique = (ids: string[], path: string, what: string) => { if (new Set(ids).size !== ids.length) ctx.addIssue({ code: "custom", path: [path], message: `${what} must be unique.` }); };
   unique(s.goals.map(g => g.id), "goals", "Goal ids");
   unique(s.termSpaces.map(t => t.projectId), "termSpaces", "Term spaces per project");
   unique(s.packages.map(p => p.id), "packages", "Package ids");
   unique(s.packages.flatMap(p => p.reminders.map(r => `${p.id}:${r.uid}`)), "packages", "Reminder UIDs within a package");
+  unique((s.decisionRecords ?? []).map(r => r.id), "decisionRecords", "Decision record ids");
+  unique((s.calendar?.issued ?? []).map(e => e.uid), "calendar", "Issued calendar UIDs");
 });
 
 export type DateTarget = z.infer<typeof DateTargetSchema>;
