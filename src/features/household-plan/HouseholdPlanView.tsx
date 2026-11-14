@@ -30,7 +30,8 @@ import { AddProjectForm, ProjectCard, SepPanel } from "./parts";
 import { attentionItems, type AttentionItem } from "./attention";
 import { DealPanel } from "@/features/deal/DealPanel";
 import { ChooseTerms, PackageCard } from "@/features/deal/ChooseTerms";
-import { saveActionPackage, saveCashContext, saveDealGoal, setPackageStatus, setReminderStatus } from "@/lib/client/api";
+import { commitWorkspaceChange, newWorkspaceEvent, saveActionPackage, saveCashContext, saveDealGoal, setPackageStatus, setReminderStatus } from "@/lib/client/api";
+import { DocumentFacts } from "./DocumentFacts";
 import type { DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 
 type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
@@ -201,6 +202,12 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
       {ready && (ready.assumptions.length > 0 || ready.warnings.length > 0) && <details className="explain"><summary>Conditions and calculation notes ({ready.assumptions.length + ready.warnings.length})</summary>
         <ul className="bullets small">{[...ready.assumptions, ...ready.warnings].map(n => <li key={n}>{n}</li>)}</ul></details>}
     </section>
+
+    <DocumentFacts ws={ws} onCommit={async (next, summary) => {
+      if (pending) { setNotice({ tone: "warn", text: "Save or discard the change that didn't go through first." }); return false; }
+      try { const saved = (await commitWorkspaceChange(workspaceRepo(), ws, next, newWorkspaceEvent("document_imported", summary))).saved; setWs(saved); setNotice({ tone: "ok", text: summary }); return true; }
+      catch (e) { if (e instanceof WorkspaceConflictError && e.current) setWs(e.current); setNotice({ tone: "warn", text: describeSaveError(e) }); return false; }
+    }} />
 
     {/* ---- forecast composition ---- */}
     <section className="plan-section" aria-labelledby="forecast-title">

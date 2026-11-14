@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Briefcase, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { samples } from "@/features/samples";
+import { ContinuePlan } from "@/features/start/ContinuePlan";
 
 export default function Home() {
   return <>
@@ -9,14 +10,18 @@ export default function Home() {
     <main id="main">
       <section className="hero shell">
         <p className="eyebrow">For self-employed people with Marketplace health insurance</p>
-        <h1>Plan your income.<br />Protect your health-insurance subsidy.</h1>
-        <p className="intro">See how changing income affects your family&apos;s coverage—and compare what you can do next.</p>
-        <div className="cta-row">
-          <Link href="/check" className="btn primary large">Check my subsidy <ArrowRight size={18} /></Link>
-          <Link href="/demo" className="btn secondary large">Try a sample household</Link>
+        <h1>Know what a client offer leaves your family — and find terms that work.</h1>
+        <p className="intro">Bring the offer and your figures. Review the facts, compare the terms, and keep the plan up to date as payments arrive.</p>
+        <ContinuePlan />
+        <div className="entry-grid">
+          <Link href="/start?intent=offer" className="entry primary-entry"><Briefcase size={20} aria-hidden="true" /><strong>Check a client offer</strong>
+            <span>What it adds after taxes and your health-insurance subsidy — and which price or payment dates would work better.</span><span className="go">Start <ArrowRight size={15} /></span></Link>
+          <Link href="/start?intent=year" className="entry"><ShieldCheck size={20} aria-hidden="true" /><strong>Check my year&apos;s income</strong>
+            <span>Whether this year&apos;s income keeps your subsidy, and how much room is left. No offer needed.</span><span className="go">Start <ArrowRight size={15} /></span></Link>
+          <Link href="/demo" className="entry"><Layers size={20} aria-hidden="true" /><strong>Try a sample</strong>
+            <span>A synthetic family, calculated live. Change any figure.</span><span className="go">Open <ArrowRight size={15} /></span></Link>
         </div>
-        <p className="cta-aside"><Briefcase size={16} aria-hidden="true" /> Got a new client offer? <Link href="/check?start=project" className="text-link">Check a new project</Link></p>
-        <p className="muted small">No account, no card. Free to check your risk.</p>
+        <p className="muted small">No account, no card. Your figures stay in this browser unless you save to a private guest session.</p>
       </section>
 
       <section className="shell band" aria-labelledby="why">

@@ -22,6 +22,12 @@ import { RiskResult } from "@/features/results/RiskPanel";
 import { ComparisonView, DecisionOverview } from "@/features/results/ComparisonView";
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { StorageFallback } from "@/features/plan/StorageFallback";
+import { PASTED_KEY } from "@/features/start/StartChooser";
+
+/** Pasted offer/statement text is used once for this import, then removed from the browser. */
+function takePasted(): string | null {
+  try { const t = sessionStorage.getItem(PASTED_KEY); sessionStorage.removeItem(PASTED_KEY); return t; } catch { return null; }
+}
 import { workspaceFromCase } from "@/features/household-plan/ops";
 import { workspaceRepo } from "@/features/household-plan/store";
 import {
@@ -51,14 +57,16 @@ function firstIncomplete(d: Draft): SectionKey {
   return "D";
 }
 
-export function Workspace({ seed, mode, initialStep = "household", entry }: {
-  seed: CaseInput | null; mode: "own" | "demo"; initialStep?: Step; entry?: "project";
+export function Workspace({ seed, mode, initialStep = "household", entry, importMode }: {
+  seed: CaseInput | null; mode: "own" | "demo"; initialStep?: Step; entry?: "project"; importMode?: "doc" | "pasted";
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(() => seed ? draftFromCase(seed) : blankDraft());
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(mode === "demo");
   const [step, setStep] = useState<Step>(initialStep);
+  const [pastedText, setPastedText] = useState<string | null>(null);
+  useEffect(() => { if (importMode === "pasted") setPastedText(takePasted()); }, [importMode]);
   const [risk, setRisk] = useState<Run<RiskAssessment>>(IDLE_RUN);
   const [comparison, setComparison] = useState<Run<ComparisonResult>>(IDLE_RUN);
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
@@ -265,7 +273,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
         <HouseholdBasics draft={draft} update={update} problemAt={problemAt} />
       </Section>
       <Section {...sectionProps("B")} title="2026 income forecast" lead="Your best estimate for the whole year, each adult separately. Leave anything you don't know blank — it stays unknown, never zero.">
-        <details className="doc-disclosure"><summary>Have a pay stub or statement? Import figures from it (optional)</summary><DocumentImport draft={draft} update={update} /></details>
+        {!importMode && <details className="doc-disclosure"><summary>Have a pay stub or statement? Import figures from it (optional)</summary><DocumentImport draft={draft} update={update} /></details>}
         {adults(draft).map(p => <IncomeEditor key={p.id} draft={draft} update={update} problemAt={problemAt} yearIndex={0} personId={p.id} />)}
       </Section>
       <Section {...sectionProps("C")} title="2026 health coverage" lead="Your Marketplace plan for 2026.">
@@ -346,7 +354,9 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
             <button type="button" className="btn ghost small" onClick={startOver}><RotateCcw size={15} /> Start over</button>
           </div>
           {restoredNote && <p className="notice" role="status">{restoredNote}</p>}
-          {entry === "project" && step === "household" && <p className="notice">First, a few facts about this year — the project is measured against them. You&apos;ll add the project in step 2.</p>}
+          {entry === "project" && step === "compare" && <p className="notice">Start with the offer. When you compare, Headroom lists only the household facts it still needs — nothing unknown is treated as $0.</p>}
+          {importMode && loaded && <div className="import-first"><h2 className="small-head">{importMode === "pasted" ? "Figures from the text you pasted" : "Your documents"}</h2>
+            <DocumentImport draft={draft} update={update} initialText={pastedText} /></div>}
           {step === "household" && <p className="muted small">About 5 minutes. Your figures stay in this browser while you work.</p>}
         </div>
         <div className="ws-grid">

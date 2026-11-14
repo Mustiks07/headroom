@@ -7,8 +7,8 @@ export function SiteHeader({ current }: { current?: "demo" | "check" | "plans" |
     <div className="shell nav-row">
       <Link href="/" className="wordmark" aria-label="Headroom home">headroom<span aria-hidden="true">↗</span></Link>
       <nav aria-label="Main navigation" className="nav-links">
-        {link("/check", "check", "Check my subsidy")}
-        {link("/demo", "demo", "Sample households")}
+        {link("/start?intent=offer", "check", "Check an offer")}
+        {link("/demo", "demo", "Samples")}
         {link("/household", "plans", "My plans")}
         {link("/pricing", "pricing", "Pricing")}
       </nav>

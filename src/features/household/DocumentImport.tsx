@@ -108,11 +108,19 @@ function defaultTarget(field: Field, draft: Draft): Target {
 const isPartialIncome = (field: Field) => field.path.startsWith("income.") && isProposed(field.proposedValue) &&
   field.proposedValue.kind === "money" && field.proposedValue.period !== "annual";
 
-export function DocumentImport({ draft, update }: { draft: Draft; update: Update }) {
+export function DocumentImport({ draft, update, initialText = null }: { draft: Draft; update: Update; initialText?: string | null }) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [aiAvailable, setAiAvailable] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const started = useRef(false);
   useEffect(() => { void getCapabilities().then(c => setAiAvailable(c.aiExtraction)); }, []);
+  // Pasted text is read like a .txt file by the same deterministic reader (no provider involved).
+  useEffect(() => {
+    if (!initialText || started.current) return;
+    started.current = true;
+    void read(new File([initialText], "pasted-text.txt", { type: "text/plain" }), false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText]);
 
   async function read(file: File, consentToProvider: boolean) {
     setState({ kind: "reading", name: file.name });
