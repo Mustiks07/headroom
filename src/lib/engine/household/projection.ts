@@ -78,6 +78,8 @@ export interface ProjectionOptions {
   excludeProjectId?: string;
   /** Also count this PROPOSED project's expected items (what-if). */
   includeProposedId?: string;
+  /** Only what already happened: actual project amounts and SEP contributions actually paid. */
+  factsOnly?: boolean;
 }
 
 const canonical = (v: unknown): string => JSON.stringify(v, (_k, x) =>
@@ -101,8 +103,9 @@ const lowOf = (f: MoneyFact) => f.range?.lowCents ?? f.valueCents!;
 const highOf = (f: MoneyFact) => f.range?.highCents ?? f.valueCents!;
 
 /** Which managed-project items count, and with which basis. */
-export function countedBasis(project: Project, item: ProjectItem, opts: Pick<ProjectionOptions, "excludeProjectId" | "includeProposedId">): "actual" | "expected" | null {
+export function countedBasis(project: Project, item: ProjectItem, opts: Pick<ProjectionOptions, "excludeProjectId" | "includeProposedId" | "factsOnly">): "actual" | "expected" | null {
   if (item.actual) return "actual";
+  if (opts.factsOnly) return null;
   if (!item.expected || item.cancelled || project.status === "cancelled") return null;
   if (project.id === opts.excludeProjectId) return null;
   if (project.status === "agreed") return "expected";
@@ -161,9 +164,10 @@ export function projectHousehold(input: HouseholdEngineInput, issues: Issues, op
     const mine = contributions.filter(c => c.taxYear === year && c.personId === owner);
     const paidCents = mine.reduce((a, c) => a + c.amountCents, 0);
     const target = input.sepTargets.find(t => t.taxYear === year && t.personId === owner)?.targetCents ?? null;
-    if (target !== null && target < paidCents) {
+    if (target !== null && target < paidCents && !opts.factsOnly) {
       warnings.push(`The ${year} SEP-IRA target (${formatUsd(target)}) is below what was already contributed (${formatUsd(paidCents)}); the paid amount stays in the calculation. Removing an excess contribution is a separate step with your plan provider.`);
     }
+    if (opts.factsOnly) return { targetCents: target, paidCents, plannedTotalCents: paidCents, remainingCents: 0, contributionIds: mine.map(c => c.id).sort() };
     return { targetCents: target, paidCents, plannedTotalCents: Math.max(target ?? 0, paidCents), remainingCents: Math.max(0, (target ?? 0) - paidCents),
       contributionIds: mine.map(c => c.id).sort() };
   };
@@ -266,7 +270,7 @@ export function projectHousehold(input: HouseholdEngineInput, issues: Issues, op
 
   if (issues.count > before) return null;
 
-  const reservedCents = YEARS.reduce((a, y) => a + sepFor(y).remainingCents, 0);
+  const reservedCents = opts.factsOnly ? 0 : YEARS.reduce((a, y) => a + sepFor(y).remainingCents, 0);
   const sepBudget = { budgetCents: input.futureSepBudgetCents, reservedCents,
     availableCents: input.futureSepBudgetCents === null ? null : input.futureSepBudgetCents - reservedCents };
 
@@ -284,7 +288,7 @@ export function projectHousehold(input: HouseholdEngineInput, issues: Issues, op
     row.existingSepContribution = { valueCents: yp.sep.plannedTotalCents, status: "confirmed", sourceId: DERIVED_SOURCE_ID };
   }
   derived.opportunity = { ...derived.opportunity, title: "Current household forecast", grossRevenueCents: 0, incrementalExpensesCents: 0 };
-  return { ownerPersonId: owner, years, counted, sepBudget, derivedInput: derived, warnings };
+  return { ownerPersonId: owner, years, counted, sepBudget, derivedInput: derived, warnings: [...new Set(warnings)] };
 }
 
 /** Trace lines that show where each year's business profit and SEP total come from. */

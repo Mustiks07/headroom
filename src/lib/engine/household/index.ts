@@ -1,83 +1,110 @@
 /**
- * Household entry points (round 3). Same guards, rules, rounding and year calculations as v1;
- * the v1 entry points are unchanged.
+ * Household entry points (round 3) on the shared `HouseholdWorkspace` contract v2.0
+ * (src/domain/household-workspace.ts, commit ecbdd18). Same guards, rules, rounding and year
+ * calculations as v1; the v1 entry points are unchanged.
  *
- *  buildHouseholdProjection   — where each year's business profit and SEP total come from
- *  evaluateHouseholdWorkspace — the plan as agreed now (fixed commitments, not re-optimized)
+ *  buildHouseholdProjection    — where each year's business profit and SEP total come from + current risk
+ *  evaluateHouseholdWorkspace  — the plan as agreed now (fixed commitments, not re-optimized)
  *  compareWorkspaceOpportunity — one candidate project evaluated on top of every other commitment
  */
-import type { BlockedComparison, CaseInput, ReadyComparison, ScenarioResult, TaxYear, TraceItem, YearResult } from "@/domain/contracts";
+import type { BlockedComparison, CaseInput, ReadyComparison, ScenarioResult, TaxYear, YearResult } from "@/domain/contracts";
 import { CONTRACT_VERSION } from "@/domain/contracts";
+import {
+  canonicalWorkspaceContent, combineFacts, forecastFacts, HouseholdWorkspaceSchema, type HouseholdWorkspace, type ProjectedPersonYear,
+  type ProjectionComponent, type ReadyHouseholdProjection, type ReadyWorkspaceComparison, type ReadyWorkspaceEvaluation, type SepYearStatus,
+} from "@/domain/household-workspace";
 import { canonical, modelWarnings, sha256Hex, stopToBlocked } from "../common";
 import { compare, makeCtx, run, scenarioFromPlan, YEARS as V1_YEARS, type Plan } from "../comparison";
 import { buildYearModel, checkOpportunity, Issues, parseCase } from "../guard";
 import { formatUsd } from "../money";
 import { EngineStop, NO_VARIATION, type YearModel } from "../model";
 import { ENGINE_VERSION, RULES_VERSION } from "../rules";
+import { assessRisk } from "../risk";
 import { profitHeadroomDollars } from "../search";
 import { evaluateYear, solveCredit, toYearResult } from "../year";
-import { projectHousehold, projectionTrace, type HouseholdProjection, type ProjectionOptions, type YearProjection } from "./projection";
-import { HouseholdEngineInputSchema, type HouseholdEngineInput } from "./types";
-
-export * from "./types";
-export type { HouseholdProjection, ProfitComponent, YearProjection, YearSep } from "./projection";
+import { workspaceToEngineInput, type AdaptedWorkspace } from "./adapter";
+import { countedBasis, projectHousehold, projectionTrace, type HouseholdProjection } from "./projection";
 
 /** Version of the household aggregation layer; v1 results keep ENGINE_VERSION unchanged. */
 export const HOUSEHOLD_ENGINE_VERSION = "headroom-household-1.0.0";
-
 const YEARS: TaxYear[] = [2026, 2027];
 
-interface Versions { engineVersion: string; householdEngineVersion: string; rulesVersion: string; calculationFingerprint: string }
-
-/** Order-insensitive fingerprint: records are sorted by id, so reordering without a change in meaning keeps it. */
-export async function householdFingerprint(input: HouseholdEngineInput, extra: Record<string, unknown> = {}): Promise<string> {
-  const byId = <T extends { id: string }>(xs: T[]) => [...xs].sort((a, b) => a.id.localeCompare(b.id));
-  const normalized = {
-    ...input,
-    forecasts: [...input.forecasts].sort((a, b) => `${a.personId}.${a.year}`.localeCompare(`${b.personId}.${b.year}`)),
-    projects: byId(input.projects).map(p => ({ ...p, items: byId(p.items) })),
-    sepContributions: byId(input.sepContributions),
-    sepTargets: [...input.sepTargets].sort((a, b) => `${a.personId}.${a.taxYear}`.localeCompare(`${b.personId}.${b.taxYear}`)),
-  };
-  return sha256Hex(JSON.stringify({ input: canonical(normalized), extra: canonical(extra), engineVersion: ENGINE_VERSION,
-    householdEngineVersion: HOUSEHOLD_ENGINE_VERSION, rulesVersion: RULES_VERSION }));
+/** SHA-256 of canonicalWorkspaceContent + engine, household-engine and rules versions (+ what was asked). */
+export async function workspaceFingerprint(ws: HouseholdWorkspace, extra: Record<string, unknown> = {}): Promise<string> {
+  return sha256Hex(JSON.stringify({ content: canonical(canonicalWorkspaceContent(ws)), extra: canonical(extra),
+    engineVersion: ENGINE_VERSION, householdEngineVersion: HOUSEHOLD_ENGINE_VERSION, rulesVersion: RULES_VERSION }));
 }
 
-function parseHousehold(raw: unknown, issues: Issues): HouseholdEngineInput | null {
-  const parsed = HouseholdEngineInputSchema.safeParse(raw);
+type Prepared = { ws: HouseholdWorkspace; adapted: AdaptedWorkspace };
+function prepare(raw: HouseholdWorkspace, candidateProjectId?: string): Prepared | BlockedComparison {
+  const parsed = HouseholdWorkspaceSchema.safeParse(raw);
   if (!parsed.success) {
-    for (const i of parsed.error.issues) issues.need("INVALID_INPUT", i.path.map(String).join(".") || "(root)", i.message);
-    return null;
+    return { status: "needs_data", code: "INVALID_WORKSPACE", message: "Part of the household plan needs review before it can be calculated.",
+      fields: parsed.error.issues.map(i => ({ path: i.path.map(String).join(".") || "(root)", reason: i.message })) };
   }
-  return parsed.data;
+  return { ws: parsed.data, adapted: workspaceToEngineInput(parsed.data, candidateProjectId) };
 }
-
-const yearsWithForecast = (input: HouseholdEngineInput): Array<0 | 1> =>
-  ([0, 1] as const).filter(yi => yi === 0 || input.forecasts.some(f => f.year === YEARS[yi] && f.personId === input.household.opportunity.ownerPersonId));
-
-async function versions(input: HouseholdEngineInput, extra: Record<string, unknown>): Promise<Versions> {
-  return { engineVersion: ENGINE_VERSION, householdEngineVersion: HOUSEHOLD_ENGINE_VERSION, rulesVersion: RULES_VERSION,
-    calculationFingerprint: await householdFingerprint(input, extra) };
+const isBlocked = (x: Prepared | BlockedComparison): x is BlockedComparison => "status" in x;
+function blocked(issues: Issues, a: AdaptedWorkspace): BlockedComparison | null {
+  const b = issues.toBlocked();
+  return b && { ...b, fields: b.fields.map(f => ({ ...f, path: a.translatePath(f.path) })) };
 }
+const yearsWithForecast = (ws: HouseholdWorkspace, owner: string): Array<0 | 1> =>
+  ([0, 1] as const).filter(yi => yi === 0 || ws.forecasts.some(f => f.year === YEARS[yi] && f.personId === owner));
 
 // --------------------------------------------------------------- projection --
-export type HouseholdProjectionResult = BlockedComparison | (Versions & {
-  status: "ready";
-  projection: Omit<HouseholdProjection, "derivedInput">;
-  trace: TraceItem[];
-  warnings: string[];
-});
+const FORECAST_KIND = { annualNetProfit: "annual_total", ytdNetProfit: "ytd_net_profit", remainingReceipts: "remaining_receipts", remainingExpenses: "remaining_expenses" } as const;
 
-export async function buildHouseholdProjection(raw: HouseholdEngineInput): Promise<HouseholdProjectionResult> {
+function peopleYears(ws: HouseholdWorkspace, p: HouseholdProjection): ReadyHouseholdProjection["years"] {
+  return p.years.map(yp => {
+    const yi = YEARS.indexOf(yp.year);
+    const ownerRow = p.derivedInput.years[yi].incomes.find(r => r.personId === p.ownerPersonId)!;
+    const owner: ProjectedPersonYear = {
+      personId: p.ownerPersonId, year: yp.year, method: yp.method,
+      components: yp.components.map((c): ProjectionComponent => ({
+        kind: c.source, label: c.label, amountCents: c.cents, status: c.status,
+        ...(c.basis === "forecast" ? {} : { basis: c.basis }), sourceIds: c.sourceIds,
+        ...(c.projectId ? { refs: { projectId: c.projectId, lineId: c.itemId ?? undefined } } : {}),
+      })),
+      total: ownerRow.scheduleCProfit,
+    };
+    const others = ws.household.years[yi].otherIncomes.filter(o => o.personId !== p.ownerPersonId).map((o): ProjectedPersonYear => {
+      const f = ws.forecasts.find(x => x.personId === o.personId && x.year === yp.year);
+      return { personId: o.personId, year: yp.year, method: f?.method ?? null,
+        components: f ? forecastFacts(f).map(x => ({ kind: FORECAST_KIND[x.key as keyof typeof FORECAST_KIND], label: x.key,
+          amountCents: x.fact.valueCents === null ? null : x.sign * x.fact.valueCents, status: x.fact.status, sourceIds: [x.fact.sourceId] })) : [],
+        total: p.derivedInput.years[yi].incomes.find(r => r.personId === o.personId)?.scheduleCProfit ?? combineFacts([], "derived-other-profit") };
+    });
+    return { year: yp.year, people: [owner, ...others] };
+  });
+}
+
+const ASSUMPTIONS = [
+  "One business profit forecast per owner and year; it leaves out the projects managed in this plan, whose payments are added once.",
+  "An actual payment replaces the expected one; agreed projects count, proposed ones only when evaluated; cancelled projects keep money already received.",
+  "SEP-IRA contributions belong to the owner and tax year: the total used is the larger of the agreed target and what was actually paid.",
+];
+
+export type HouseholdProjectionDetails = { sepBudget: HouseholdProjection["sepBudget"]; profitSources: HouseholdProjection["years"] };
+async function projectionResult(ws: HouseholdWorkspace, p: HouseholdProjection, fingerprint: string): Promise<ReadyHouseholdProjection & HouseholdProjectionDetails> {
+  const risk = await assessRisk(p.derivedInput);
+  const warnings = [...p.warnings];
+  if (risk.status !== "ready") warnings.push(`Current-year subsidy position not available: ${risk.message}`);
+  return { status: "ready", workspaceId: ws.id, workspaceRevision: ws.revision, engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION, fingerprint,
+    years: peopleYears(ws, p), currentRisk: risk.status === "ready" ? risk.risk : null,
+    assumptions: [...ASSUMPTIONS, ...(risk.status === "ready" ? risk.risk.headroomAssumptions : [])],
+    warnings: [...new Set([...warnings, ...(risk.status === "ready" ? risk.warnings : [])])], sepBudget: p.sepBudget, profitSources: p.years };
+}
+
+export async function buildHouseholdProjection(raw: HouseholdWorkspace): Promise<(ReadyHouseholdProjection & HouseholdProjectionDetails) | BlockedComparison> {
+  const prep = prepare(raw);
+  if (isBlocked(prep)) return prep;
+  const { ws, adapted } = prep;
   const issues = new Issues();
-  const input = parseHousehold(raw, issues);
-  const p = input ? projectHousehold(input, issues, { years: yearsWithForecast(input) }) : null;
-  const blocked = issues.toBlocked();
-  if (blocked || !input || !p) return blocked!;
-  const { derivedInput: _d, ...projection } = p;
-  void _d;
-  return { status: "ready", ...(await versions(input, { kind: "projection" })), projection,
-    trace: p.years.flatMap(y => projectionTrace(p, y.year)), warnings: p.warnings };
+  const p = projectHousehold(adapted.input, issues, { years: yearsWithForecast(ws, adapted.ownerPersonId) });
+  const b = blocked(issues, adapted);
+  if (b || !p) return b!;
+  return projectionResult(ws, p, await workspaceFingerprint(ws, { kind: "projection" }));
 }
 
 // ------------------------------------------------------------ fixed plan --
@@ -87,30 +114,18 @@ export interface WorkspaceYearOutcome {
   result: YearResult | null;
   risk: { magiCents: number; thresholdMagiCents: number; ptcCents: number; settlementCents: number;
     state: "below_cliff" | "at_risk" | "over_cliff" | "no_credit"; additionalProfitHeadroomCents: number | null } | null;
+  legalSepLimitCents: number | null;
   problems: string[];
 }
-
-export interface FixedPlanOutcome {
-  /** The agreed commitments are possible and allowed as recorded. */
-  feasible: boolean;
-  reasons: string[];
+export interface FixedPlanDetails {
   /** Checks that could not be made because an input is missing (not a failure). */
   notChecked: string[];
   years: WorkspaceYearOutcome[];
-  /** Spendable cash of both years after settlement, when both years were calculated. */
-  twoYearSpendableCents: number | null;
   /** Years not calculated because next-year facts are missing (not an error for the current-year check). */
   pendingYears: Array<{ year: TaxYear; fields: BlockedComparison["fields"] }>;
 }
 
-export type HouseholdWorkspaceEvaluation = BlockedComparison | (Versions & {
-  status: "ready";
-  projection: Omit<HouseholdProjection, "derivedInput">;
-  fixedPlan: FixedPlanOutcome;
-  warnings: string[];
-});
-
-function riskOf(model: YearModel) {
+function riskOf(model: YearModel): WorkspaceYearOutcome["risk"] {
   const c = solveCredit(model, NO_VARIATION);
   const threshold = 400 * c.fplDollars;
   const headroom = c.ptc.ptc > 0 ? profitHeadroomDollars(model, NO_VARIATION) : null;
@@ -122,13 +137,13 @@ function riskOf(model: YearModel) {
 }
 
 /** Evaluate the commitments as recorded: no optimization, no silent change of an agreed amount. */
-function fixedPlan(input: HouseholdEngineInput, p: HouseholdProjection, issues: Issues): { outcome: FixedPlanOutcome; models: YearModel[] } | null {
+function fixedPlan(p: HouseholdProjection, issues: Issues): { reasons: string[]; details: FixedPlanDetails; models: YearModel[] } | null {
   const derived = parseCase(p.derivedInput, issues);
   if (!derived) return null;
   const reasons: string[] = [];
   const years: WorkspaceYearOutcome[] = [];
   const models: YearModel[] = [];
-  const pendingYears: FixedPlanOutcome["pendingYears"] = [];
+  const pendingYears: FixedPlanDetails["pendingYears"] = [];
   for (const yp of p.years) {
     const yi = YEARS.indexOf(yp.year) as 0 | 1;
     const yearIssues = new Issues();
@@ -141,6 +156,7 @@ function fixedPlan(input: HouseholdEngineInput, p: HouseholdProjection, issues: 
     models.push(model);
     const problems: string[] = [];
     let result: YearResult | null = null, risk: WorkspaceYearOutcome["risk"] = null;
+    const legalSepLimitCents = solveCredit(model, NO_VARIATION, false).sepMax;
     try {
       risk = riskOf(model);
       const yc = evaluateYear(model, NO_VARIATION);
@@ -151,12 +167,12 @@ function fixedPlan(input: HouseholdEngineInput, p: HouseholdProjection, issues: 
       if (e.code === "SEP_OVER_LIMIT") {
         const sep = yp.sep;
         problems.push(sep.paidCents > 0 && sep.paidCents >= sep.plannedTotalCents
-          ? `${yp.year}: SEP-IRA contributions already paid (${formatUsd(sep.paidCents)}) exceed the legal limit for the current profit forecast. ${e.message} An excess contribution has to be corrected with your plan provider; Headroom does not change a paid amount.`
-          : `${yp.year}: the agreed SEP-IRA target (${formatUsd(sep.plannedTotalCents)}) is no longer allowed for the current profit forecast. ${e.message} Lower the target before contributing the rest (${formatUsd(sep.remainingCents)} still to pay).`);
+          ? `${yp.year}: SEP-IRA contributions already paid (${formatUsd(sep.paidCents)}) exceed the legal limit of ${formatUsd(legalSepLimitCents)} for the current profit forecast. An excess contribution has to be corrected with your plan provider; Headroom does not change a paid amount.`
+          : `${yp.year}: the agreed SEP-IRA target of ${formatUsd(sep.plannedTotalCents)} is no longer allowed: the limit for the current profit forecast is ${formatUsd(legalSepLimitCents)}. Lower the target before paying the rest (${formatUsd(sep.remainingCents)} still to pay).`);
       } else problems.push(`${yp.year}: ${e.message}`);
     }
     reasons.push(...problems);
-    years.push({ year: yp.year, result, risk, problems });
+    years.push({ year: yp.year, result, risk, legalSepLimitCents, problems });
   }
   const { budgetCents, reservedCents, availableCents } = p.sepBudget;
   if (budgetCents !== null && availableCents !== null && availableCents < 0) {
@@ -166,76 +182,103 @@ function fixedPlan(input: HouseholdEngineInput, p: HouseholdProjection, issues: 
   if (budgetCents === null && reservedCents > 0) {
     notChecked.push(`Not checked: whether money is set aside for the ${formatUsd(reservedCents)} of agreed SEP-IRA contributions still to be paid. Enter the set-aside amount to check it.`);
   }
-  const both = years.length === 2 && years.every(y => y.result);
-  return { outcome: { feasible: reasons.length === 0, reasons, notChecked, years,
-    twoYearSpendableCents: both ? years.reduce((a, y) => a + y.result!.spendableAfterSettlementCents, 0) : null, pendingYears }, models };
+  return { reasons, details: { notChecked, years, pendingYears }, models };
 }
 
-export async function evaluateHouseholdWorkspace(raw: HouseholdEngineInput): Promise<HouseholdWorkspaceEvaluation> {
+/** The open commitments (agreed, not yet received/paid) as one fixed scenario on top of what already happened. */
+function agreedScenario(input: AdaptedWorkspace["input"], current: HouseholdProjection, reasons: string[]): { result: ScenarioResult | null; creditLostYears: TaxYear[] } {
+  if (current.years.length < 2) return { result: null, creditLostYears: [] };
+  const factsIssues = new Issues();
+  const facts = projectHousehold(input, factsIssues, { years: [0, 1], factsOnly: true });
+  const parsed = facts ? parseCase(facts.derivedInput, factsIssues) : null;
+  const m0 = parsed ? buildYearModel(parsed, 0, factsIssues) : null, m1 = parsed ? buildYearModel(parsed, 1, factsIssues) : null;
+  if (!parsed || !m0 || !m1) return { result: null, creditLostYears: [] };
+  const plan: Plan = { kind: "accept_now", label: "Your plan as agreed: open project payments and SEP-IRA contributions still to make",
+    revenue: 0, receipts: [], expenses: [], sep: [current.years[0].sep.remainingCents, current.years[1].sep.remainingCents], reasons: [...reasons], actions: [],
+    assumptions: ["Fixed agreements on the current facts; amounts and dates are not re-optimized.",
+      "Compared with only what has already happened (payments received or paid, SEP-IRA contributions made)."] };
+  for (const pr of input.projects) for (const item of pr.items) {
+    if (countedBasis(pr, item, {}) !== "expected") continue;
+    if (item.kind === "receipt") { plan.receipts.push({ date: item.expected!.date, amount: item.expected!.amountCents }); plan.revenue += item.expected!.amountCents; }
+    else plan.expenses.push({ yearIndex: V1_YEARS.indexOf(Number(item.expected!.date.slice(0, 4)) as TaxYear) as 0 | 1, amount: item.expected!.amountCents });
+  }
+  plan.receipts.sort((a, b) => a.date.localeCompare(b.date));
+  try {
+    const ctx = makeCtx(parsed, [m0, m1]);
+    const factYcs = run([m0, m1], ctx.decline);
+    const ycs = run([m0, m1], plan);
+    const creditLostYears = YEARS.filter((_y, i) => factYcs[i].credit.ptc.ptc > 0 && ycs[i].credit.ptc.ptc === 0);
+    return { result: scenarioFromPlan(ctx, plan, ycs, "agreed-plan"), creditLostYears };
+  } catch (e) {
+    if (!(e instanceof EngineStop)) throw e;
+    return { result: null, creditLostYears: [] };
+  }
+}
+
+export type WorkspaceEvaluationDetails = { fixedPlan: FixedPlanDetails };
+export async function evaluateHouseholdWorkspace(raw: HouseholdWorkspace): Promise<(ReadyWorkspaceEvaluation & WorkspaceEvaluationDetails) | BlockedComparison> {
+  const prep = prepare(raw);
+  if (isBlocked(prep)) return prep;
+  const { ws, adapted } = prep;
   const issues = new Issues();
-  const input = parseHousehold(raw, issues);
-  const p = input ? projectHousehold(input, issues, { years: yearsWithForecast(input) }) : null;
-  const fixed = input && p ? fixedPlan(input, p, issues) : null;
-  const blocked = issues.toBlocked();
-  if (blocked || !input || !p || !fixed) return blocked!;
-  const { derivedInput: _d, ...projection } = p;
-  void _d;
-  return { status: "ready", ...(await versions(input, { kind: "workspace" })), projection, fixedPlan: fixed.outcome,
-    warnings: [...modelWarnings(fixed.models, p.derivedInput), ...p.warnings] };
+  const p = projectHousehold(adapted.input, issues, { years: yearsWithForecast(ws, adapted.ownerPersonId) });
+  const fixed = p ? fixedPlan(p, issues) : null;
+  const b = blocked(issues, adapted);
+  if (b || !p || !fixed) return b!;
+  const fingerprint = await workspaceFingerprint(ws, { kind: "evaluation" });
+  const projection = await projectionResult(ws, p, fingerprint);
+  const agreed = agreedScenario(adapted.input, p, fixed.reasons);
+  const warnings = [...modelWarnings(fixed.models, p.derivedInput), ...p.warnings, ...fixed.details.notChecked];
+  for (const y of fixed.details.pendingYears) warnings.push(`${y.year} is not calculated yet: ${y.fields[0]?.reason ?? "facts are missing"}`);
+  for (const y of agreed.creditLostYears) warnings.push(`The open agreements push ${y} household income above the premium tax credit limit: the ${y} credit is lost.`);
+  const sep: SepYearStatus[] = p.years.map(yp => ({ personId: p.ownerPersonId, year: yp.year, targetCents: yp.sep.targetCents, paidCents: yp.sep.paidCents,
+    remainingCents: yp.sep.remainingCents, legalLimitCents: fixed.details.years.find(y => y.year === yp.year)?.legalSepLimitCents ?? null }));
+  return { status: "ready", projection,
+    agreed: { result: agreed.result, stillFeasible: fixed.reasons.length === 0, reasons: fixed.reasons, creditLostYears: agreed.creditLostYears },
+    sep, futureContributionBudgetRemainingCents: p.sepBudget.availableCents, fingerprint, warnings: [...new Set(warnings)], fixedPlan: fixed.details };
 }
 
 // ------------------------------------------------------- candidate comparison --
-export type WorkspaceOpportunityComparison = BlockedComparison | (Versions & {
-  status: "ready";
-  candidateProjectId: string;
-  /** Baseline: every other commitment plus the candidate's amounts already received/paid. */
-  baseline: Omit<HouseholdProjection, "derivedInput">;
-  /** The plan as currently agreed (includes the candidate if it is an agreed project being edited). */
-  fixedPlan: FixedPlanOutcome | null;
-  /** Options for the candidate only, relative to the baseline. Uses the v1 comparison and its scenario kinds. */
-  comparison: ReadyComparison;
-  warnings: string[];
-});
+export type WorkspaceComparisonDetails = { baselineProjection: HouseholdProjection["years"]; warnings: string[] };
 
 /**
  * Evaluate ONLY the increment of one project on top of all other commitments. Editing an agreed
  * project first removes its not-yet-received items from the baseline; its actual receipts stay.
  * Declining the candidate never cancels another project.
  */
-export async function compareWorkspaceOpportunity(raw: HouseholdEngineInput, candidateProjectId: string): Promise<WorkspaceOpportunityComparison> {
-  const issues = new Issues();
-  const input = parseHousehold(raw, issues);
-  if (!input) return issues.toBlocked()!;
-  const candidate = input.projects.find(p => p.id === candidateProjectId);
+export async function compareWorkspaceOpportunity(raw: HouseholdWorkspace, candidateProjectId: string): Promise<(ReadyWorkspaceComparison & WorkspaceComparisonDetails) | BlockedComparison> {
+  const prep = prepare(raw, candidateProjectId);
+  if (isBlocked(prep)) return prep;
+  const { ws, adapted } = prep;
+  const ci = ws.projects.findIndex(p => p.id === candidateProjectId);
+  const candidate = ws.projects[ci];
   if (!candidate) return { status: "needs_data", code: "CANDIDATE_MISSING", message: "Choose the project to evaluate.", fields: [{ path: "projects", reason: `No project with id "${candidateProjectId}".` }] };
   if (candidate.status === "cancelled") {
-    return { status: "needs_data", code: "CANDIDATE_CANCELLED", message: `"${candidate.title}" is cancelled; reopen it before evaluating new terms.`, fields: [{ path: `projects[${input.projects.indexOf(candidate)}].status`, reason: "Cancelled project." }] };
+    return { status: "needs_data", code: "CANDIDATE_CANCELLED", message: `"${candidate.title}" is cancelled; reopen it before evaluating new terms.`, fields: [{ path: `projects[${ci}].status`, reason: "Cancelled project." }] };
   }
-  const opts: ProjectionOptions = { years: [0, 1], excludeProjectId: candidate.id };
-  const baseline = projectHousehold(input, issues, opts);
-  const current = projectHousehold(input, new Issues(), { years: yearsWithForecast(input) });
-  const blocked = issues.toBlocked();
-  if (blocked || !baseline) return blocked!;
-  const fixedIssues = new Issues();
-  const fixed = current ? fixedPlan(input, current, fixedIssues) : null;
+  const issues = new Issues();
+  const baseline = projectHousehold(adapted.input, issues, { years: [0, 1], excludeProjectId: candidate.id });
+  const b = blocked(issues, adapted);
+  if (b || !baseline) return b!;
 
-  // Only the candidate's items that have not happened can be decided; received money is a fact in the baseline.
-  const open = candidate.items.filter(i => !i.actual && !i.cancelled && i.expected);
-  const receipts = open.filter(i => i.kind === "receipt").map(i => ({ id: i.id, ...i.expected! }));
-  const expenses = open.filter(i => i.kind === "expense").map(i => ({ id: i.id, ...i.expected! }));
+  // Only lines that have not happened can be decided; received money is a fact in the baseline.
+  const open = (lines: typeof candidate.receipts) => lines.filter(l => !l.actual && !l.cancelledAt && l.expected).map(l => ({ id: l.id, ...l.expected! }));
+  const receipts = open(candidate.receipts), expenses = open(candidate.expenses);
   const warnings = [...baseline.warnings];
-  const received = candidate.items.filter(i => i.actual);
+  const received = [...candidate.receipts, ...candidate.expenses].filter(l => l.actual);
   if (received.length) warnings.push(`${received.length} payment${received.length === 1 ? "" : "s"} of "${candidate.title}" already happened; they stay in the baseline and are not moved or re-priced.`);
-  if (!receipts.length && !expenses.length) {
-    return { status: "needs_data", code: "NOTHING_TO_DECIDE", message: `"${candidate.title}" has no expected payments left to decide.`, fields: [{ path: `projects[${input.projects.indexOf(candidate)}].items`, reason: "All items are received, paid or cancelled." }] };
+  if (!receipts.length) {
+    return { status: "needs_data", code: "NOTHING_TO_DECIDE", message: `"${candidate.title}" has no expected receipts left to decide.`, fields: [{ path: `projects[${ci}].receipts`, reason: "All receipts are received or cancelled." }] };
   }
 
   const derived: CaseInput = structuredClone(baseline.derivedInput);
+  derived.constraints = { ...derived.constraints, canSplitPayment: candidate.terms.canSplitPayment,
+    canRenegotiatePrice: candidate.terms.canRenegotiatePrice, nextYearPaymentLatestDate: candidate.terms.nextYearPaymentLatestDate };
   const budgetLeft = baseline.sepBudget.availableCents;
-  if (budgetLeft !== null) {
-    const userMax = derived.constraints.maxAdditionalSepCents;
-    derived.constraints.maxAdditionalSepCents = Math.max(0, Math.min(userMax, budgetLeft));
-    if (budgetLeft < userMax) {
+  if (budgetLeft === null) warnings.push("No money set aside for future SEP-IRA contributions was entered, so no additional contribution is assumed possible.");
+  else {
+    derived.constraints.maxAdditionalSepCents = Math.max(0, budgetLeft);
+    if (baseline.sepBudget.reservedCents > 0) {
       warnings.push(`New SEP-IRA contributions are limited to ${formatUsd(Math.max(0, budgetLeft))}: the money set aside (${formatUsd(baseline.sepBudget.budgetCents!)}) minus agreed contributions not yet paid (${formatUsd(baseline.sepBudget.reservedCents)}).`);
     }
   }
@@ -245,41 +288,39 @@ export async function compareWorkspaceOpportunity(raw: HouseholdEngineInput, can
     }
   }
 
-  let comparison: ReadyComparison;
   const byDate = <T extends { date: string }>(xs: T[]) => [...xs].sort((a, b) => a.date.localeCompare(b.date));
   const expenseYears = new Set(expenses.map(e => e.date.slice(0, 4)));
-  // Re-negotiating an AGREED project: its remaining amount is treated as one offer on its first date, so the
-  // usual options (SEP, split, counteroffer) can be searched; the agreed schedule itself stays in fixedPlan.
+  // Re-negotiating an AGREED project: the remaining amount is one offer on its first date so the usual options
+  // can be searched; the agreed schedule itself is evaluated by evaluateHouseholdWorkspace.
   const regroup = candidate.status === "agreed" && receipts.length > 1 && expenseYears.size <= 1;
   const single = (receipts.length === 1 && expenses.length <= 1) || regroup;
-  if (single) {
-    const first = byDate(receipts)[0];
-    const gross = receipts.reduce((a, r) => a + r.amountCents, 0);
-    derived.opportunity = { ...derived.opportunity, title: candidate.title, ownerPersonId: candidate.ownerPersonId,
-      grossRevenueCents: gross, plannedReceiptDate: first.date,
-      incrementalExpensesCents: expenses.reduce((a, e) => a + e.amountCents, 0), expensePaymentDate: byDate(expenses)[0]?.date ?? first.date };
-    if (regroup) warnings.push(`Options treat the ${formatUsd(gross)} still to be received from "${candidate.title}" as one payment on ${first.date}; the schedule you agreed is evaluated separately under the plan as agreed.`);
-  }
+  const first = byDate(receipts)[0];
+  derived.opportunity = { title: candidate.title, ownerPersonId: candidate.ownerPersonId,
+    grossRevenueCents: receipts.reduce((a, r) => a + r.amountCents, 0), plannedReceiptDate: first.date,
+    incrementalExpensesCents: expenses.reduce((a, e) => a + e.amountCents, 0), expensePaymentDate: byDate(expenses)[0]?.date ?? first.date,
+    cashAccountingConfirmed: candidate.cashAccountingConfirmed, timingArrangementConfirmed: candidate.timingArrangementConfirmed };
+  if (regroup) warnings.push(`Options treat the ${formatUsd(derived.opportunity.grossRevenueCents)} still to be received from "${candidate.title}" as one payment on ${first.date}; the schedule you agreed is evaluated separately as your plan as agreed.`);
+
   const v1Issues = new Issues();
   const parsed = parseCase(derived, v1Issues);
   const m0 = parsed ? buildYearModel(parsed, 0, v1Issues) : null;
   const m1 = parsed ? buildYearModel(parsed, 1, v1Issues) : null;
-  if (parsed && single) checkOpportunity(parsed, v1Issues);
-  const v1Blocked = v1Issues.toBlocked();
+  if (parsed) checkOpportunity(parsed, v1Issues);
+  const v1Blocked = blocked(v1Issues, adapted);
   if (v1Blocked || !parsed || !m0 || !m1) return v1Blocked!;
   try {
-    const ver = await versions(input, { kind: "candidate", candidateProjectId });
+    const fingerprint = await workspaceFingerprint(ws, { kind: "candidate", candidateProjectId });
+    let comparison: ReadyComparison;
     if (single) {
       const out = compare(parsed, [m0, m1]);
       comparison = { status: "ready", contractVersion: CONTRACT_VERSION, engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION,
-        calculationFingerprint: ver.calculationFingerprint, caseId: parsed.id, baselineScenarioId: out.baselineScenarioId,
+        calculationFingerprint: fingerprint, caseId: parsed.id, baselineScenarioId: out.baselineScenarioId,
         recommendedScenarioId: out.recommendedScenarioId, scenarios: out.scenarios, warnings: out.warnings };
     } else {
-      // Several payments: evaluate the offered schedule exactly; options are only searched for single-payment offers.
+      // Several payments on a proposed offer: evaluate the offered schedule exactly; options are searched for one-payment offers.
       const ctx = makeCtx(parsed, [m0, m1]);
       const plan: Plan = { kind: "accept_now", label: `Accept "${candidate.title}" on its payment schedule`,
-        revenue: receipts.reduce((a, r) => a + r.amountCents, 0),
-        receipts: receipts.map(r => ({ date: r.date, amount: r.amountCents })),
+        revenue: receipts.reduce((a, r) => a + r.amountCents, 0), receipts: byDate(receipts).map(r => ({ date: r.date, amount: r.amountCents })),
         expenses: expenses.map(e => ({ yearIndex: V1_YEARS.indexOf(Number(e.date.slice(0, 4)) as TaxYear) as 0 | 1, amount: e.amountCents })),
         sep: [0, 0], reasons: [], assumptions: [...ctx.common, "Each scheduled payment is counted in the year of its date."], actions: [] };
       const scenarios: ScenarioResult[] = [scenarioFromPlan(ctx, ctx.decline, run([m0, m1], ctx.decline))];
@@ -288,19 +329,21 @@ export async function compareWorkspaceOpportunity(raw: HouseholdEngineInput, can
       const best = scenarios.filter(s => s.feasible && (s.kind === "decline" ? ctx.target === 0 : s.twoYearCashDeltaCents >= ctx.target))
         .sort((a, b) => b.twoYearCashDeltaCents - a.twoYearCashDeltaCents)[0];
       comparison = { status: "ready", contractVersion: CONTRACT_VERSION, engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION,
-        calculationFingerprint: ver.calculationFingerprint, caseId: parsed.id, baselineScenarioId: "decline", recommendedScenarioId: best?.id ?? null,
+        calculationFingerprint: fingerprint, caseId: parsed.id, baselineScenarioId: "decline", recommendedScenarioId: best?.id ?? null,
         scenarios, warnings: ["SEP-IRA, split and counteroffer options are calculated for offers with one payment; this offer has several."] };
     }
     comparison.warnings = [...modelWarnings([m0, m1], parsed), ...comparison.warnings];
     for (const s of comparison.scenarios) for (const [yi, y] of s.years.entries()) y.trace = [...projectionTrace(baseline, YEARS[yi]), ...y.trace];
-    const { derivedInput: _d, ...base } = baseline;
-    void _d;
-    return { status: "ready", ...ver, candidateProjectId, baseline: base, fixedPlan: fixed?.outcome ?? null, comparison,
-      warnings: [...warnings, ...(fixed ? [] : ["The plan as currently agreed could not be evaluated; see the household check for the missing information."])] };
+    const others = ws.projects.filter(p => p.id !== candidate.id && p.status === "agreed").map(p => `"${p.title}"`);
+    const receivedCents = candidate.receipts.filter(l => l.actual).reduce((a, l) => a + l.actual!.amountCents, 0);
+    return { status: "ready", candidateProjectId, fingerprint, comparison,
+      baseline: { label: `Your plan without "${candidate.title}"`,
+        description: `Your profit forecast${others.length ? ` plus agreed ${others.join(", ")}` : ""}` +
+          (receivedCents ? `, plus ${formatUsd(receivedCents)} already received from "${candidate.title}"` : "") +
+          `, and SEP-IRA contributions already agreed. Declining "${candidate.title}" does not change any other project.` },
+      baselineProjection: baseline.years, warnings };
   } catch (e) {
-    if (e instanceof EngineStop) return stopToBlocked(e, "years");
+    if (e instanceof EngineStop) return stopToBlocked(e, "projects");
     throw e;
   }
 }
-
-export type { YearProjection as HouseholdYearProjection };
