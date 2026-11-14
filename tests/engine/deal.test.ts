@@ -98,6 +98,19 @@ describe("deal search: achievable goal with an agreed deposit (A) and an offer (
     for (const x of byDec.variants) expect(x.dateTargets[0].achievedCents!).toBeGreaterThanOrEqual(usd(5000));
   });
 
+  it("reproduces the documented example (handoff + competitor scenario)", async () => {
+    const r = ready(await search(dealWorkspace(), deal()));
+    const show = (x: DealVariant) => [x.purpose, x.terms.priceCents / 100, x.terms.payments.map(p => `${p.date} ${p.amountCents / 100}`).join(" + "),
+      (x.terms.additionalSep?.amountCents ?? 0) / 100, x.twoYearCashDeltaCents / 100];
+    expect(r.variants.map(show)).toEqual([
+      ["simplest", 12000, "2027-01-04 12000", 33, 8268],
+      ["most_cash", 15000, "2026-12-15 9002 + 2027-01-04 5998", 0, 10390],
+      ["most_retirement", 15000, "2026-12-15 10250 + 2027-01-04 4750", 1000, 9571],
+    ]);
+    const nf = await search(dealWorkspace(), deal({ minCash: 12000, maxPrice: 13000 }));
+    expect(nf.status === "no_feasible_terms" && nf.relaxations.map(x => [x.constraint, x.requiredCents])).toEqual([["minimum_cash", usd(9006)], ["price_max", usd(17500)]]);
+  });
+
   it("parameterized: invariants hold at other profits and step sizes", async () => {
     for (const [profit, step] of [[100000, 100], [109000, 500], [118000, 250]] as const) {
       const d = deal({ step, minCash: 2000 });

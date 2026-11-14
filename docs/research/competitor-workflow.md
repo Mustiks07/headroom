@@ -1,4 +1,4 @@
-# Competitor workflow comparison (round 3)
+# Competitor workflow comparison (round 3, deal-terms scenario added in round 4)
 
 Checked by Claude 2 in the session of 2026-11-14 (UTC dates of the hackathon commits run into 2026-11-15). Free public pages only: no signup, no payment, no installation or execution of other teams' code. "Ran" means we entered the inputs below into the live public tool in a headless Chromium and read the result; "states" means it is written on the vendor's page and was not exercised. Screens and raw outputs were kept in the session scratchpad, not in Git.
 
@@ -28,6 +28,24 @@ Reproduced by `tests/engine/workflow-scenario.test.ts`.
 The integration review corrected the available-cash result: the $4,000 snapshot predates the $1,000 payment. Cash left is $3,000; reserving the unpaid $2,598 leaves $402. Paying a contribution does not create new capacity. The regression now asserts this amount.
 
 The free calculator workflows exercised below did not expose steps 2, 5 and 6 together (an agreed project, recorded actual payments/contributions, and re-evaluating fixed agreements after a correction). ProjectionLab's paid workflow was not exercised; no absence claim is made for it. This is a workflow comparison, not a claim that competitors' arithmetic is wrong.
+
+### Round 4: which terms for an offer meet the family's goal? (deal search `headroom-deal-1.0.0` on engine `headroom-engine-1.2.0`, rules r3)
+
+Reproduced by `tests/engine/deal.test.ts` ("reproduces the documented example"), on its own synthetic workspace (`tests/engine/deal-fixture.ts`): same family and premiums as above, base profit $112,000 (2026) / $118,000 (2027) excluding projects; agreed project A with **$3,000 already received** (2026-10-02) and $3,000 expected 2026-12-01; offer B $12,000 on 2026-12-20; agreed 2026 SEP goal $1,000 with $2,500 set aside (so $1,500 is free for new contributions).
+
+Goal: at least **+$4,000** of spendable cash after both returns settle, compared with declining B's unpaid terms; at least $10,000 from B by 2027-01-10; at most $1,000 extra SEP. The client is open to asking $12,000–$15,000 (step $250), paid 2026-12-15…31 and/or 2027-01-04…10, at most two payments.
+
+| Question | Headroom output |
+| --- | --- |
+| Simplest terms that meet the goal | $12,000 in one payment on 2027-01-04 plus an extra $33 SEP for 2027 → **+$8,268** (the 2027 credit sits $1 from the limit — shown as the first sensitivity) |
+| Most cash (recommended: the simpler option is $2,122 worse, above the $120 threshold) | $15,000 as $9,002 on 2026-12-15 + $5,998 on 2027-01-04 → **+$10,390**; settlements −$2,760 (2027-04-15) and −$1,850 (2028-04-18) shown as dated flows |
+| Most to retirement | $15,000 as $10,250 + $4,750 with $1,000 extra 2026 SEP → +$9,571 cash, $1,000 retirement |
+| Different date goal: $5,000 of project cash (after its tax reserve) by 2026-12-31 | The simplest option changes to $8,800 in December + $3,200 in January (+$8,311) |
+| Unreachable: +$12,000 with price ≤ $13,000 | No terms: the most possible is +$9,006; asking about $17,500 (checked every $250) would be needed — shown as a figure to discuss, not an offer |
+| Client has not confirmed new terms | Only the offer is evaluated: −$3,616; an extra SEP of $2,598 would be needed, more than the $1,000 allowed |
+| Household balance on 2027-01-10 | Given only with a bank snapshot and confirmed list of flows through that date; otherwise "not calculated" while project figures stay |
+
+The free calculators exercised in round 3 take one MAGI (or one profit) per run; answering this question with them means computing MAGI for every price/split/SEP combination by hand. They were **not re-run** in round 4, and ProjectionLab's paid what-if scenarios were not exercised, so no claim is made that a paid tool cannot do this.
 
 ## Product competitors
 
@@ -76,7 +94,7 @@ Weights from the supplied contest materials (`docs/BUSINESS.md`); the same five 
 
 ## Limits of this comparison
 
-- One synthetic household and one run per tool; no accuracy claims beyond the outputs listed.
+- One synthetic household and one run per tool; no accuracy claims beyond the outputs listed. The round 4 deal scenario is Headroom-only; competitors were not re-run for it.
 - ProjectionLab paid features, HESTi's live URL and all contest demos were not executed.
 - Only repositories found by public search on 2026-11-14 are covered; private or unnamed contest entries are unknown.
 - Competitor pages change; re-run the scenario before using any number in the deck.
