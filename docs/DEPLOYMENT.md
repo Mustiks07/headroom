@@ -1,6 +1,6 @@
 # Deployment and configuration
 
-Owner: Claude 3. The foundation is buildable without external keys; it is not a finished public financial product. The user will provide access/configuration later. Keep working on the manual/local path meanwhile.
+Owner: Claude 3. The integrated app builds and runs without external keys. Public deployment and optional provider connections still require configuration and verification. See [the integration review](handoffs/integration-review.md) for the checked local scope.
 
 ## Local
 
@@ -11,7 +11,7 @@ npm run dev
 
 Node 22 baseline. Copy `.env.example` to `.env.local` for service configuration. Use the committed lockfile; do not generate separate package-manager locks on different branches.
 
-The initial calculator/storage/export functions are explicit unavailable stubs assigned to Claude 2/3. “Works without keys” is a release requirement for real manual calculation/local persistence, not a claim that the foundation already computes taxes.
+The financial engine, browser-local storage and PDF export are implemented. Missing optional cloud/AI configuration must preserve the guest path and return truthful service states.
 
 ## Supabase
 

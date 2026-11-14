@@ -6,7 +6,7 @@ import { EngineStop } from "@/lib/engine/model";
 import { rulesFor } from "@/lib/engine/rules";
 import { evaluateYear, scheduleSe } from "@/lib/engine/year";
 import { NO_VARIATION } from "@/lib/engine/model";
-import { family, model, setIncome, usd, wages } from "./helpers";
+import { family, single, model, setIncome, usd, wages } from "./helpers";
 
 describe("Social Security wage base per individual", () => {
   it("does not let a spouse's wages reduce the owner's cap (prototype error)", () => {
@@ -59,4 +59,28 @@ describe("SEP contribution limits", () => {
     expect(sep.infeasibilityReasons.join(" ")).toMatch(/above your maximum/);
     expect(r.recommendedScenarioId).not.toBe("sep_minimum");
   });
+});
+
+it("uses the 2027 indexed QBI minimum only above the 2027 qualifying amount", () => {
+  // IRS Rev. Proc. 2026-35 section 3.28(2): $1,030 qualifying QBI, $415 minimum deduction.
+  // Wages keep the full return above the EITC support guard; no SEHI deduction in this case.
+  const c = setIncome(single(), 1, "primary", { ...wages(usd(80000)), scheduleCProfit: usd(1100) });
+  c.years[1].coverage.forEach(month => { month.sehiEligibilityConfirmed = false; });
+  const below = evaluateYear(model(c, 1), NO_VARIATION);
+  expect(below.qbi).toBeLessThan(usd(1030));
+  expect(below.qbiDeduction).toBe(20446);
+  setIncome(c, 1, "primary", { scheduleCProfit: usd(2000) });
+  const above = evaluateYear(model(c, 1), NO_VARIATION);
+  expect(above.qbiDeduction).toBe(usd(415));
+});
+
+it("does not certify ignored insurance ranges or mixed-direction retirement ranges", async () => {
+  for (const field of ["existingSepContribution", "coverage"] as const) {
+    const c = family();
+    const fact = field === "coverage" ? c.years[0].coverage[0].enrollmentPremium : c.years[0].incomes[0][field];
+    fact.range = { lowCents: fact.valueCents!, highCents: fact.valueCents! + usd(2000) };
+    const result = await calculateComparison(c);
+    expect(result.status).toBe("needs_data");
+    if (result.status !== "ready") expect(result.code).toBe("RANGE_NOT_SUPPORTED");
+  }
 });

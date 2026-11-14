@@ -1,6 +1,6 @@
 {
   "taxYear": 2027,
-  "packVersion": "2027.r1",
+  "packVersion": "2027.r2",
   "coverageFplGuidelineYear": 2026,
   "fpl": { "baseDollars": 15960, "stepDollars": 5680, "region": "contiguous-48-dc", "sourceId": "hhs-fpl-2026" },
   "applicableFigure": {
@@ -30,7 +30,7 @@
   "employeeFica": { "socialSecurityRate": "0.062", "medicareRate": "0.0145", "sourceId": "ssa-2027" },
   "additionalMedicare": { "rate": "0.009", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8959" },
   "niit": { "rate": "0.038", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8960" },
-  "qbi": { "rate": "0.20", "minimumDeductionDollars": 400, "minimumQbiDollars": 1000, "sourceId": "irs-i8995" },
+  "qbi": { "rate": "0.20", "minimumDeductionDollars": 415, "minimumQbiDollars": 1030, "sourceId": "irs-rp-2026-35" },
   "childTaxCredit": { "perChildDollars": 2300, "refundablePerChildDollars": null, "refundableEarnedIncomeFloorDollars": 2500, "refundableRate": "0.15", "otherDependentDollars": 500, "phaseoutThresholdDollars": { "single": 200000, "mfj": 400000 }, "phaseoutPerThousandDollars": 50, "sourceIds": ["irs-rp-2026-35", "irs-s8812"] },
   "eitcSupportBoundDollars": { "single": [21000, 55000, 62000, 67000], "mfj": [29000, 63000, 70000, 75000], "sourceId": "headroom-eitc-support-bound" },
   "sep": { "netEarningsRate": "0.20", "annualCapDollars": 75000, "sourceIds": ["irs-pub-560", "irs-n-2026-66"] },

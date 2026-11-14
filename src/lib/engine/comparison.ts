@@ -68,8 +68,8 @@ export function compare(input: CaseInput, models: Models): ComparisonOutput {
     ? `Project expenses ${formatUsd(o.incrementalExpensesCents)} stay in ${YEARS[expenseList[0].yearIndex]} (paid ${o.expensePaymentDate}); they do not move with receipts.`
     : "No incremental project expenses entered.";
   const returnDue = (yi: 0 | 1) => models[yi].rules.returnDueDate;
-  const marketplaceAction = (date: string, id: string) => ({ id: `${id}-marketplace`, title: `Update your Marketplace income estimate for ${date.slice(0, 4)} within 30 days of receiving the payment`,
-    dueDate: addDays(date, 30), sourceIds: ["healthcare-gov-report-changes"] });
+  const marketplaceAction = (date: string, id: string) => ({ id: `${id}-marketplace`, title: `Update your Marketplace income estimate for ${date.slice(0, 4)} as soon as your expected income changes; do not wait for payment`,
+    dueDate: null, sourceIds: ["healthcare-gov-report-changes"] });
   const common = [
     "Planning estimate under current federal rules, not a tax return or Marketplace eligibility determination.",
     `Cash is measured after both tax years settle (2026 return due ${returnDue(0)}, 2027 return due ${returnDue(1)}), not a bank balance on December 31.`,

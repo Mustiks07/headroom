@@ -7,7 +7,7 @@
     { "id": "irs-rp-2026-26", "title": "Rev. Proc. 2026-26, 2027 applicable percentage table", "url": "https://www.irs.gov/pub/irs-drop/rp-26-26.pdf", "status": "final; band values as recorded in docs/ENGINE_SPEC.md and the prototype, primary PDF hash in data/reference/source-manifest.json" },
     { "id": "irs-i8962-2026-draft", "title": "Instructions for Form 8962 (2026), Worksheet 2 and Table 2", "url": "https://www.irs.gov/pub/irs-dft/i8962--dft.pdf", "status": "DRAFT" },
     { "id": "irs-rp-2025-32", "title": "Rev. Proc. 2025-32, 2026 inflation adjustments", "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf", "status": "final" },
-    { "id": "irs-rp-2026-35", "title": "Rev. Proc. 2026-35, 2027 inflation adjustments", "url": "https://www.irs.gov/pub/irs-drop/rp-26-35.pdf", "status": "final; standard deduction and CTC verified by the foundation, brackets transcribed by the prototype and not re-read in this build" },
+    { "id": "irs-rp-2026-35", "title": "Rev. Proc. 2026-35, 2027 inflation adjustments", "url": "https://www.irs.gov/pub/irs-drop/rp-26-35.pdf", "status": "2027 single/MFJ brackets, standard deduction and QBI minimum checked against the IRS PDF on 2026-11-14; CTC checked by the foundation" },
     { "id": "ssa-2026", "title": "SSA 2026 contribution and benefit base", "url": "https://www.ssa.gov/oact/cola/cbb.html", "status": "final" },
     { "id": "ssa-2027", "title": "SSA 2027 COLA fact sheet", "url": "https://www.ssa.gov/cola/factsheets/2027.html", "status": "final" },
     { "id": "irs-n-2025-67", "title": "Notice 2025-67, 2026 retirement plan limits", "url": "https://www.irs.gov/pub/irs-drop/n-25-67.pdf", "status": "final" },

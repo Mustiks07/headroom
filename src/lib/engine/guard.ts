@@ -122,7 +122,14 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
         else issues.need("NEGATIVE", path, `${f} cannot be negative.`);
       }
       amounts[f] = fact.valueCents;
-      if (fact.range) ranges[f] = { low: fact.range.lowCents, high: fact.range.highCents };
+      if (fact.range && fact.range.lowCents !== fact.range.highCents) {
+        const supported = p.role !== "dependent" && ((f === "scheduleCProfit" && p.id === input.opportunity.ownerPersonId)
+          || f === "taxableInterest" || f === "taxExemptInterest");
+        if (!supported) issues.need("RANGE_NOT_SUPPORTED", path,
+          "Ranges are supported for the business owner's profit and adult interest income. Remove this range and use separate scenarios for payroll or retirement changes.");
+        else if (fact.range.lowCents < 0) issues.need("NEGATIVE_RANGE", path, "The income range cannot include a loss or negative interest.");
+        else ranges[f] = { low: fact.range.lowCents, high: fact.range.highCents };
+      }
     }
     if (p.role === "dependent" && INCOME_FIELDS.some(f => amounts[f] !== 0)) {
       issues.bad("DEPENDENT_INCOME", `${base}.incomes[${row}]`, "Dependent income (and their possible filing requirement) is not modeled.");
@@ -160,6 +167,8 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
       const fact = m[f];
       if (!factOk(fact)) { issues.need("COVERAGE_UNKNOWN", `${path}.${f}`, `${f} for month ${m.month} of ${year.year} is unknown.`); vals.push(0); continue; }
       checkSource(fact, `${path}.${f}`);
+      if (fact.range && fact.range.lowCents !== fact.range.highCents) issues.need("RANGE_NOT_SUPPORTED", `${path}.${f}`,
+        "Insurance amount ranges are not calculated. Remove this range and compare separate insurance forecasts instead.");
       vals.push(fact.valueCents);
     }
     const [prem, bench, adv] = vals;

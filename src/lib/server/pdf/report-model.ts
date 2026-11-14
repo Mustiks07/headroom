@@ -1,4 +1,5 @@
 import type { CaseInput, MoneyFact, ReadyComparison, ScenarioResult, YearResult } from "@/domain/contracts";
+import { resolveSource } from "@/domain/sources";
 
 /** Renderer-independent report content, built only from the input and a fresh ReadyComparison. */
 export type Block =
@@ -78,8 +79,7 @@ export function buildReportModel(input: CaseInput, comparison: ReadyComparison, 
   if (!chosen) throw new Error("Chosen scenario is not in the comparison.");
   const role = (personId: string) => input.people.find(p => p.id === personId)?.role ?? personId;
   const blocks: Block[] = [];
-  const evidenceLabel = new Map(input.evidence.map(e => [e.id, e.label]));
-  const sourceText = (ids: string[]) => ids.length ? ids.map(id => evidenceLabel.get(id) ?? id).join("; ") : "None listed";
+  const sourceText = (ids: string[]) => ids.length ? ids.map(id => resolveSource(input, id)?.label ?? id).join("; ") : "None listed";
 
   blocks.push({ type: "paragraph", tone: "notice", text:
     "Planning estimate based on the information entered. It is not tax or legal advice and not a Marketplace eligibility decision. " +
@@ -161,7 +161,16 @@ export function buildReportModel(input: CaseInput, comparison: ReadyComparison, 
     ["Objective", c.objective === "spendable_cash" ? "Most spendable cash" : "Retirement savings and cash"],
   ] });
 
-  blocks.push({ type: "heading", text: "Sources" });
+  const ruleIds = [...new Set(comparison.scenarios.flatMap(s => [
+    ...s.actions.flatMap(a => a.sourceIds), ...s.years.flatMap(y => y.trace.flatMap(t => t.sourceIds)),
+  ]))].filter(id => !input.evidence.some(e => e.id === id));
+  blocks.push({ type: "heading", text: "Rules and official sources" });
+  blocks.push({ type: "bullets", items: ruleIds.map(id => {
+    const source = resolveSource(input, id);
+    return source ? `[${id}] ${source.label}; ${source.excerpt ?? ""}${source.url ? `; ${source.url}` : ""}` : `Rule reference: ${id}`;
+  }) });
+
+  blocks.push({ type: "heading", text: "Household input sources" });
   blocks.push({ type: "bullets", items: input.evidence.length ? input.evidence.map(e => [
     `[${e.id}] ${e.label}`, `kind: ${e.kind}`, e.taxYear ? `tax year ${e.taxYear}` : "", e.page ? `page ${e.page}` : "",
     e.excerpt ? `excerpt: "${e.excerpt}"` : "", e.url ?? ""].filter(Boolean).join("; ")) : ["No sources recorded."] });
@@ -169,7 +178,7 @@ export function buildReportModel(input: CaseInput, comparison: ReadyComparison, 
   blocks.push({ type: "heading", text: "Calculation trace for the chosen option" });
   for (const year of chosen.years) {
     blocks.push({ type: "table", columns: [{ title: `${year.year} step`, width: 0.3 }, { title: "Amount", width: 0.18, align: "right" }, { title: "Explanation and sources", width: 0.52 }],
-      rows: year.trace.length ? year.trace.slice(0, 60).map(t => [t.label, money(t.amountCents),
+      rows: year.trace.length ? year.trace.slice(0, 60).map(t => [t.label, t.amountCents === null ? "See explanation" : money(t.amountCents),
         `${t.explanation}${t.sourceIds.length ? ` [${t.sourceIds.join(", ")}]` : ""}`]) : [["No trace items", "-", "-"]] });
   }
 

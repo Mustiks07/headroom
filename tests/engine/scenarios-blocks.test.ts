@@ -139,6 +139,6 @@ describe("uncertainty and ordinary projects", () => {
     expect(a.calculationFingerprint).toBe(await calculationFingerprint(family()));
     const changed = family(); changed.opportunity.grossRevenueCents += 100;
     expect(await calculationFingerprint(changed)).not.toBe(a.calculationFingerprint);
-    expect(a.rulesVersion).toBe("us-federal-aca-2026-2027.r1");
+    expect(a.rulesVersion).toBe("us-federal-aca-2026-2027.r2");
   });
 });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, Download, FileJson, FileSearch, FlaskConical, History, Mail, RefreshCw, Trash2 } from "lucide-react";
 import type { ComparisonResult, PlanEvent, ReadyComparison, SavedPlan, ScenarioResult } from "@/domain/contracts";
+import { resolveSource } from "@/domain/sources";
 import { calculateComparison } from "@/lib/engine";
 import { exportPlanPdf } from "@/lib/client/api";
 import { dateTime, money, shortDate, shortFingerprint, signClass, signedMoney } from "@/features/format";
@@ -186,7 +187,10 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
               {done ? <CheckCircle2 className="check-icon" size={20} aria-hidden="true" /> : <Circle className="check-icon" size={20} aria-hidden="true" />}
               <div className="check-body">
                 <p className="check-title">{a.title}</p>
-                <p className="muted small">{a.dueDate ? `Due ${shortDate(a.dueDate)}` : "No fixed date"}{a.sourceIds.length > 0 && ` · Source: ${a.sourceIds.map(sid => plan.input.evidence.find(e => e.id === sid)?.label ?? sid).join(", ")}`}</p>
+                <p className="muted small">{a.dueDate ? `Due ${shortDate(a.dueDate)}` : "No fixed date"}
+                  {a.sourceIds.map(sid => { const source = resolveSource(plan.input, sid); return <span key={sid}> · {source?.url
+                    ? <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a> : source?.label ?? sid}</span>; })}
+                </p>
                 {confirming === a.id ? <div className="confirm-row" role="group" aria-label="Confirm this action">
                   <span className="small">Have you actually done this?</span>
                   <button type="button" className="btn small primary" disabled={busy === a.id} onClick={() => toggleAction(a.id, true)}>Yes, it&apos;s done</button>

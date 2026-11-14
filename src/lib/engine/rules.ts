@@ -7,8 +7,8 @@ import sourcesFile from "../../../data/rules/sources.json";
 import table2026 from "../../../data/reference/2026-8962-table2.json";
 import { dollars, rate, type Rate } from "./money";
 
-export const ENGINE_VERSION = "headroom-engine-1.0.0";
-export const RULES_VERSION = "us-federal-aca-2026-2027.r1";
+export const ENGINE_VERSION = "headroom-engine-1.0.1";
+export const RULES_VERSION = "us-federal-aca-2026-2027.r2";
 
 export type Filing = "single" | "mfj";
 

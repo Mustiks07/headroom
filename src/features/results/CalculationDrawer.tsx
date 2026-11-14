@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import type { CaseInput, TraceItem } from "@/domain/contracts";
+import { resolveSource } from "@/domain/sources";
 import { moneyExact, shortFingerprint } from "@/features/format";
 import { describePath, getAt, isMoneyFact } from "@/features/household/draft";
 
@@ -39,7 +40,7 @@ export function CalculationDrawer({ content, onClose }: { content: DrawerContent
 
   if (!content) return null;
   const { input } = content;
-  const sourceFor = (id: string) => input.evidence.find(e => e.id === id);
+  const sourceFor = (id: string) => resolveSource(input, id);
 
   return <div className="drawer-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
     <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
@@ -57,7 +58,7 @@ export function CalculationDrawer({ content, onClose }: { content: DrawerContent
           {content.trace.map(item => <li key={item.id} className="trace-item">
             <div className="trace-top">
               <strong>{item.label}</strong>
-              <span className="num">{item.amountCents === null ? "Not computed" : moneyExact(item.amountCents)}</span>
+              <span className="num">{item.amountCents === null ? "See explanation" : moneyExact(item.amountCents)}</span>
             </div>
             {item.explanation && <p>{item.explanation}</p>}
             {item.inputPaths.length > 0 && <div className="trace-sub">

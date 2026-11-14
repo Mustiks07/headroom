@@ -307,7 +307,7 @@ export function yearTrace(model: YearModel, yc: YearComputation, extraPaths: str
     t("agi", "Adjusted gross income", yc.credit.agi, inc("w2Box1"), ev, "W-2 box 1 + taxable interest + net profit − half SE tax − SEP − SEHI."),
     t("standard_deduction", "Standard deduction", yc.standardDeduction, ["filingStatus"], [r.bracketSourceId], "Itemizing is outside the supported case."),
     t("qbi_deduction", "Qualified business income deduction", yc.qbiDeduction, [], [r.qbi.sourceId],
-      `20% of QBI ${formatUsd(yc.qbi)} (profit after half SE tax, SEP and SEHI), limited to 20% of taxable income before QBI; $400 minimum when QBI ≥ $1,000 (material participation assumed). Below the wage/SSTB threshold.`),
+      `20% of QBI ${formatUsd(yc.qbi)} (profit after half SE tax, SEP and SEHI), limited to 20% of taxable income before QBI; ${formatUsd(r.qbi.minimumDeduction)} minimum when QBI ≥ ${formatUsd(r.qbi.minimumQbi)} (material participation assumed). Below the wage/SSTB threshold.`),
     t("taxable_income", "Taxable income", yc.taxable, [], [r.bracketSourceId], "AGI − standard deduction − QBI deduction."),
     t("regular_tax", "Income tax before credits", yc.regularTax, [], [r.bracketSourceId, "irs-i1040-tax-table"],
       yc.taxable < r.taxTableUpper ? "Tax Table method: rate schedule at the $50 band midpoint, rounded to whole dollars." : "Tax Computation Worksheet (rate schedule)."),

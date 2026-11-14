@@ -31,6 +31,7 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
   const [text, setText] = useState(centsToInput(fact.valueCents));
   const [error, setError] = useState<string | null>(null);
   const [showRange, setShowRange] = useState(!!fact.range);
+  const supportsRange = /\.(scheduleCProfit|taxableInterest|taxExemptInterest)$/.test(path);
 
   useEffect(() => {
     const parsed = parseDollarsToCents(text);
@@ -74,7 +75,7 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
       <span className="money-prefix" aria-hidden="true">$</span>
       <input id={id} inputMode="decimal" autoComplete="off" value={text} placeholder={plain ? "0" : "Unknown"}
         aria-invalid={!!error || !!problem} aria-describedby={describedBy}
-        onChange={e => setText(e.target.value)} onBlur={e => commit(e.target.value)}
+        onChange={e => commit(e.target.value)}
         onKeyDown={e => { if (e.key === "Enter") commit((e.target as HTMLInputElement).value); }} />
       {plain ? null : fact.status === "unknown"
         ? <span className="status-pill unknown">Unknown</span>
@@ -88,8 +89,8 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
     </div>
     {!compact && !plain && <div className="money-meta">
       <span className="source-chip" title={source?.excerpt}>{sourceText}</span>
-      <button type="button" className="link-btn" aria-expanded={showRange} onClick={() => setShowRange(v => !v)}>
-        {showRange ? "Hide range" : fact.range ? "Edit range" : "Not sure? Add a range"}</button>
+      {(supportsRange || fact.range) && <button type="button" className="link-btn" aria-expanded={showRange} onClick={() => setShowRange(v => !v)}>
+        {showRange ? "Hide range" : fact.range ? "Edit range" : "Not sure? Add a range"}</button>}
     </div>}
     {hint && <p className="hint" id={hintId}>{hint}</p>}
     {showRange && !compact && !plain && <div className="range-row">

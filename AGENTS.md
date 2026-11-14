@@ -42,3 +42,13 @@ Claude 3 integrates engine and UI branches into `claude3` after their handoffs, 
 Run the checks affected by your change. At handoff: typecheck, the relevant small test group, and one build. After integration: the finite checks in `docs/ACCEPTANCE.md`, including the deployed core journey. Repeat only after relevant code changes or a failure. No arbitrary coverage target, speculative test expansion, cosmetic unit tests or repeated identical green runs. Financial boundary errors and cross-user data access deserve targeted checks.
 
 Never claim guaranteed savings, independent professional review, customer payments or a finished integration without evidence. Synthetic examples must be labeled. Retirement principal is not spendable cash. Do not count repayment twice. Every number displayed by the product must originate from the actual calculation result.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

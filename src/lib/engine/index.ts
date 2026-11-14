@@ -46,7 +46,6 @@ function modelWarnings(models: YearModel[], input: CaseInput): string[] {
     else w.push(`${m.year} applicable figures are derived from Rev. Proc. 2026-26 bands (no published ${m.year} Form 8962 table yet).`);
     if (!m.ptcEligible) w.push(`${m.year}: no premium tax credit eligibility was confirmed, so any advance credit is fully repaid.`);
   }
-  if (models.some(m => m.year === 2027)) w.push("2027 tax brackets are transcribed from Rev. Proc. 2026-35 by the prototype and not re-read in this build.");
   w.push("Assumes required SSNs, lawful presence, Marketplace enrollment and no other coverage offers as confirmed in your entries; not a Marketplace eligibility determination.");
   return [...new Set(w)];
 }
