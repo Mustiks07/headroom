@@ -1,121 +1,117 @@
 /**
- * Deal-term search (round 4): price × payment schedule × additional SEP for ONE project, on top of
- * every other commitment, using the existing year calculation (guards, SEHI/PTC, taxes, rounding).
+ * Deal-term search (round 4) on the shared deal-planning contract v1.0 (src/domain/deal-planning.ts).
+ * Price × payment schedule × additional SEP for ONE project, on top of every other commitment, using
+ * the existing year calculation (guards, SEHI/PTC, taxes, rounding). No second tax engine.
  *
- * Search space and accuracy (also returned in `search`):
- *  - price: lattice from the minimum to the maximum asked price (≤ ~80 points, ≥ $50 step) plus the offered price;
- *  - schedule: the amount paid in 2026 windows vs 2027 windows on the same lattice; inside one tax year money
- *    goes to the earliest allowed window first (tax depends only on the year; earlier is never worse for dated goals);
- *  - additional SEP per tax year: {0, the smallest amount that restores that year's premium tax credit (exact
- *    bisection), the most allowed by the cap, the cash set aside and the legal limit};
- *  - every year result comes from evaluateYear (memoised by profit change and SEP), so lattice values are exact for
- *    the lattice point; chosen variants are then refined (split ±1 lattice step at $5 then $1; lowest price every $5
- *    then $1 below the lattice point) and re-evaluated with run()/scenarioFromPlan before all constraints are checked.
- * Not claimed: a global optimum between lattice points beyond the refinement window, or SEP gains from line-5
- * steps smaller than the restore-the-credit amount.
+ * Search space and accuracy (returned in `search`):
+ *  - total asked price: every `price.stepCents` from min to max; above ~60 points a coarser lattice of
+ *    whole steps, then the simplest variant is refined back to `stepCents`;
+ *  - schedule: the unpaid remainder split between 2026 and 2027 windows on a lattice (≤ ~60 points, ≥ $50);
+ *    inside one tax year money goes to the earliest window first (tax depends only on the year; earlier is
+ *    never worse for dated goals); each window's max share is respected;
+ *  - additional SEP in ONE tax year: {0, the smallest amount that restores that year's premium tax credit
+ *    (exact bisection), the most allowed by the goal, the SEP cash left and the legal limit};
+ *  - each lattice point is evaluated exactly with evaluateYear (memoised); chosen variants are refined
+ *    (split ±1 lattice step every $5, then $1; lower price every step) and re-run through run()/scenarioFromPlan
+ *    before every constraint is checked. Not claimed: a global optimum between lattice points outside the
+ *    refinement window, or SEP gains from applicable-figure steps smaller than the restore-the-credit amount.
  */
-import type { CaseInput, ScenarioKind, TaxYear } from "@/domain/contracts";
-import { canonicalWorkspaceContent, type HouseholdWorkspace } from "@/domain/household-workspace";
-import { canonical, modelWarnings, sha256Hex } from "../common";
+import type { BlockedComparison, CaseInput, ScenarioKind, ScenarioResult, TaxYear } from "@/domain/contracts";
+import {
+  CashContextSchema, cashCompletenessFor, dealSearchFingerprint, DealGoalSchema, DealTermsSpaceSchema,
+  type CashContext, type DatedFlow, type DateTarget, type DealGoal, type DealSearchMeta, type DealSearchResult, type DealTermsSpace,
+  type DealVariant, type DecisionSensitivityResult, type NoFeasibleTerms, type SensitivityItem,
+} from "@/domain/deal-planning";
+import type { HouseholdWorkspace } from "@/domain/household-workspace";
+import { modelWarnings } from "../common";
 import { firstBusinessDay, makeCtx, run, scenarioFromPlan, stressPlan, YEARS, type Ctx, type Plan } from "../comparison";
 import { buildYearModel, checkOpportunity, Issues, parseCase } from "../guard";
+import { candidateContext, engineWorkspaceFingerprint, type CandidateContext } from "../household";
 import { formatUsd } from "../money";
 import { EngineStop, type YearModel } from "../model";
 import { ENGINE_VERSION, RULES_VERSION } from "../rules";
 import { profitHeadroomDollars } from "../search";
 import { evaluateYear, solveCredit } from "../year";
-import { candidateContext } from "../household";
-import { DealSearchRequestSchema, type CashContext, type ConstraintCheck, type DatedFlow, type DateTarget, type DateTargetResult,
-  type DealGoal, type DealSearchRequest, type DealSearchResult, type DealTerms, type DealTermsSpace, type DealVariant,
-  type DecisionSensitivity, type Relaxation, type SensitivityItem, type Violation } from "./types";
 
+/** Label of the search layer (documentation; fingerprints use ENGINE_VERSION per the contract). */
 export const DEAL_SEARCH_VERSION = "headroom-deal-1.0.0";
-const MAX_LATTICE = 80;
+const MAX_PRICE_POINTS = 60, MAX_SPLIT_POINTS = 60;
 
-interface Slot { windowId: string; date: string; yi: 0 | 1; minBps: number; maxBps: number }
+type YI = 0 | 1;
+interface Slot { windowId: string; date: string; yi: YI; maxBps: number }
+interface Payment { id: string; windowId: string; date: string; amountCents: number; yi: YI }
 interface YearEval { spendable: number; ptc: number; magi: number; room: number }
-interface Candidate {
-  price: number;
-  x: number;                                 // amount paid in 2026 (cents)
-  payments: Array<{ windowId: string; date: string; amountCents: number; yi: 0 | 1 }>;
-  sep: [number, number];
-  cashDelta: number;
-  retirement: number;
-  years: [YearEval, YearEval];
+interface Candidate { price: number; remainder: number; x: number; payments: Payment[]; sepYear: YI | null; sep: number; cashDelta: number; years: [YearEval, YearEval] }
+/** Engine variant: the contract shape plus the exact v1 scenario (dropped by schema parsing when stored). */
+export type EngineDealVariant = DealVariant & { scenario: ScenarioResult };
+
+const clip = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
+const yearOf = (date: string): YI => (date.startsWith("2026") ? 0 : 1);
+const blockedFromSchema = (what: string, issues: Array<{ path: PropertyKey[]; message: string }>): BlockedComparison => ({
+  status: "needs_data", code: "INVALID_DEAL_INPUT", message: `The ${what} needs review before options can be searched.`,
+  fields: issues.map(i => ({ path: `dealPlanning.${what}.${i.path.map(String).join(".")}`, reason: i.message })) });
+
+// =====================================================================================================
+interface Prepared {
+  cc: CandidateContext; models: [YearModel, YearModel]; ctx: Ctx; parsed: CaseInput;
+  received: number; offered: Array<{ id: string; date: string; amountCents: number }>; offeredPrice: number;
+  openExpenses: [number, number]; due: [string, string]; sepCashLeft: number | null; warnings: string[];
 }
 
-const ceilTo = (v: number, step: number) => Math.ceil(v / step) * step;
-
-export async function searchDealTerms(ws: HouseholdWorkspace, rawRequest: DealSearchRequest): Promise<DealSearchResult> {
-  const parsedReq = DealSearchRequestSchema.safeParse(rawRequest);
-  if (!parsedReq.success) {
-    return { status: "needs_data", code: "INVALID_DEAL_REQUEST", message: "The goal or the allowed terms need review.",
-      fields: parsedReq.error.issues.map(i => ({ path: `dealRequest.${i.path.join(".")}`, reason: i.message })) };
-  }
-  const { goal, terms, cash } = parsedReq.data;
-  const cc = candidateContext(ws, goal.projectId);
+function prepareDeal(ws: HouseholdWorkspace, projectId: string): Prepared | BlockedComparison {
+  const cc = candidateContext(ws, projectId);
   if ("status" in cc) return cc;
-  const { candidate, receipts: offered, expenses, baseline } = cc;
-  const warnings = [...cc.warnings];
-
-  // ------------------------------------------------------------ models --
+  const { candidate, receipts: offered, expenses } = cc;
+  const received = candidate.receipts.filter(l => l.actual).reduce((a, l) => a + l.actual!.amountCents, 0);
   const derived: CaseInput = structuredClone(cc.derived);
-  const offeredTotal = offered.reduce((a, r) => a + r.amountCents, 0);
-  const firstOffered = [...offered].sort((a, b) => a.date.localeCompare(b.date))[0];
-  derived.opportunity = { title: candidate.title, ownerPersonId: candidate.ownerPersonId, grossRevenueCents: offeredTotal,
-    plannedReceiptDate: firstOffered.date, incrementalExpensesCents: expenses.reduce((a, e) => a + e.amountCents, 0),
-    expensePaymentDate: expenses[0]?.date ?? firstOffered.date, cashAccountingConfirmed: candidate.cashAccountingConfirmed,
-    timingArrangementConfirmed: candidate.timingArrangementConfirmed };
-  const v1Issues = new Issues();
-  const parsed = parseCase(derived, v1Issues);
-  const m0 = parsed ? buildYearModel(parsed, 0, v1Issues) : null, m1 = parsed ? buildYearModel(parsed, 1, v1Issues) : null;
-  if (parsed) checkOpportunity(parsed, v1Issues);
-  const v1Blocked = v1Issues.toBlocked();
-  if (v1Blocked || !parsed || !m0 || !m1) return { ...v1Blocked!, fields: v1Blocked!.fields.map(f => ({ ...f, path: cc.adapted.translatePath(f.path) })) };
+  const first = [...offered].sort((a, b) => a.date.localeCompare(b.date))[0];
+  derived.opportunity = { title: candidate.title, ownerPersonId: candidate.ownerPersonId, grossRevenueCents: offered.reduce((a, r) => a + r.amountCents, 0),
+    plannedReceiptDate: first.date, incrementalExpensesCents: expenses.reduce((a, e) => a + e.amountCents, 0), expensePaymentDate: expenses[0]?.date ?? first.date,
+    cashAccountingConfirmed: candidate.cashAccountingConfirmed, timingArrangementConfirmed: candidate.timingArrangementConfirmed };
+  const issues = new Issues();
+  const parsed = parseCase(derived, issues);
+  const m0 = parsed ? buildYearModel(parsed, 0, issues) : null, m1 = parsed ? buildYearModel(parsed, 1, issues) : null;
+  if (parsed) checkOpportunity(parsed, issues);
+  const b = issues.toBlocked();
+  if (b || !parsed || !m0 || !m1) return { ...b!, fields: b!.fields.map(f => ({ ...f, path: cc.adapted.translatePath(f.path) })) };
   const models: [YearModel, YearModel] = [m0, m1];
   let ctx: Ctx;
   try { ctx = makeCtx(parsed, models); } catch (e) {
     if (e instanceof EngineStop) return { status: e.kind === "unsupported" ? "unsupported" : "needs_data", code: e.code, message: e.message, fields: [{ path: "household", reason: e.message }] };
     throw e;
   }
-  ctx.target = goal.minTwoYearCashDeltaCents;
-  const declineYears = run(models, ctx.decline);
-
-  // SEP cap: the goal's cap, the cash set aside after agreed unpaid goals, then the legal limit per year (checked per evaluation).
-  const cashLeft = baseline.sepBudget.availableCents;
-  const sepCap = Math.max(0, Math.min(goal.maxAdditionalSepCents, cashLeft ?? 0));
-  if (cashLeft === null && goal.maxAdditionalSepCents > 0) warnings.push("No money set aside for future SEP-IRA contributions was entered, so no additional contribution is searched.");
-
-  // ------------------------------------------------------------ slots --
-  const slotIssues: string[] = [];
-  const slots = buildSlots(terms, candidate.timingArrangementConfirmed === true, slotIssues);
-  warnings.push(...slotIssues);
-  const fixedTerms = !terms.newTermsConfirmed;
-  if (fixedTerms) warnings.push("The client has not confirmed that new terms can be discussed, so only the offered price and dates are evaluated; only an additional SEP-IRA contribution is searched.");
-
-  // ------------------------------------------------------- year memo --
-  const memo = new Map<string, YearEval | null>();
   const openExpenses: [number, number] = [0, 0];
-  for (const e of expenses) openExpenses[YEARS.indexOf(Number(e.date.slice(0, 4)) as TaxYear)] += e.amountCents;
-  const yearEval = (yi: 0 | 1, receipts: number, s: number): YearEval | null => {
-    const key = `${yi}|${receipts}|${s}`;
+  for (const e of expenses) openExpenses[yearOf(e.date)] += e.amountCents;
+  return { cc, models, ctx, parsed, received, offered, offeredPrice: received + offered.reduce((a, r) => a + r.amountCents, 0), openExpenses,
+    due: [m0.rules.returnDueDate, m1.rules.returnDueDate], sepCashLeft: cc.baseline.sepBudget.availableCents, warnings: [...cc.warnings] };
+}
+
+/** Exact year evaluation, memoised by (year, receipts, SEP). Expenses of open lines stay in their own year. */
+function yearEvaluator(p: Prepared) {
+  const memo = new Map<string, YearEval | null>();
+  return (yi: YI, receipts: number, sep: number): YearEval | null => {
+    const key = `${yi}|${receipts}|${sep}`;
     if (memo.has(key)) return memo.get(key)!;
     let out: YearEval | null = null;
     try {
-      const yc = evaluateYear(models[yi], { profitDelta: receipts - openExpenses[yi], additionalSep: s });
+      const yc = evaluateYear(p.models[yi], { profitDelta: receipts - p.openExpenses[yi], additionalSep: sep });
       out = { spendable: yc.spendable, ptc: yc.credit.ptc.ptc, magi: yc.credit.magi, room: yc.credit.sepMax - yc.credit.sepTotal };
     } catch (e) { if (!(e instanceof EngineStop)) throw e; }
     memo.set(key, out);
     return out;
   };
-  const sepOptions = (yi: 0 | 1, receipts: number): number[] => {
-    const base = yearEval(yi, receipts, 0);
-    if (!base || sepCap === 0) return [0];
-    const room = Math.min(base.room, sepCap);
+}
+
+/** {0, smallest SEP that restores the year's credit (exact), the cap} for one year's receipts. */
+function sepOptions(p: Prepared, ev: ReturnType<typeof yearEvaluator>, cap: number) {
+  return (yi: YI, receipts: number): number[] => {
+    const base = ev(yi, receipts, 0);
+    if (!base || cap <= 0) return [0];
+    const room = Math.min(base.room, cap);
     const opts = new Set<number>([0]);
-    if (room > 0) opts.add(Math.floor(room / 100) * 100);
-    if (base.ptc === 0 && models[yi].ptcEligible && room > 0) {
-      const keeps = (s: number) => { try { return solveCredit(models[yi], { profitDelta: receipts - openExpenses[yi], additionalSep: s }, false).ptc.ptc > 0; } catch { return false; } };
+    if (room >= 100) opts.add(Math.floor(room / 100) * 100);
+    if (base.ptc === 0 && p.models[yi].ptcEligible && room >= 100) {
+      const keeps = (s: number) => { try { return solveCredit(p.models[yi], { profitDelta: receipts - p.openExpenses[yi], additionalSep: s }, false).ptc.ptc > 0; } catch { return false; } };
       if (keeps(Math.floor(room / 100) * 100)) {
         let lo = 0, hi = Math.floor(room / 100);
         while (lo < hi) { const mid = Math.floor((lo + hi) / 2); if (keeps(mid * 100)) hi = mid; else lo = mid + 1; }
@@ -124,504 +120,533 @@ export async function searchDealTerms(ws: HouseholdWorkspace, rawRequest: DealSe
     }
     return [...opts].sort((a, b) => a - b);
   };
-
-  // ------------------------------------------------------- enumerate --
-  const priceMin = fixedTerms ? offeredTotal : terms.minPriceCents, priceMax = fixedTerms ? offeredTotal : terms.maxPriceCents;
-  const step = Math.max(5000, ceilTo(Math.ceil(Math.max(priceMax, 1) / MAX_LATTICE), 5000));
-  let evaluated = 0;
-  const all: Candidate[] = [];
-  const consider = (price: number, payments: Candidate["payments"]) => {
-    const x = payments.filter(p => p.yi === 0).reduce((a, p) => a + p.amountCents, 0);
-    const r: [number, number] = [x, price - x];
-    const o0 = sepOptions(0, r[0]), o1 = sepOptions(1, r[1]);
-    for (const s0 of o0) for (const s1 of o1) {
-      if (s0 + s1 > sepCap) continue;
-      const y0 = yearEval(0, r[0], s0), y1 = yearEval(1, r[1], s1);
-      evaluated++;
-      if (!y0 || !y1) continue;
-      all.push({ price, x, payments, sep: [s0, s1], retirement: s0 + s1, years: [y0, y1],
-        cashDelta: y0.spendable + y1.spendable - ctx.declineCash });
-    }
-  };
-  if (fixedTerms) {
-    consider(offeredTotal, offered.map(o => ({ windowId: "offered", date: o.date, amountCents: o.amountCents, yi: yearOf(o.date) })));
-  } else {
-    const prices = new Set<number>([priceMin, priceMax]);
-    for (let p = ceilTo(priceMin, step); p <= priceMax; p += step) prices.add(p);
-    if (offeredTotal >= priceMin && offeredTotal <= priceMax) prices.add(offeredTotal);
-    for (const price of [...prices].sort((a, b) => a - b)) {
-      for (const x of splitValues(price, slots, step)) {
-        const pay = allocate(price, x, slots, terms.maxPayments);
-        if (pay) consider(price, pay);
-      }
-    }
-    // The offered schedule is always a reference, also when it lies outside the windows.
-    if (!all.some(c => c.price === offeredTotal && samePayments(c.payments, offered))) {
-      consider(offeredTotal, offered.map(o => ({ windowId: "offered", date: o.date, amountCents: o.amountCents, yi: yearOf(o.date) })));
-    }
-  }
-
-  // ------------------------------------------------- goals per candidate --
-  const due: [string, string] = [models[0].rules.returnDueDate, models[1].rules.returnDueDate];
-  const burden = (c: Candidate, yi: 0 | 1) => {
-    const receiptsY = c.payments.filter(p => p.yi === yi).reduce((a, p) => a + p.amountCents, 0);
-    return receiptsY - openExpenses[yi] - (c.years[yi].spendable - declineYears[yi].spendable) - c.sep[yi];
-  };
-  const projectFlows = (c: Candidate): DatedFlow[] => {
-    const flows: DatedFlow[] = [];
-    for (const l of candidate.receipts.filter(l => l.actual)) flows.push({ date: l.actual!.date, amountCents: l.actual!.amountCents, label: "Received (fact)", kind: "project_receipt" });
-    for (const p of c.payments) flows.push({ date: p.date, amountCents: p.amountCents, label: `Payment in window ${p.windowId}`, kind: "project_receipt" });
-    for (const e of expenses) flows.push({ date: e.date, amountCents: -e.amountCents, label: "Project expense", kind: "project_expense" });
-    ([0, 1] as const).forEach(yi => {
-      if (c.sep[yi] > 0) flows.push({ date: due[yi], amountCents: -c.sep[yi], label: `Additional SEP-IRA for ${YEARS[yi]} (assumed paid on the return due date)`, kind: "sep_contribution" });
-      const b = burden(c, yi);
-      if (b !== 0) flows.push({ date: due[yi], amountCents: -b, label: `This project's extra tax and premium credit settlement for ${YEARS[yi]} (paid with the return)`, kind: "tax_settlement" });
-    });
-    return flows.sort((a, b) => a.date.localeCompare(b.date));
-  };
-  const dateResult = (c: Candidate, t: DateTarget): DateTargetResult => evaluateDateTarget(c, t, { ws, candidateId: candidate.id, offeredExpenses: expenses,
-    burden: [burden(c, 0), burden(c, 1)], due, cash, remainingSep: [baseline.years[0].sep.remainingCents, baseline.years[1].sep.remainingCents] });
-  const meets = (c: Candidate) => c.cashDelta >= goal.minTwoYearCashDeltaCents &&
-    goal.dateTargets.every(t => dateResult(c, t).met !== false);
-  const feasible = all.filter(meets);
-
-  // ------------------------------------------------------- choose --
-  const materiality = Math.max(10000, Math.round(offeredTotal / 100));
-  const complexity = (c: Candidate) => [new Set(c.payments.map(p => p.windowId)).size, c.payments.some(p => p.yi === 1) ? 1 : 0, c.retirement > 0 ? 1 : 0, c.price === offeredTotal ? 0 : 1];
-  const lexi = (a: number[], b: number[]) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
-  const chosen: Array<{ role: DealVariant["role"]; c: Candidate }> = [];
-  if (feasible.length) {
-    const mostCash = [...feasible].sort((a, b) => b.cashDelta - a.cashDelta || lexi(complexity(a), complexity(b)) || a.price - b.price)[0];
-    const simplest = [...feasible].sort((a, b) => lexi(complexity(a), complexity(b)) || a.price - b.price || b.cashDelta - a.cashDelta)[0];
-    chosen.push({ role: "simplest", c: simplest }, { role: "most_cash", c: mostCash });
-    // Third option: a genuinely different trade-off, first that applies.
-    const lowestPrice = [...feasible].sort((a, b) => a.price - b.price || b.cashDelta - a.cashDelta)[0];
-    const noSep = [...feasible].filter(c => c.retirement === 0).sort((a, b) => b.cashDelta - a.cashDelta)[0];
-    const firstTarget = goal.dateTargets.find(t => t.kind !== "household_balance");
-    const earliest = firstTarget && [...feasible].sort((a, b) => (dateResult(b, firstTarget).valueCents ?? 0) - (dateResult(a, firstTarget).valueCents ?? 0) || b.cashDelta - a.cashDelta)[0];
-    if (lowestPrice.price < Math.min(simplest.price, mostCash.price)) chosen.push({ role: "lowest_price", c: lowestPrice });
-    else if (noSep && (simplest.retirement > 0 || mostCash.retirement > 0)) chosen.push({ role: "no_additional_sep", c: noSep });
-    else if (earliest && firstTarget && (dateResult(earliest, firstTarget).valueCents ?? 0) > Math.max(dateResult(simplest, firstTarget).valueCents ?? 0, dateResult(mostCash, firstTarget).valueCents ?? 0)) {
-      chosen.push({ role: "most_by_date", c: earliest });
-    }
-  }
-  const offeredCand = all.filter(c => c.price === offeredTotal && samePayments(c.payments, offered)).sort((a, b) => a.retirement - b.retirement)[0];
-  const offeredTerms = offeredCand ? { twoYearCashDeltaCents: offeredCand.cashDelta, retirementCents: offeredCand.retirement,
-    unmetGoals: [...(offeredCand.cashDelta < goal.minTwoYearCashDeltaCents ? ["two_year_cash"] : []),
-      ...goal.dateTargets.filter(t => dateResult(offeredCand, t).met === false).map(t => `date_target:${t.id}`)] } : null;
-
-  // ------------------------------------------------------- refine + exact --
-  const refineCtx = { slots, terms, sepOptions, yearEval, ctx, meets, step, offeredTotal, fixedTerms };
-  const variants: DealVariant[] = [];
-  const seen = new Set<string>();
-  for (const { role, c } of chosen) {
-    const refined = role === "most_cash" || role === "no_additional_sep" ? refineSplit(c, refineCtx) : role === "lowest_price" || role === "simplest" ? refinePrice(c, refineCtx) : c;
-    const key = termsKey(refined);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const v = exactVariant(refined, role, { ctx, models, candidateTitle: candidate.title, goal, terms, offeredTotal, slots, sepCap, cashLeft, dateResult, projectFlows, warnings, openExpenses, offeredYear: yearOf(firstOffered.date) });
-    if (v) variants.push(v);
-  }
-  const simplestV = variants.find(v => v.role === "simplest");
-  for (const v of variants) {
-    if (simplestV && v !== simplestV) {
-      const gain = v.twoYearCashDeltaCents - simplestV.twoYearCashDeltaCents;
-      v.marginalGainOverSimplestCents = gain;
-      if (gain > 0 && gain < materiality) v.label += ` (only ${formatUsd(gain)} more than the simplest option)`;
-    }
-  }
-
-  // ------------------------------------------------------- infeasible --
-  const violations: Violation[] = [], relaxations: Relaxation[] = [];
-  if (!variants.length) {
-    analyseInfeasible({ all, goal, dateResult, violations });
-    relax({ goal, terms, fixedTerms, slots, sepCap, offeredTotal, ctx, models, yearEval, sepOptionsRelaxed: makeSepOptions(models, openExpenses, Infinity, yearEval),
-      dateResult, relaxations, all, step });
-  }
-
-  const fingerprint = await sha256Hex(JSON.stringify(canonical({ content: canonicalWorkspaceContent(cc.ws), request: parsedReq.data,
-    engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION, dealSearchVersion: DEAL_SEARCH_VERSION })));
-  const others = cc.ws.projects.filter(p => p.id !== candidate.id && p.status === "agreed").map(p => `"${p.title}"`);
-  return {
-    status: variants.length ? "ready" : "no_feasible_terms",
-    engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION, dealSearchVersion: DEAL_SEARCH_VERSION, fingerprint, projectId: candidate.id,
-    baseline: { label: `Your plan without the unpaid terms of "${candidate.title}"`,
-      description: `Your profit forecast${others.length ? `, agreed ${others.join(", ")}` : ""}, money already received from "${candidate.title}", and SEP-IRA goals already agreed. Changes are measured against this.`,
-      horizon: `Spendable cash after the 2026 and 2027 returns settle (due ${due[0]} and ${due[1]}); dated goals use the flows listed with each option.` },
-    variants, offeredTerms, violations, relaxations,
-    search: { priceRange: [priceMin, priceMax], priceStepCents: fixedTerms ? 0 : step, splitStepCents: fixedTerms ? 0 : step,
-      sepCandidates: "0, the smallest amount that keeps that year's premium tax credit (exact), and the most allowed by your cap, the cash set aside and the legal limit",
-      windows: slots.map(s => ({ id: s.windowId, year: YEARS[s.yi], date: s.date })), evaluatedTermCombinations: evaluated,
-      exactRefinement: "Each shown option is refined (split: ±1 step at $5, then $1; lowest price: every $5 below the step, then $1) and recalculated with the full tax and credit calculation before its constraints are checked.",
-      materialityCents: materiality, additionalSepLimitCents: sepCap },
-    warnings: [...new Set([...modelWarnings(models, parsed), ...warnings])],
-  };
 }
 
-// ----------------------------------------------------------------- slots & schedules --
-const yearOf = (date: string): 0 | 1 => (date.startsWith("2026") ? 0 : 1);
-
-function buildSlots(terms: DealTermsSpace, timingConfirmed: boolean, notes: string[]): Slot[] {
+function buildSlots(space: DealTermsSpace, timingConfirmed: boolean, notes: string[]): Slot[] {
   const out: Slot[] = [];
-  for (const w of terms.windows) {
+  for (const w of space.paymentWindows) {
     for (const y of [2026, 2027] as const) {
-      const start = w.earliestDate > `${y}-01-01` ? w.earliestDate : y === 2027 ? firstBusinessDay(2027) : `${y}-01-01`;
-      if (start > w.latestDate || start > `${y}-12-31` || w.latestDate < `${y}-01-01`) continue;
-      if (y === 2027 && !timingConfirmed) {
-        notes.push(`Window ${w.id}: payments in 2027 are not searched until the client confirms in writing that they are not payable or available to you earlier.`);
-        continue;
-      }
-      out.push({ windowId: w.earliestDate.slice(0, 4) === w.latestDate.slice(0, 4) ? w.id : `${w.id}-${y}`, date: start, yi: y === 2026 ? 0 : 1, minBps: w.minShareBps, maxBps: w.maxShareBps });
+      const lo = w.earliest > `${y}-01-01` ? w.earliest : y === 2027 ? firstBusinessDay(2027) : `${y}-01-01`;
+      const start = y === 2027 && lo < firstBusinessDay(2027) ? firstBusinessDay(2027) : lo;
+      if (start > w.latest || w.latest < `${y}-01-01` || start > `${y}-12-31`) continue;
+      if (y === 2027 && !timingConfirmed) { notes.push(`Window ${w.id}: 2027 payments are not searched until the client confirms in writing that they are not payable or available to you earlier.`); continue; }
+      const split = w.earliest.slice(0, 4) !== w.latest.slice(0, 4);
+      out.push({ windowId: split ? `${w.id}-${y}` : w.id, date: start, yi: y === 2026 ? 0 : 1, maxBps: w.maxShareBps });
     }
-  }
-  if (terms.windows.some(w => !["2026", "2027"].includes(w.earliestDate.slice(0, 4)) || !["2026", "2027"].includes(w.latestDate.slice(0, 4)))) {
-    notes.push("Window dates outside 2026–2027 are not calculated.");
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
+const maxIn = (remainder: number, s: Slot) => Math.floor((remainder * s.maxBps) / 10000 / 100) * 100;
 
-const bounds = (price: number, s: Slot) => [Math.ceil((price * s.minBps) / 10000 / 100) * 100, Math.floor((price * s.maxBps) / 10000 / 100) * 100] as const;
-
-function splitValues(price: number, slots: Slot[], step: number): number[] {
-  const s26 = slots.filter(s => s.yi === 0), s27 = slots.filter(s => s.yi === 1);
-  const lo = Math.max(s26.reduce((a, s) => a + bounds(price, s)[0], 0), price - s27.reduce((a, s) => a + bounds(price, s)[1], 0));
-  const hi = Math.min(s26.reduce((a, s) => a + bounds(price, s)[1], 0), price - s27.reduce((a, s) => a + bounds(price, s)[0], 0));
+function splitValues(remainder: number, slots: Slot[], step: number): number[] {
+  const cap = (yi: YI) => slots.filter(s => s.yi === yi).reduce((a, s) => a + maxIn(remainder, s), 0);
+  const lo = Math.max(0, remainder - cap(1)), hi = Math.min(remainder, cap(0));
   if (lo > hi) return [];
   const xs = new Set<number>([lo, hi]);
-  for (let x = ceilTo(lo, step); x <= hi; x += step) xs.add(x);
+  for (let x = Math.ceil(lo / step) * step; x <= hi; x += step) xs.add(x);
   return [...xs];
 }
 
-/** Money in each tax year goes to the earliest windows first, within each window's share bounds. */
-function allocate(price: number, x: number, slots: Slot[], maxPayments: number): Candidate["payments"] | null {
-  const out: Candidate["payments"] = [];
+/** Earliest windows first inside each tax year, within each window's max share. */
+function allocate(remainder: number, x: number, slots: Slot[], maxPayments: number): Payment[] | null {
+  const out: Payment[] = [];
   for (const yi of [0, 1] as const) {
-    const ys = slots.filter(s => s.yi === yi);
-    let left = yi === 0 ? x : price - x;
-    const amounts = ys.map(s => bounds(price, s)[0]);
-    left -= amounts.reduce((a, b) => a + b, 0);
-    if (left < 0) return null;
-    ys.forEach((s, i) => { const add = Math.min(left, bounds(price, s)[1] - amounts[i]); amounts[i] += add; left -= add; });
+    let left = yi === 0 ? x : remainder - x;
+    for (const s of slots.filter(q => q.yi === yi)) {
+      const amt = Math.min(left, maxIn(remainder, s));
+      if (amt > 0) out.push({ id: `pay-${s.windowId}`, windowId: s.windowId, date: s.date, amountCents: amt, yi });
+      left -= amt;
+    }
     if (left > 0) return null;
-    ys.forEach((s, i) => { if (amounts[i] > 0) out.push({ windowId: s.windowId, date: s.date, amountCents: amounts[i], yi }); });
   }
-  return new Set(out.map(p => p.windowId)).size <= maxPayments && out.length > 0 ? out : null;
+  return out.length && out.length <= maxPayments ? out : null;
+}
+const offeredPayments = (p: Prepared): Payment[] => p.offered.map(o => ({ id: o.id, windowId: "offered", date: o.date, amountCents: o.amountCents, yi: yearOf(o.date) }));
+
+// =====================================================================================================
+interface DateEnv { p: Prepared; cash: CashContext | null; complete: boolean }
+
+function burden(p: Prepared, c: Candidate, decl: [YearEval, YearEval], yi: YI): number {
+  const r = c.payments.filter(q => q.yi === yi).reduce((a, q) => a + q.amountCents, 0);
+  return r - p.openExpenses[yi] - (c.years[yi].spendable - decl[yi].spendable) - (c.sepYear === yi ? c.sep : 0);
 }
 
-const samePayments = (a: Candidate["payments"], b: Array<{ date: string; amountCents: number }>) =>
-  a.length === b.length && a.every((p, i) => p.date === b[i].date && p.amountCents === b[i].amountCents);
-const termsKey = (c: Candidate) => JSON.stringify([c.price, c.payments.map(p => [p.date, p.amountCents]), c.sep]);
+/**
+ * Date targets. project_receipts = gross money from the project by D (received facts + scheduled).
+ * project_available_cash = scheduled receipts − project expenses − additional SEP paid − the project's tax reserve:
+ * a year's extra tax and lost credit set aside pro rata as its money arrives (a planning amount, NOT an estimated-tax
+ * calculation), which becomes the settlement on the return due date — so it is never counted twice.
+ * household_balance = only with a complete cash context covering D.
+ */
+function dateTarget(env: DateEnv, c: Candidate, decl: [YearEval, YearEval], t: DateTarget) {
+  const { p } = env, D = t.byDate;
+  const fact = p.cc.candidate.receipts.filter(l => l.actual && l.actual.date <= D).reduce((a, l) => a + l.actual!.amountCents, 0);
+  const sched = c.payments.filter(q => q.date <= D).reduce((a, q) => a + q.amountCents, 0);
+  const expD = p.cc.expenses.filter(e => e.date <= D).reduce((a, e) => a + e.amountCents, 0);
+  const sepD = c.sepYear !== null && p.due[c.sepYear] <= D ? c.sep : 0;
+  const reserveD = ([0, 1] as const).reduce<number>((a, yi) => {
+    const b = burden(p, c, decl, yi);
+    if (p.due[yi] <= D) return a + b;
+    const ry = c.payments.filter(q => q.yi === yi).reduce((s, q) => s + q.amountCents, 0);
+    const arrived = c.payments.filter(q => q.yi === yi && q.date <= D).reduce((s, q) => s + q.amountCents, 0);
+    return a + (ry > 0 ? Math.round((Math.max(0, b) * arrived) / ry) : 0);
+  }, 0);
+  const res = (v: number | null, explanation: string) => ({ targetId: t.id, achievedCents: v, met: v === null ? null : v >= t.minimumCents, explanation: clip(explanation, 400) });
+  if (t.kind === "project_receipts") {
+    const v = fact + sched;
+    return res(v, `By ${D}: ${formatUsd(v)} from the project (${formatUsd(fact)} already received + ${formatUsd(sched)} under these terms). Gross money, not profit after tax.`);
+  }
+  if (t.kind === "project_available_cash") {
+    const v = sched - expD - sepD - reserveD;
+    return res(v, `By ${D}: payments ${formatUsd(sched)} − project expenses ${formatUsd(expD)} − extra SEP ${formatUsd(sepD)} − reserve for this project's tax and credit settlement ${formatUsd(reserveD)} = ${formatUsd(v)}. The reserve is a planning amount, not an estimated-tax calculation.`);
+  }
+  const cash = env.cash;
+  if (!env.complete || !cash?.snapshot || !cash.completeness.through || D > cash.completeness.through || D < cash.snapshot.date) {
+    return res(null, `Household balance on ${D} is not calculated: it needs a bank balance snapshot and your confirmation that every significant flow is listed through ${D}. The project figures still apply.`);
+  }
+  const S = cash.snapshot.date, inc = new Set(cash.includedFactIds);
+  const after = (date: string, id: string) => date > S && date <= D && !inc.has(id);
+  let v = cash.snapshot.balanceCents + cash.flows.filter(f => f.date > S && f.date <= D).reduce((a, f) => a + f.amountCents, 0);
+  for (const pr of env.p.cc.ws.projects) for (const [lines, sign] of [[pr.receipts, 1], [pr.expenses, -1]] as const) for (const l of lines) {
+    if (l.actual) { if (after(l.actual.date, l.id)) v += sign * l.actual.amountCents; continue; }
+    if (pr.id === p.cc.candidate.id || l.cancelledAt || !l.expected || pr.status !== "agreed") continue;
+    if (after(l.expected.date, l.id)) v += sign * l.expected.amountCents;
+  }
+  v += c.payments.filter(q => q.date > S && q.date <= D).reduce((a, q) => a + q.amountCents, 0);
+  v -= p.cc.expenses.filter(e => e.date > S && e.date <= D).reduce((a, e) => a + e.amountCents, 0);
+  for (const sc of env.p.cc.ws.retirement.contributions) if (after(sc.paidDate, sc.id)) v -= sc.amountCents;
+  const agreedSep = ([0, 1] as const).reduce<number>((a, yi) => a + (p.due[yi] <= D && p.due[yi] > S ? p.cc.baseline.years[yi].sep.remainingCents : 0), 0);
+  v -= sepD + agreedSep;
+  const value = v - reserveD - cash.reserveCents;
+  return res(value, `Balance ${formatUsd(cash.snapshot.balanceCents)} on ${S}, your listed flows, plan payments, expenses and SEP not already in that balance${agreedSep ? ` (incl. agreed SEP ${formatUsd(agreedSep)})` : ""}, minus this project's tax reserve ${formatUsd(reserveD)} and your untouched reserve ${formatUsd(cash.reserveCents)}: ${formatUsd(value)} on ${D}. Other taxes only as listed.`);
+}
 
-function makeSepOptions(models: [YearModel, YearModel], openExpenses: [number, number], cap: number, yearEval: (yi: 0 | 1, r: number, s: number) => YearEval | null) {
-  return (yi: 0 | 1, receipts: number): number[] => {
-    const base = yearEval(yi, receipts, 0);
-    if (!base) return [0];
-    const room = Math.min(base.room, cap);
-    const opts = new Set<number>([0]);
-    if (base.ptc === 0 && models[yi].ptcEligible && room > 0) {
-      const keeps = (s: number) => { try { return solveCredit(models[yi], { profitDelta: receipts - openExpenses[yi], additionalSep: s }, false).ptc.ptc > 0; } catch { return false; } };
-      if (keeps(Math.floor(room / 100) * 100)) {
-        let lo = 0, hi = Math.floor(room / 100);
-        while (lo < hi) { const mid = Math.floor((lo + hi) / 2); if (keeps(mid * 100)) hi = mid; else lo = mid + 1; }
-        opts.add(lo * 100);
+// =====================================================================================================
+export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal, spaceRaw: DealTermsSpace, cashRaw: CashContext | null): Promise<DealSearchResult> {
+  const g = DealGoalSchema.safeParse(goalRaw); if (!g.success) return blockedFromSchema("goal", g.error.issues);
+  const sp = DealTermsSpaceSchema.safeParse(spaceRaw); if (!sp.success) return blockedFromSchema("terms", sp.error.issues);
+  const cs = cashRaw === null ? null : CashContextSchema.safeParse(cashRaw);
+  if (cs && !cs.success) return blockedFromSchema("cash", cs.error.issues);
+  const goal = g.data, space = sp.data, cash = cs ? cs.data! : null;
+  if (goal.projectId !== space.projectId) return { status: "needs_data", code: "DEAL_PROJECT_MISMATCH", message: "The goal and the allowed terms are for different projects.", fields: [{ path: "dealPlanning.termSpaces", reason: "Choose the terms for the goal's project." }] };
+  const prep = prepareDeal(ws, goal.projectId);
+  if ("status" in prep) return prep;
+  const p = prep, { ctx, models } = p;
+  const warnings = [...p.warnings];
+  const ev = yearEvaluator(p);
+  const decl = run(models, ctx.decline).map(y => ({ spendable: y.spendable, ptc: y.credit.ptc.ptc, magi: y.credit.magi, room: 0 })) as [YearEval, YearEval];
+
+  // ---------------------------------------------------------------- limits --
+  const fixedTerms = space.newTermsConfirmed !== true;
+  if (fixedTerms) warnings.push(space.newTermsConfirmed === null
+    ? "It is not yet known whether the client would accept new terms, so only the offered price and dates are evaluated (plus an optional SEP-IRA contribution)."
+    : "The client does not accept new terms, so only the offered price and dates are evaluated (plus an optional SEP-IRA contribution).");
+  let sepCap = 0;
+  if (space.allowAdditionalSep) {
+    if (p.sepCashLeft === null) warnings.push("No money set aside for future SEP-IRA contributions was entered, so no additional contribution is searched.");
+    else if (p.sepCashLeft < 0) return { status: "needs_data", code: "AGREED_SEP_BUDGET_SHORTFALL", message: "Your existing SEP commitments exceed the cash still available. Review them before searching new terms.",
+      fields: [{ path: "retirement.futureContributionBudget", reason: `Existing commitments need ${formatUsd(-p.sepCashLeft)} more than the remaining SEP cash.` }] };
+    else sepCap = goal.maxAdditionalSepCents === null ? p.sepCashLeft : Math.min(goal.maxAdditionalSepCents, p.sepCashLeft);
+  }
+  const sepOpt = sepOptions(p, ev, sepCap);
+  const slots = buildSlots(space, p.cc.candidate.timingArrangementConfirmed === true, warnings);
+  const complete = cashCompletenessFor(goal, cash) === "household_complete";
+
+  // ---------------------------------------------------------------- enumerate --
+  const all: Candidate[] = [];
+  let evaluated = 0, shift = 0;
+  const consider = (price: number, payments: Payment[]) => {
+    const remainder = price - p.received;
+    const x = payments.filter(q => q.yi === 0).reduce((a, q) => a + q.amountCents, 0);
+    const r: [number, number] = [x, remainder - x];
+    const options: Array<[YI | null, number]> = [[null, 0]];
+    for (const yi of [0, 1] as const) for (const s of sepOpt(yi, r[yi])) if (s > 0) options.push([yi, s]);
+    for (const [sy, s] of options) {
+      const y0 = ev(0, r[0], sy === 0 ? s : 0), y1 = ev(1, r[1], sy === 1 ? s : 0);
+      evaluated++;
+      if (!y0 || !y1) continue;
+      all.push({ price, remainder, x, payments, sepYear: sy, sep: s, years: [y0, y1], cashDelta: y0.spendable + y1.spendable - ctx.declineCash - shift });
+    }
+  };
+  consider(p.offeredPrice, offeredPayments(p));
+  const asOfferedNoSep = all.find(c => c.sep === 0);
+  if (goal.baseline === "accept_as_offered") {
+    if (!asOfferedNoSep) return { status: "unsupported", code: "OFFER_NOT_CALCULABLE", message: "The offered terms cannot be calculated in the supported range, so they cannot be the baseline.", fields: [{ path: "dealPlanning.goals.baseline", reason: "Use the plan without this project as the baseline." }] };
+    shift = asOfferedNoSep.cashDelta;
+    for (const c of all) c.cashDelta -= shift;
+  }
+
+  let priceStep = space.price.stepCents;
+  if (!fixedTerms) {
+    const nSteps = Math.floor((space.price.maxCents - space.price.minCents) / space.price.stepCents);
+    const stride = Math.max(1, Math.ceil((nSteps + 1) / MAX_PRICE_POINTS));
+    priceStep = stride * space.price.stepCents;
+    const prices = new Set<number>();
+    for (let k = 0; k <= nSteps; k += stride) prices.add(space.price.minCents + k * space.price.stepCents);
+    prices.add(space.price.minCents + nSteps * space.price.stepCents);
+    for (const price of [...prices].sort((a, b) => a - b)) {
+      const rem = price - p.received;
+      if (rem <= 0) continue;
+      const splitStep = Math.max(5000, Math.ceil(rem / MAX_SPLIT_POINTS / 5000) * 5000);
+      for (const x of splitValues(rem, slots, splitStep)) {
+        const pay = allocate(rem, x, slots, space.maxPayments);
+        if (pay) consider(price, pay);
       }
     }
-    return [...opts];
+  }
+  const env: DateEnv = { p, cash, complete };
+  const meets = (c: Candidate) => c.cashDelta >= goal.minimumTwoYearCashDeltaCents && goal.dateTargets.every(t => dateTarget(env, c, decl, t).met !== false);
+  const feasible = all.filter(meets);
+
+  // ---------------------------------------------------------------- choose --
+  const materiality = Math.max(10000, Math.round(p.offeredPrice / 100));
+  const isOffered = (c: Candidate) => c.price === p.offeredPrice && c.payments.every(q => q.windowId === "offered");
+  const complexity = (c: Candidate) => [isOffered(c) ? 0 : 1, c.payments.length, c.payments.some(q => q.yi === 1) ? 1 : 0, c.sep > 0 ? 1 : 0, c.price];
+  const lexi = (a: number[], b: number[]) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+  const picks: Array<{ purpose: DealVariant["purpose"]; c: Candidate }> = [];
+  if (feasible.length) {
+    const simplest = [...feasible].sort((a, b) => lexi(complexity(a), complexity(b)) || b.cashDelta - a.cashDelta)[0];
+    const mostCash = [...feasible].sort((a, b) => b.cashDelta - a.cashDelta || lexi(complexity(a), complexity(b)))[0];
+    picks.push({ purpose: isOffered(simplest) ? "as_offered" : "simplest", c: simplest }, { purpose: "most_cash", c: mostCash });
+    const target = goal.dateTargets.find(t => t.kind !== "household_balance") ?? goal.dateTargets[0];
+    const val = (c: Candidate) => (target ? dateTarget(env, c, decl, target).achievedCents ?? -Infinity : -Infinity);
+    const earliest = target && [...feasible].sort((a, b) => val(b) - val(a) || b.cashDelta - a.cashDelta)[0];
+    const mostRet = [...feasible].sort((a, b) => b.sep - a.sep || b.cashDelta - a.cashDelta)[0];
+    if (earliest && val(earliest) > Math.max(val(simplest), val(mostCash))) picks.push({ purpose: "earliest_money", c: earliest });
+    else if (mostRet.sep > Math.max(simplest.sep, mostCash.sep)) picks.push({ purpose: "most_retirement", c: mostRet });
+    else {
+      // Lowest risk: the largest smallest distance (in extra profit) to losing a credit, among the 20 best by cash.
+      const margin = (c: Candidate) => Math.min(...([0, 1] as const).map(yi => {
+        if (c.years[yi].ptc === 0) return Infinity;
+        try { return profitHeadroomDollars(models[yi], { profitDelta: c.payments.filter(q => q.yi === yi).reduce((a, q) => a + q.amountCents, 0) - p.openExpenses[yi], additionalSep: c.sepYear === yi ? c.sep : 0 }) ?? Infinity; } catch { return Infinity; }
+      }));
+      const pool = [...feasible].sort((a, b) => b.cashDelta - a.cashDelta).slice(0, 20);
+      const safest = pool.sort((a, b) => margin(b) - margin(a))[0];
+      if (safest && Number.isFinite(margin(safest)) && margin(safest) > Math.max(margin(simplest), margin(mostCash))) picks.push({ purpose: "lowest_risk", c: safest });
+    }
+  }
+
+  // ---------------------------------------------------------------- refine + exact --
+  const variants: EngineDealVariant[] = [];
+  const keys = new Set<string>();
+  const re: RefineEnv = { slots, space, meets, ev, sepOpt, shift, ctx, p, priceStep };
+  for (const { purpose, c } of picks) {
+    const refined = fixedTerms ? c : purpose === "most_cash" ? refineSplit(c, re) : purpose === "simplest" ? refinePrice(c, re) : c;
+    const key = JSON.stringify([refined.price, refined.payments.map(q => [q.date, q.amountCents]), refined.sepYear, refined.sep]);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    const v = exactVariant(refined, purpose, { p, env, decl, goal, space, slots, sepCap, shift, warnings });
+    if (v) variants.push(v);
+  }
+  const best = variants.length ? Math.max(...variants.map(v => v.twoYearCashDeltaCents)) : 0;
+  for (const v of variants) v.differenceFromBestCents = best - v.twoYearCashDeltaCents;
+  const simple = variants.find(v => v.purpose === "simplest" || v.purpose === "as_offered");
+  const recommended = simple && simple.differenceFromBestCents < materiality ? simple : variants.find(v => v.purpose === "most_cash") ?? variants[0];
+
+  // ---------------------------------------------------------------- meta --
+  const workspaceFp = await engineWorkspaceFingerprint(p.cc.ws);
+  const meta: DealSearchMeta = {
+    goalId: goal.id, projectId: goal.projectId, workspaceFingerprint: workspaceFp,
+    searchFingerprint: await dealSearchFingerprint(workspaceFp, goal, space, cash, ENGINE_VERSION, RULES_VERSION),
+    engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION,
+    baseline: goal.baseline === "decline_unpaid_terms"
+      ? { kind: goal.baseline, label: `Your plan without the unpaid terms of "${p.cc.candidate.title}"`, description: clip(`Profit forecast, other agreed projects, ${formatUsd(p.received)} already received from this project and SEP goals already agreed. Declining does not cancel anything else.`, 400) }
+      : { kind: goal.baseline, label: `Your plan with "${p.cc.candidate.title}" exactly as offered`, description: clip(`As offered: ${formatUsd(p.offeredPrice)} total, ${p.offered.map(o => `${formatUsd(o.amountCents)} on ${o.date}`).join(", ")}, no extra SEP.`, 400) },
+    horizon: { from: "2026-01-01", through: "2027-12-31", settlementThrough: p.due[1] },
+    search: { priceStepCents: fixedTerms ? 0 : priceStep, paymentDateCandidates: fixedTerms ? p.offered.length : slots.length, sepStepCents: null, evaluated, exhaustiveWithinSpace: fixedTerms,
+      note: clip(fixedTerms ? "Offered terms only; additional SEP options: none, the exact amount that restores a credit, and the most allowed." :
+        `Price every ${formatUsd(priceStep)} (the simplest option refined to ${formatUsd(space.price.stepCents)}), 2026/2027 split on a lattice refined to $1 for the most-cash option, SEP options exact. Shown options are re-checked with the full calculation; not a proof of the global optimum between lattice points.`, 400) },
+    cashCompleteness: cashCompletenessFor(goal, cash),
+    simplerVariantThresholdCents: materiality,
+    warnings: [...new Set([...modelWarnings(models, p.parsed), ...warnings])],
   };
+  if (variants.length) return { status: "ready", ...meta, variants, recommendedVariantId: recommended?.id ?? null };
+  const nf: NoFeasibleTerms = { status: "no_feasible_terms", ...meta, violated: [], relaxations: [] };
+  explainInfeasible(nf, { all, goal, env, decl, p, space, slots, sepCap, ev, shift, fixedTerms, priceStep });
+  return nf;
 }
 
-// ----------------------------------------------------------------- refinement --
-interface RefineCtx {
-  slots: Slot[]; terms: DealTermsSpace; step: number; offeredTotal: number; fixedTerms: boolean; ctx: Ctx;
-  sepOptions: (yi: 0 | 1, r: number) => number[];
-  yearEval: (yi: 0 | 1, r: number, s: number) => YearEval | null;
-  meets: (c: Candidate) => boolean;
-}
-function bestFor(price: number, x: number, rc: RefineCtx, prefer: (a: Candidate, b: Candidate) => number, mustMeet: boolean): Candidate | null {
-  const pay = rc.fixedTerms ? null : allocate(price, x, rc.slots, rc.terms.maxPayments);
+// =====================================================================================================
+interface RefineEnv { slots: Slot[]; space: DealTermsSpace; meets: (c: Candidate) => boolean; ev: ReturnType<typeof yearEvaluator>; sepOpt: (yi: YI, r: number) => number[]; shift: number; ctx: Ctx; p: Prepared; priceStep: number }
+function bestAt(price: number, x: number, e: RefineEnv): Candidate | null {
+  const rem = price - e.p.received;
+  if (rem <= 0) return null;
+  const pay = allocate(rem, x, e.slots, e.space.maxPayments);
   if (!pay) return null;
+  const r: [number, number] = [x, rem - x];
   let best: Candidate | null = null;
-  const r: [number, number] = [x, price - x];
-  for (const s0 of rc.sepOptions(0, r[0])) for (const s1 of rc.sepOptions(1, r[1])) {
-    const y0 = rc.yearEval(0, r[0], s0), y1 = rc.yearEval(1, r[1], s1);
+  const options: Array<[YI | null, number]> = [[null, 0]];
+  for (const yi of [0, 1] as const) for (const s of e.sepOpt(yi, r[yi])) if (s > 0) options.push([yi, s]);
+  for (const [sy, s] of options) {
+    const y0 = e.ev(0, r[0], sy === 0 ? s : 0), y1 = e.ev(1, r[1], sy === 1 ? s : 0);
     if (!y0 || !y1) continue;
-    const c: Candidate = { price, x, payments: pay, sep: [s0, s1], retirement: s0 + s1, years: [y0, y1], cashDelta: y0.spendable + y1.spendable - rc.ctx.declineCash };
-    if (mustMeet && !rc.meets(c)) continue;
-    if (!best || prefer(c, best) < 0) best = c;
+    const c: Candidate = { price, remainder: rem, x, payments: pay, sepYear: sy, sep: s, years: [y0, y1], cashDelta: y0.spendable + y1.spendable - e.ctx.declineCash - e.shift };
+    if (e.meets(c) && (!best || c.cashDelta > best.cashDelta || (c.cashDelta === best.cashDelta && c.sep < best.sep))) best = c;
   }
   return best;
 }
-/** Split at a fixed price: ±1 lattice step at $5, then $1 around the best. */
-function refineSplit(c: Candidate, rc: RefineCtx): Candidate {
-  if (rc.fixedTerms) return c;
-  const prefer = (a: Candidate, b: Candidate) => b.cashDelta - a.cashDelta || a.retirement - b.retirement;
+/** Most cash: split refined at a fixed price, ±1 lattice step every $5, then every $1. */
+function refineSplit(c: Candidate, e: RefineEnv): Candidate {
+  if (c.payments.some(q => q.windowId === "offered")) return c;
+  const step = Math.max(5000, Math.ceil(c.remainder / MAX_SPLIT_POINTS / 5000) * 5000);
   let best = c;
   const scan = (from: number, to: number, by: number) => {
-    for (let x = Math.max(0, from); x <= Math.min(c.price, to); x += by) {
-      const k = bestFor(c.price, x, rc, prefer, true);
-      if (k && prefer(k, best) < 0) best = k;
-    }
+    for (let x = Math.max(0, from); x <= Math.min(c.remainder, to); x += by) { const k = bestAt(c.price, x, e); if (k && k.cashDelta > best.cashDelta) best = k; }
   };
-  scan(c.x - rc.step, c.x + rc.step, 500);
+  scan(c.x - step, c.x + step, 500);
   scan(best.x - 500, best.x + 500, 100);
   return best;
 }
-/** Lowest price meeting all goals: every $5 below the lattice point, then every $1. */
-function refinePrice(c: Candidate, rc: RefineCtx): Candidate {
-  if (rc.fixedTerms) return c;
-  const share = c.price > 0 ? c.x / c.price : 0;
-  const prefer = (a: Candidate, b: Candidate) => b.cashDelta - a.cashDelta;
-  const at = (p: number) => {
-    const x = Math.round((p * share) / 100) * 100;
-    return bestFor(p, x, rc, prefer, true) ?? bestFor(p, c.payments.every(q => q.yi === 0) ? p : c.payments.every(q => q.yi === 1) ? 0 : x, rc, prefer, true);
-  };
-  const lowest = Math.max(rc.terms.minPriceCents, c.price - rc.step);
-  let found: Candidate | null = null;
-  for (let p = lowest; p < c.price; p += 500) { const k = at(p); if (k) { found = k; break; } }
-  if (found) for (let p = Math.max(lowest, found.price - 500); p < found.price; p += 100) { const k = at(p); if (k) { found = k; break; } }
-  return found && found.price < c.price ? found : c;
+/** Simplest: the lowest asked price (at the user's price step) between the previous lattice point and this one. */
+function refinePrice(c: Candidate, e: RefineEnv): Candidate {
+  if (c.payments.some(q => q.windowId === "offered")) return c;
+  const share = c.remainder > 0 ? c.x / c.remainder : 0;
+  for (let price = Math.max(e.space.price.minCents, c.price - e.priceStep + e.space.price.stepCents); price < c.price; price += e.space.price.stepCents) {
+    const rem = price - e.p.received;
+    const x = c.payments.every(q => q.yi === 0) ? rem : c.payments.every(q => q.yi === 1) ? 0 : Math.round((rem * share) / 100) * 100;
+    const k = bestAt(price, x, e);
+    if (k) return k;
+  }
+  return c;
 }
 
-// ----------------------------------------------------------------- exact variant --
-function kindOf(c: Candidate, offeredTotal: number, offeredYear: 0 | 1): ScenarioKind {
-  if (c.price !== offeredTotal) return "renegotiate";
-  if (c.payments.some(p => p.yi !== offeredYear)) return "split_payment";
-  if (c.retirement > 0) return "sep_minimum";
-  return "accept_now";
+// =====================================================================================================
+interface ExactEnv { p: Prepared; env: DateEnv; decl: [YearEval, YearEval]; goal: DealGoal; space: DealTermsSpace; slots: Slot[]; sepCap: number; shift: number; warnings: string[] }
+function kindOf(c: Candidate, p: Prepared): ScenarioKind {
+  const offeredYear = yearOf([...p.offered].sort((a, b) => a.date.localeCompare(b.date))[0].date);
+  if (c.price !== p.offeredPrice) return "renegotiate";
+  if (c.payments.some(q => q.yi !== offeredYear)) return "split_payment";
+  return c.sep > 0 ? "sep_minimum" : "accept_now";
 }
 
-interface ExactCtx {
-  ctx: Ctx; models: [YearModel, YearModel]; candidateTitle: string; goal: DealGoal; terms: DealTermsSpace; offeredTotal: number;
-  slots: Slot[]; sepCap: number; cashLeft: number | null; warnings: string[]; openExpenses: [number, number]; offeredYear: 0 | 1;
-  dateResult: (c: Candidate, t: DateTarget) => DateTargetResult; projectFlows: (c: Candidate) => DatedFlow[];
-}
-function exactVariant(c: Candidate, role: DealVariant["role"], x: ExactCtx): DealVariant | null {
-  const plan: Plan = { kind: kindOf(c, x.offeredTotal, x.offeredYear), label: "", revenue: c.price,
-    receipts: c.payments.map(p => ({ date: p.date, amount: p.amountCents })),
-    expenses: x.openExpenses.flatMap((amount, i) => (amount > 0 ? [{ yearIndex: i as 0 | 1, amount }] : [])), sep: c.sep, reasons: [], actions: [],
-    assumptions: [...x.ctx.common, "Asked terms: the client has not agreed until they confirm in writing.",
-      "Additional SEP-IRA amounts are on top of SEP goals already agreed; retirement money is not spendable cash."] };
+const PURPOSE_LABEL: Record<DealVariant["purpose"], string> = { simplest: "Simplest terms that meet your goal", most_cash: "Most cash after both returns",
+  earliest_money: "Most money by your date", most_retirement: "Most added to retirement", lowest_risk: "Furthest from losing a credit", as_offered: "As offered" };
+
+function exactVariant(c: Candidate, purpose: DealVariant["purpose"], x: ExactEnv): EngineDealVariant | null {
+  const { p } = x;
+  const plan: Plan = { kind: kindOf(c, p), label: "", revenue: c.remainder, receipts: c.payments.map(q => ({ date: q.date, amount: q.amountCents })),
+    expenses: p.openExpenses.flatMap((amount, i) => (amount > 0 ? [{ yearIndex: i as YI, amount }] : [])),
+    sep: c.sepYear === null ? [0, 0] : c.sepYear === 0 ? [c.sep, 0] : [0, c.sep], reasons: [], actions: [],
+    assumptions: [...p.ctx.common, "Asked terms: nothing is agreed until the client confirms in writing.",
+      "Additional SEP-IRA is on top of SEP goals already agreed; retirement money is not spendable cash."] };
   let ycs;
-  try { ycs = run(x.models, plan); } catch (e) {
+  try { ycs = run(p.models, plan); } catch (e) {
     if (!(e instanceof EngineStop)) throw e;
-    x.warnings.push(`An option was dropped after the exact check: ${e.message}`);
+    x.warnings.push(`An option was dropped by the exact check: ${e.message}`);
     return null;
   }
-  const exactDelta = ycs[0].spendable + ycs[1].spendable - x.ctx.declineCash;
+  const exactDelta = ycs[0].spendable + ycs[1].spendable - p.ctx.declineCash - x.shift;
   const exact: Candidate = { ...c, cashDelta: exactDelta,
-    years: [0, 1].map(i => ({ spendable: ycs[i].spendable, ptc: ycs[i].credit.ptc.ptc, magi: ycs[i].credit.magi, room: ycs[i].credit.sepMax - ycs[i].credit.sepTotal })) as [YearEval, YearEval] };
-  const dateTargets = x.goal.dateTargets.map(t => x.dateResult(exact, t));
-  const checks: ConstraintCheck[] = [
-    { constraint: "price", satisfied: x.terms.newTermsConfirmed ? c.price >= x.terms.minPriceCents && c.price <= x.terms.maxPriceCents : c.price === x.offeredTotal,
-      detail: x.terms.newTermsConfirmed ? `Asked ${formatUsd(c.price)} within ${formatUsd(x.terms.minPriceCents)}–${formatUsd(x.terms.maxPriceCents)}.` : `Offered price ${formatUsd(c.price)} kept.` },
-    { constraint: "payment_windows", satisfied: c.payments.every(p => p.windowId === "offered" || x.slots.some(s => s.windowId === p.windowId && s.date === p.date))
-      && new Set(c.payments.map(p => p.windowId)).size <= x.terms.maxPayments,
-      detail: `${c.payments.length} payment(s): ${c.payments.map(p => `${formatUsd(p.amountCents)} on ${p.date}`).join(", ")}.` },
-    { constraint: "additional_sep", satisfied: c.retirement <= x.sepCap && c.retirement <= x.goal.maxAdditionalSepCents,
-      detail: `${formatUsd(c.retirement)} additional SEP-IRA; limit ${formatUsd(x.sepCap)} (your cap ${formatUsd(x.goal.maxAdditionalSepCents)}, cash left after agreed goals ${x.cashLeft === null ? "not entered" : formatUsd(x.cashLeft)}); the legal limit was checked by the tax calculation.` },
-    { constraint: "two_year_cash", satisfied: exactDelta >= x.goal.minTwoYearCashDeltaCents,
-      detail: `${formatUsd(exactDelta)} after both returns settle vs your minimum ${formatUsd(x.goal.minTwoYearCashDeltaCents)}.` },
-    ...dateTargets.map(d => ({ constraint: `date_target:${d.targetId}`, satisfied: d.met !== false, detail: d.explanation })),
+    years: ([0, 1] as const).map(i => ({ spendable: ycs[i].spendable, ptc: ycs[i].credit.ptc.ptc, magi: ycs[i].credit.magi, room: ycs[i].credit.sepMax - ycs[i].credit.sepTotal })) as [YearEval, YearEval] };
+  const dts = x.goal.dateTargets.map(t => dateTarget(x.env, exact, x.decl, t));
+  const changed = c.price !== p.offeredPrice || c.payments.some(q => q.windowId !== "offered");
+  const constraints: DealVariant["constraints"] = [
+    { id: "minimum_cash", satisfied: exactDelta >= x.goal.minimumTwoYearCashDeltaCents, detail: clip(`${formatUsd(exactDelta)} after both returns settle vs your minimum ${formatUsd(x.goal.minimumTwoYearCashDeltaCents)} (retirement excluded).`, 400) },
+    ...dts.map(d => ({ id: "date_target" as const, satisfied: d.met !== false, detail: d.explanation })),
+    { id: "price_bounds", satisfied: !changed || (c.price >= x.space.price.minCents && c.price <= x.space.price.maxCents),
+      detail: `Total asked ${formatUsd(c.price)}${changed ? ` within ${formatUsd(x.space.price.minCents)}–${formatUsd(x.space.price.maxCents)}` : " (as offered)"}.` },
+    { id: "payment_windows", satisfied: !changed || c.payments.every(q => x.slots.some(s => s.windowId === q.windowId && s.date === q.date && q.amountCents <= maxIn(c.remainder, s))),
+      detail: clip(`${c.payments.map(q => `${formatUsd(q.amountCents)} on ${q.date}`).join(", ")}.`, 400) },
+    { id: "max_payments", satisfied: !changed || c.payments.length <= x.space.maxPayments, detail: `${c.payments.length} payment(s), at most ${x.space.maxPayments}.` },
+    { id: "additional_sep_limit", satisfied: x.goal.maxAdditionalSepCents === null || c.sep <= x.goal.maxAdditionalSepCents,
+      detail: `Extra SEP-IRA ${formatUsd(c.sep)}${x.goal.maxAdditionalSepCents === null ? "" : `, your limit ${formatUsd(x.goal.maxAdditionalSepCents)}`}.` },
+    { id: "sep_cash", satisfied: c.sep <= x.sepCap, detail: `SEP cash left after agreed goals and recorded payments: ${p.sepCashLeft === null ? "not entered" : formatUsd(p.sepCashLeft)}.` },
+    { id: "sep_legal_limit", satisfied: true, detail: "The legal SEP-IRA limit on the year's whole business profit was checked by the tax calculation." },
+    { id: "timing_confirmation", satisfied: !c.payments.some(q => q.yi === 1 && q.windowId !== "offered") || p.cc.candidate.timingArrangementConfirmed === true,
+      detail: "2027 payments need the client's written confirmation that the money is not payable or available earlier." },
+    { id: "new_terms_confirmation", satisfied: !changed || x.space.newTermsConfirmed === true, detail: changed ? "The client said new terms can be discussed." : "Offered terms." },
+    { id: "fixed_facts", satisfied: c.payments.reduce((a, q) => a + q.amountCents, 0) === c.price - p.received,
+      detail: `${formatUsd(p.received)} already received stays as recorded; payments cover only the remaining ${formatUsd(c.price - p.received)}.` },
   ];
-  if (checks.some(k => !k.satisfied)) { x.warnings.push(`An option failed its exact re-check and was not shown (${checks.filter(k => !k.satisfied).map(k => k.constraint).join(", ")}).`); return null; }
-  const scenario = scenarioFromPlan(x.ctx, plan, ycs, `deal-${role}`);
-  const roleLabel = { simplest: "Simplest that meets your goal", most_cash: "Most cash after both returns", lowest_price: "Lowest price that meets your goal",
-    no_additional_sep: "No additional SEP-IRA", most_by_date: "Most money by your date", offered: "Offered terms" }[role];
-  const terms: DealTerms = { priceCents: c.price, payments: c.payments.map(p => ({ windowId: p.windowId, date: p.date, amountCents: p.amountCents })),
-    additionalSep: ([0, 1] as const).filter(i => c.sep[i] > 0).map(i => ({ year: YEARS[i], amountCents: c.sep[i] })) };
-  scenario.label = `${roleLabel}: ${formatUsd(c.price)} — ${terms.payments.map(p => `${formatUsd(p.amountCents)} ${p.date}`).join(", ")}${c.retirement ? `; SEP-IRA +${formatUsd(c.retirement)}` : ""}`;
+  if (constraints.some(k => !k.satisfied)) { x.warnings.push(`An option failed its exact re-check and is not shown (${constraints.filter(k => !k.satisfied).map(k => k.id).join(", ")}).`); return null; }
+  const scenario = scenarioFromPlan(p.ctx, plan, ycs, `deal-${purpose}`);
+  const sepYear = c.sepYear === null ? null : YEARS[c.sepYear];
+  const datedFlows: DatedFlow[] = [
+    ...p.cc.candidate.receipts.filter(l => l.actual).map(l => ({ date: l.actual!.date, amountCents: l.actual!.amountCents, kind: "project_receipt" as const, basis: "fixed" as const, label: "Already received" })),
+    ...c.payments.map(q => ({ date: q.date, amountCents: q.amountCents, kind: "project_receipt" as const, basis: "proposed" as const, label: "Payment under these terms" })),
+    ...p.cc.expenses.map(e => ({ date: e.date, amountCents: -e.amountCents, kind: "project_expense" as const, basis: "estimated" as const, label: "Project expense" })),
+    ...(c.sep > 0 && c.sepYear !== null ? [{ date: p.due[c.sepYear], amountCents: -c.sep, kind: "sep_contribution" as const, basis: "proposed" as const, label: `Extra SEP-IRA for ${sepYear} (by the return due date)` }] : []),
+    ...([0, 1] as const).flatMap(yi => { const b = burden(p, exact, x.decl, yi); return b ? [{ date: p.due[yi], amountCents: -b, kind: "tax_settlement" as const, basis: "estimated" as const,
+      label: clip(`This project's extra tax and credit settlement for ${YEARS[yi]} (${b > 0 ? "paid" : "received"} with the return)`, 200) }] : []; }),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  const title = p.cc.candidate.title;
+  const actions: DealVariant["actions"] = [
+    ...(changed ? [{ id: "send-terms", title: clip(`Send the proposed terms for "${title}" to the client`, 300), dueDate: null, dueCondition: "Before the next invoice; nothing changes until the client confirms in writing.", kind: "send_terms" as const, sourceIds: ["irs-pub-334"] }] : []),
+    ...c.payments.map(q => ({ id: `receive-${q.id}`, title: clip(`Receive ${formatUsd(q.amountCents)} for "${title}" and record the actual payment`, 300), dueDate: q.date, dueCondition: null, kind: "receive_payment" as const, sourceIds: [] })),
+    ...(c.sep > 0 && c.sepYear !== null ? [{ id: `sep-${sepYear}`, title: `Contribute the extra ${formatUsd(c.sep)} to the SEP-IRA for ${sepYear}`, dueDate: p.due[c.sepYear], dueCondition: "Later only with a filed extension.", kind: "sep_contribution" as const, sourceIds: ["irs-pub-560"] }] : []),
+    { id: "marketplace", title: "Update your Marketplace income estimate for the years these payments fall in", dueDate: null, dueCondition: "As soon as the client agrees to the terms.", kind: "marketplace_update" as const, sourceIds: ["healthcare-gov-report-changes"] },
+    ...([0, 1] as const).flatMap(yi => { const b = burden(p, exact, x.decl, yi); return b > 0 ? [{ id: `settle-${YEARS[yi]}`, title: clip(`Keep about ${formatUsd(b)} for this project's extra ${YEARS[yi]} tax and credit repayment (an estimate, not a quarterly payment calculation)`, 300),
+      dueDate: p.due[yi], dueCondition: null, kind: "tax_payment" as const, sourceIds: ["irs-ptc-qa"] }] : []; }),
+  ].slice(0, 15);
   return {
-    id: `deal-${role}`, role, label: scenario.label, kind: plan.kind, terms, twoYearCashDeltaCents: exactDelta, retirementCents: c.retirement,
-    goalMet: dateTargets.some(d => d.met === null) ? null : true, dateTargets,
-    aca: ([0, 1] as const).map(i => ({ year: YEARS[i], magiCents: ycs[i].credit.magi, ptcCents: ycs[i].credit.ptc.ptc, creditKept: !x.models[i].ptcEligible || ycs[i].credit.ptc.ptc > 0 })),
-    checks, flows: x.projectFlows(exact), scenario, marginalGainOverSimplestCents: null,
-    clientTermsDraft: clientDraft(x.candidateTitle, terms),
-    reminders: [
-      ...terms.payments.map(p => ({ date: p.date, title: `Expect ${formatUsd(p.amountCents)} for "${x.candidateTitle}" (record the actual payment when it arrives)` })),
-      ...terms.additionalSep.map(s => ({ date: x.models[YEARS.indexOf(s.year)].rules.returnDueDate, title: `Last day to contribute the additional ${formatUsd(s.amountCents)} SEP-IRA for ${s.year} (later with an extension)` })),
-    ].sort((a, b) => a.date.localeCompare(b.date)),
-    sensitivity: sensitivity(exact, x),
+    id: `v-${purpose}`, label: clip(`${PURPOSE_LABEL[purpose]}: ${formatUsd(c.price)} total; ${c.payments.map(q => `${formatUsd(q.amountCents)} ${q.date}`).join(", ")}${c.sep ? `; extra SEP ${formatUsd(c.sep)}` : ""}`, 200),
+    purpose, terms: { priceCents: c.price, payments: c.payments.map(q => ({ id: q.id, date: q.date, amountCents: q.amountCents })),
+      additionalSep: c.sep > 0 && sepYear ? { year: sepYear, personId: p.cc.candidate.ownerPersonId, amountCents: c.sep } : null },
+    twoYearCashDeltaCents: exactDelta, retirementAddedCents: c.sep, datedFlows: datedFlows.slice(0, 100), dateTargets: dts,
+    aca: ([0, 1] as const).map(i => ({ year: YEARS[i], magiCents: ycs[i].credit.magi, ptcCents: ycs[i].credit.ptc.ptc, creditLost: p.models[i].ptcEligible && x.decl[i].ptc > 0 && ycs[i].credit.ptc.ptc === 0 })),
+    constraints, actions, differenceFromBestCents: 0, verifiedExact: true, scenario,
   };
 }
 
-function clientDraft(title: string, t: DealTerms): string {
-  const lines = t.payments.map(p => `• ${formatUsd(p.amountCents)} paid on ${p.date}`).join("\n");
-  return `Proposed terms for "${title}": total ${formatUsd(t.priceCents)} for the remaining work.\n${lines}\n` +
-    (t.payments.some(p => p.date.startsWith("2027")) ? "The 2027 payment is not payable or available before that date.\n" : "") +
-    "These terms apply once you confirm them in writing.";
-}
-
-// ----------------------------------------------------------------- dated goals --
-interface DateCtx { ws: HouseholdWorkspace; candidateId: string; offeredExpenses: Array<{ id: string; amountCents: number; date: string }>;
-  burden: [number, number]; due: [string, string]; cash: CashContext | null; remainingSep: [number, number] }
-
-function evaluateDateTarget(c: Candidate, t: DateTarget, d: DateCtx): DateTargetResult {
-  const D = t.byDate;
-  const receivedFacts = d.ws.projects.find(p => p.id === d.candidateId)!.receipts.filter(l => l.actual && l.actual.date <= D)
-    .reduce((a, l) => a + l.actual!.amountCents, 0);
-  const scheduled = c.payments.filter(p => p.date <= D).reduce((a, p) => a + p.amountCents, 0);
-  const expensesByD = d.offeredExpenses.filter(e => e.date <= D).reduce((a, e) => a + e.amountCents, 0);
-  const sepByD = ([0, 1] as const).reduce<number>((a, i) => a + (d.due[i] <= D ? c.sep[i] : 0), 0);
-  // Planning reserve: the project's extra tax and lost/changed credit for a year, set aside pro rata as its money arrives;
-  // it is paid with that year's return, so it is never counted twice. A benefit (negative burden) arrives only at filing.
-  const reserveByD = ([0, 1] as const).reduce<number>((a, i) => {
-    const receiptsY = c.payments.filter(p => p.yi === i).reduce((s, p) => s + p.amountCents, 0);
-    const arrived = c.payments.filter(p => p.yi === i && p.date <= D).reduce((s, p) => s + p.amountCents, 0);
-    if (d.due[i] <= D) return a + d.burden[i];
-    return a + (receiptsY > 0 ? Math.round((Math.max(0, d.burden[i]) * arrived) / receiptsY) : 0);
-  }, 0);
-  if (t.kind === "project_receipts") {
-    const v = receivedFacts + scheduled;
-    return { targetId: t.id, kind: t.kind, byDate: D, requiredCents: t.minCents, valueCents: v, met: v >= t.minCents,
-      explanation: `Received from the project by ${D}: ${formatUsd(v)} (${formatUsd(receivedFacts)} already received + ${formatUsd(scheduled)} scheduled). Gross receipts, not profit after tax.` };
+// =====================================================================================================
+interface InfeasibleEnv { all: Candidate[]; goal: DealGoal; env: DateEnv; decl: [YearEval, YearEval]; p: Prepared; space: DealTermsSpace; slots: Slot[]; sepCap: number;
+  ev: ReturnType<typeof yearEvaluator>; shift: number; fixedTerms: boolean; priceStep: number }
+function explainInfeasible(nf: NoFeasibleTerms, a: InfeasibleEnv) {
+  const { all, goal } = a;
+  if (!all.length) { nf.violated.push({ id: "payment_windows", detail: "No schedule fits the allowed windows, shares and number of payments in the supported tax range." }); return; }
+  const bestCash = Math.max(...all.map(c => c.cashDelta));
+  if (bestCash < goal.minimumTwoYearCashDeltaCents) {
+    nf.violated.push({ id: "minimum_cash", detail: clip(`Within the allowed prices, payment windows and SEP limit, the most this project adds after both returns is ${formatUsd(bestCash)}; the goal is ${formatUsd(goal.minimumTwoYearCashDeltaCents)}.`, 400) });
+    nf.relaxations.push({ constraint: "minimum_cash", requiredCents: bestCash, requiredDate: null, explanation: clip(`With the current limits, the cash goal could be at most ${formatUsd(bestCash)}.`, 400) });
   }
-  if (t.kind === "project_available_cash") {
-    const v = scheduled - expensesByD - sepByD - reserveByD;
-    return { targetId: t.id, kind: t.kind, byDate: D, requiredCents: t.minCents, valueCents: v, met: v >= t.minCents,
-      explanation: `Added to money you can use by ${D}: scheduled receipts ${formatUsd(scheduled)} − project expenses ${formatUsd(expensesByD)} − additional SEP ${formatUsd(sepByD)} − reserve for this project's tax and credit settlement ${formatUsd(reserveByD)} = ${formatUsd(v)}. The reserve is a planning amount, not a calculated estimated-tax payment.` };
-  }
-  // household_balance: only with a complete cash context through the date.
-  const cash = d.cash;
-  if (!cash || !cash.completeThrough || cash.completeThrough < D || cash.snapshot.date > D) {
-    return { targetId: t.id, kind: t.kind, byDate: D, requiredCents: t.minCents, valueCents: null, met: null,
-      explanation: `Household balance by ${D} is not calculated: confirm a bank balance snapshot and that all other money in and out is listed through ${D}. The project-only figures above still apply.` };
-  }
-  const S = cash.snapshot.date, inc = new Set(cash.snapshot.includedFactIds);
-  const after = (date: string, id: string) => date > S && date <= D && !inc.has(id);
-  let v = cash.snapshot.balanceCents + cash.knownFlows.filter(f => f.date > S && f.date <= D).reduce((a, f) => a + f.amountCents, 0);
-  for (const p of d.ws.projects) for (const [lines, sign] of [[p.receipts, 1], [p.expenses, -1]] as const) for (const l of lines) {
-    if (l.actual) { if (after(l.actual.date, l.id)) v += sign * l.actual.amountCents; continue; }
-    if (p.id === d.candidateId || l.cancelledAt || !l.expected || p.status !== "agreed") continue;
-    if (after(l.expected.date, l.id)) v += sign * l.expected.amountCents;
-  }
-  v += c.payments.filter(p => p.date > S && p.date <= D).reduce((a, p) => a + p.amountCents, 0);
-  v -= d.offeredExpenses.filter(e => e.date > S && e.date <= D).reduce((a, e) => a + e.amountCents, 0);
-  for (const sc of d.ws.retirement.contributions) if (after(sc.paidDate, sc.id)) v -= sc.amountCents;
-  v -= sepByD;
-  // Agreed SEP goals still unpaid are assumed paid on that year's return due date (existing commitments, counted once).
-  const agreedSepByD = ([0, 1] as const).reduce<number>((a, i) => a + (d.due[i] <= D ? d.remainingSep[i] : 0), 0);
-  v -= agreedSepByD;
-  const value = v - reserveByD - cash.protectedReserveCents;
-  return { targetId: t.id, kind: t.kind, byDate: D, requiredCents: t.minCents, valueCents: value, met: value >= t.minCents,
-    explanation: `Balance ${formatUsd(cash.snapshot.balanceCents)} on ${S} + your listed flows + plan payments, expenses and SEP not already in that balance` +
-      `${agreedSepByD ? ` (incl. agreed SEP ${formatUsd(agreedSepByD)})` : ""} − this project's tax and credit reserve or settlement ${formatUsd(reserveByD)} − protected reserve ${formatUsd(cash.protectedReserveCents)} = ${formatUsd(value)} by ${D}. Other taxes come only from your listed flows.` };
-}
-
-// ----------------------------------------------------------------- infeasible --
-function analyseInfeasible(a: { all: Candidate[]; goal: DealGoal; dateResult: (c: Candidate, t: DateTarget) => DateTargetResult; violations: Violation[] }) {
-  if (!a.all.length) { a.violations.push({ constraint: "terms", requiredCents: 0, bestAchievableCents: null, explanation: "No payment schedule fits the allowed windows, share limits and number of payments." }); return; }
-  const bestCash = Math.max(...a.all.map(c => c.cashDelta));
-  if (bestCash < a.goal.minTwoYearCashDeltaCents) {
-    a.violations.push({ constraint: "two_year_cash", requiredCents: a.goal.minTwoYearCashDeltaCents, bestAchievableCents: bestCash,
-      explanation: `Within your price range, payment windows and SEP limit, the most this project can add after both returns is ${formatUsd(bestCash)}; you asked for at least ${formatUsd(a.goal.minTwoYearCashDeltaCents)}.` });
-  }
-  for (const t of a.goal.dateTargets) {
-    const vals = a.all.map(c => a.dateResult(c, t)).filter(r => r.valueCents !== null);
+  for (const t of goal.dateTargets) {
+    const vals = all.map(c => dateTarget(a.env, c, a.decl, t)).filter(r => r.achievedCents !== null);
     if (!vals.length) continue;
-    const best = Math.max(...vals.map(r => r.valueCents!));
-    if (best < t.minCents) a.violations.push({ constraint: `date_target:${t.id}`, requiredCents: t.minCents, bestAchievableCents: best,
-      explanation: `By ${t.byDate} the most possible is ${formatUsd(best)} (${t.kind.replace(/_/g, " ")}); you asked for ${formatUsd(t.minCents)}.` });
-  }
-  if (!a.violations.length) a.violations.push({ constraint: "combination", requiredCents: 0, bestAchievableCents: null,
-    explanation: "Each goal can be met on its own, but no single set of terms meets all of them together." });
-}
-
-interface RelaxCtx {
-  goal: DealGoal; terms: DealTermsSpace; fixedTerms: boolean; slots: Slot[]; sepCap: number; offeredTotal: number; ctx: Ctx; step: number;
-  models: [YearModel, YearModel]; yearEval: (yi: 0 | 1, r: number, s: number) => YearEval | null;
-  sepOptionsRelaxed: (yi: 0 | 1, r: number) => number[];
-  dateResult: (c: Candidate, t: DateTarget) => DateTargetResult; relaxations: Relaxation[]; all: Candidate[];
-}
-function relax(r: RelaxCtx) {
-  const meets = (c: Candidate) => c.cashDelta >= r.goal.minTwoYearCashDeltaCents && r.goal.dateTargets.every(t => r.dateResult(c, t).met !== false);
-  const build = (price: number, pay: Candidate["payments"], s0: number, s1: number): Candidate | null => {
-    const x = pay.filter(p => p.yi === 0).reduce((a, p) => a + p.amountCents, 0);
-    const y0 = r.yearEval(0, x, s0), y1 = r.yearEval(1, price - x, s1);
-    return y0 && y1 ? { price, x, payments: pay, sep: [s0, s1], retirement: s0 + s1, years: [y0, y1], cashDelta: y0.spendable + y1.spendable - r.ctx.declineCash } : null;
-  };
-  // 1. Price ceiling only (other limits unchanged).
-  if (!r.fixedTerms) {
-    const hiLimit = r.terms.maxPriceCents + Math.max(r.terms.maxPriceCents - r.terms.minPriceCents, r.offeredTotal, 2_000_000);
-    let found: number | null = null;
-    for (let p = r.terms.maxPriceCents + 100; p <= hiLimit && found === null; p += r.step) {
-      for (const x of splitValues(p, r.slots, r.step)) {
-        const pay = allocate(p, x, r.slots, r.terms.maxPayments);
-        if (!pay) continue;
-        const sepOpts = (yi: 0 | 1, rec: number) => { const base = r.yearEval(yi, rec, 0); return base ? [0, Math.min(base.room, r.sepCap)].filter((v, i, a) => a.indexOf(v) === i) : [0]; };
-        for (const s0 of sepOpts(0, x)) for (const s1 of sepOpts(1, p - x)) {
-          if (s0 + s1 > r.sepCap) continue;
-          const c = build(p, pay, s0, s1);
-          if (c && meets(c)) { found = p; break; }
-        }
-        if (found !== null) break;
-      }
-    }
-    r.relaxations.push(found !== null
-      ? { constraint: "max_price", value: `${found}`, explanation: `Asking about ${formatUsd(found)} (above your maximum of ${formatUsd(r.terms.maxPriceCents)}; checked every ${formatUsd(r.step)}) would meet the goal with your other limits. This is a target to discuss, not a price the client accepted.` }
-      : { constraint: "max_price", value: "none", explanation: `No price up to ${formatUsd(hiLimit)} meets the goal with your other limits.` });
-  }
-  // 2. Additional SEP cap only (legal limit still applies; cash set aside is ignored to show the amount needed).
-  let needSep: number | null = null;
-  const pool = r.fixedTerms ? r.all : r.all.filter(c => c.price <= r.terms.maxPriceCents);
-  for (const c of pool) for (const s0 of r.sepOptionsRelaxed(0, c.x)) for (const s1 of r.sepOptionsRelaxed(1, c.price - c.x)) {
-    const k = build(c.price, c.payments, s0, s1);
-    if (k && meets(k) && (needSep === null || k.retirement < needSep)) needSep = k.retirement;
-  }
-  if (needSep !== null && needSep > r.sepCap) {
-    r.relaxations.push({ constraint: "max_additional_sep", value: `${needSep}`, explanation: `An additional SEP-IRA contribution of ${formatUsd(needSep)} (above the ${formatUsd(r.sepCap)} you can use now) would meet the goal at an allowed price and schedule. It needs that much cash, and it is retirement money, not spending money.` });
-  }
-  // 3. Dated goals: the earliest date by which the best schedule reaches each target.
-  for (const t of r.goal.dateTargets) {
-    if (t.kind === "household_balance") continue;
-    const okOthers = r.all.filter(c => c.cashDelta >= r.goal.minTwoYearCashDeltaCents);
+    const best = Math.max(...vals.map(r => r.achievedCents!));
+    if (best >= t.minimumCents) continue;
+    nf.violated.push({ id: "date_target", detail: clip(`By ${t.byDate} at most ${formatUsd(best)} (${t.kind.replace(/_/g, " ")}); the goal is ${formatUsd(t.minimumCents)}.`, 400) });
+    // Earliest later date by which an option that meets the cash goal reaches the target.
     let earliest: string | null = null;
-    for (const c of okOthers) {
-      for (const date of [...new Set([...c.payments.map(p => p.date), "2027-04-15", "2028-04-18"])].sort()) {
-        if (date < t.byDate) continue;
-        if ((r.dateResult(c, { ...t, byDate: date }).valueCents ?? -Infinity) >= t.minCents) { if (!earliest || date < earliest) earliest = date; break; }
+    for (const c of all.filter(k => k.cashDelta >= goal.minimumTwoYearCashDeltaCents)) for (const d of [...new Set([...c.payments.map(q => q.date), ...a.p.due])].sort()) {
+      if (d <= t.byDate) continue;
+      if ((dateTarget(a.env, c, a.decl, { ...t, byDate: d }).achievedCents ?? -Infinity) >= t.minimumCents) { if (!earliest || d < earliest) earliest = d; break; }
+    }
+    if (earliest) nf.relaxations.push({ constraint: "date_target", requiredCents: null, requiredDate: earliest,
+      explanation: clip(`With the cash goal kept, ${formatUsd(t.minimumCents)} (${t.kind.replace(/_/g, " ")}) is first reached on ${earliest}.`, 400) });
+  }
+  if (!nf.violated.length) nf.violated.push({ id: "minimum_cash", detail: "Each goal can be met on its own, but no single set of terms meets all of them together." });
+
+  const meets = (c: Candidate) => c.cashDelta >= goal.minimumTwoYearCashDeltaCents && goal.dateTargets.every(t => dateTarget(a.env, c, a.decl, t).met !== false);
+  const make = (price: number, pay: Payment[], sy: YI | null, s: number): Candidate | null => {
+    const rem = price - a.p.received, x = pay.filter(q => q.yi === 0).reduce((t, q) => t + q.amountCents, 0);
+    const y0 = a.ev(0, x, sy === 0 ? s : 0), y1 = a.ev(1, rem - x, sy === 1 ? s : 0);
+    return y0 && y1 ? { price, remainder: rem, x, payments: pay, sepYear: sy, sep: s, years: [y0, y1], cashDelta: y0.spendable + y1.spendable - a.p.ctx.declineCash - a.shift } : null;
+  };
+  // Price ceiling only: search above the maximum at the same lattice step, all other limits unchanged.
+  if (!a.fixedTerms) {
+    const ceiling = a.space.price.maxCents + Math.max(a.space.price.maxCents - a.space.price.minCents, a.p.offeredPrice, 2_000_000);
+    const sepOpt = sepOptions(a.p, a.ev, a.sepCap);
+    let found: number | null = null;
+    for (let price = a.space.price.maxCents + a.space.price.stepCents; price <= ceiling && found === null; price += a.priceStep) {
+      const rem = price - a.p.received;
+      for (const x of splitValues(rem, a.slots, Math.max(5000, Math.ceil(rem / MAX_SPLIT_POINTS / 5000) * 5000))) {
+        const pay = allocate(rem, x, a.slots, a.space.maxPayments);
+        if (!pay) continue;
+        const opts: Array<[YI | null, number]> = [[null, 0], ...([0, 1] as const).flatMap(yi => sepOpt(yi, yi === 0 ? x : rem - x).filter(s => s > 0).map(s => [yi, s] as [YI, number]))];
+        if (opts.some(([sy, s]) => { const c = make(price, pay, sy, s); return !!c && meets(c); })) { found = price; break; }
       }
     }
-    if (earliest && earliest > t.byDate) r.relaxations.push({ constraint: `date_target:${t.id}`, value: earliest,
-      explanation: `With your other goals, ${formatUsd(t.minCents)} (${t.kind.replace(/_/g, " ")}) is first reached on ${earliest}, not by ${t.byDate}.` });
+    nf.relaxations.push(found !== null
+      ? { constraint: "price_max", requiredCents: found, requiredDate: null, explanation: clip(`Asking about ${formatUsd(found)} in total (your maximum is ${formatUsd(a.space.price.maxCents)}; checked every ${formatUsd(a.priceStep)}) would meet the goal with your other limits. A target to discuss, not a price the client accepted.`, 400) }
+      : { constraint: "price_max", requiredCents: null, requiredDate: null, explanation: clip(`No total price up to ${formatUsd(ceiling)} meets the goal with your other limits.`, 400) });
   }
+  // Additional SEP only: the legal limit still applies; the SEP cash and your cap are ignored to show what would be needed.
+  const relaxedSep = sepOptions(a.p, a.ev, Number.MAX_SAFE_INTEGER);
+  let needSep: number | null = null;
+  for (const c of all) for (const yi of [0, 1] as const) for (const s of relaxedSep(yi, yi === 0 ? c.x : c.remainder - c.x)) {
+    if (s <= a.sepCap) continue;
+    const k = make(c.price, c.payments, yi, s);
+    if (k && meets(k) && (needSep === null || s < needSep)) needSep = s;
+  }
+  if (needSep !== null) nf.relaxations.push({ constraint: "additional_sep", requiredCents: needSep, requiredDate: null,
+    explanation: clip(`An extra SEP-IRA of ${formatUsd(needSep)} (more than the ${formatUsd(a.sepCap)} your limit and the SEP cash left allow now) would meet the goal within the allowed prices and dates. It needs that much cash and is retirement money, not spending money.`, 400) });
 }
 
-// ----------------------------------------------------------------- sensitivity --
-function sensitivity(c: Candidate, x: ExactCtx): DecisionSensitivity {
-  const items: SensitivityItem[] = [];
-  for (const yi of [0, 1] as const) {
-    const receipts = c.payments.filter(p => p.yi === yi).reduce((a, p) => a + p.amountCents, 0);
-    const v = { profitDelta: receipts - x.openExpenses[yi], additionalSep: c.sep[yi] };
-    let headroom: number | null = null;
-    try { headroom = profitHeadroomDollars(x.models[yi], v); } catch { headroom = null; }
-    if (headroom !== null) items.push({ year: YEARS[yi], fact: "other business profit", kind: "credit_lost", thresholdCents: (headroom + 1) * 100,
-      checked: "exact: the household income limit is re-solved with the deduction and credit at each amount" });
+// =====================================================================================================
+/**
+ * What could change the chosen terms: exact credit limits per year (extra other profit), the first
+ * extra 2026 profit found that breaks the cash goal (checked every $250 up to +$25,000 and at both
+ * credit limits), a December payment slipping into January, the extra SEP not being paid, and
+ * estimated/ranged facts. No probabilities.
+ */
+export async function evaluateDecisionSensitivity(ws: HouseholdWorkspace, goalRaw: DealGoal, variant: DealVariant, searchFingerprint: string): Promise<DecisionSensitivityResult> {
+  const g = DealGoalSchema.safeParse(goalRaw); if (!g.success) return blockedFromSchema("goal", g.error.issues);
+  const goal = g.data;
+  const prep = prepareDeal(ws, goal.projectId);
+  if ("status" in prep) return prep;
+  const p = prep, { models, ctx } = p;
+  const pays = variant.terms.payments.map(q => ({ ...q, yi: yearOf(q.date) }));
+  if (pays.reduce((a, q) => a + q.amountCents, 0) !== variant.terms.priceCents - p.received) {
+    return { status: "needs_data", code: "STALE_VARIANT", message: "These terms no longer match the payments already recorded. Search again.", fields: [{ path: "dealPlanning.packages", reason: "Received amounts changed since the search." }] };
   }
-  // First additional 2026 base profit (same for this option and the baseline) at which the option no longer meets the cash goal.
-  const deltaAt = (extra: number): number | null => {
-    try {
-      const yc = (i: 0 | 1, rec: number, s: number) => evaluateYear(x.models[i], { profitDelta: rec + (i === 0 ? extra : 0), additionalSep: s }).spendable;
-      const exp = (i: 0 | 1) => x.openExpenses[i];
-      const rec = (i: 0 | 1) => c.payments.filter(p => p.yi === i).reduce((a, p) => a + p.amountCents, 0);
-      const opt = yc(0, rec(0) - exp(0), c.sep[0]) + yc(1, rec(1) - exp(1), c.sep[1]);
-      const base = yc(0, 0, 0) + yc(1, 0, 0);
-      return opt - base;
-    } catch { return null; }
+  const sepYi: YI | null = variant.terms.additionalSep ? (variant.terms.additionalSep.year === 2026 ? 0 : 1) : null;
+  const sepAmt = variant.terms.additionalSep?.amountCents ?? 0;
+  const receiptsIn = (yi: YI, list = pays) => list.filter(q => q.yi === yi).reduce((a, q) => a + q.amountCents, 0);
+  const baselineCash = (extra: [number, number]) => {
+    const d = ([0, 1] as const).map(yi => evaluateYear(models[yi], { profitDelta: extra[yi], additionalSep: 0 }).spendable);
+    if (goal.baseline === "decline_unpaid_terms") return d[0] + d[1];
+    const o = ([0, 1] as const).map(yi => evaluateYear(models[yi], { profitDelta: extra[yi] + p.offered.filter(q => yearOf(q.date) === yi).reduce((a, q) => a + q.amountCents, 0) - p.openExpenses[yi], additionalSep: 0 }).spendable);
+    return o[0] + o[1];
   };
-  const points = new Set<number>();
-  for (let e = 0; e <= 2_500_000; e += 25_000) points.add(e);
-  for (const it of items) if (it.year === 2026 && it.thresholdCents !== null) { points.add(it.thresholdCents - 100); points.add(it.thresholdCents); }
-  const baseHead = (() => { try { return profitHeadroomDollars(x.models[0], { profitDelta: 0, additionalSep: 0 }); } catch { return null; } })();
-  if (baseHead !== null) { points.add(baseHead * 100); points.add((baseHead + 1) * 100); }
-  let first: number | null = null;
-  for (const e of [...points].sort((a, b) => a - b)) { const d = deltaAt(e); if (d !== null && d < x.goal.minTwoYearCashDeltaCents) { first = e; break; } }
-  items.push({ year: 2026, fact: "other business profit (in this option and without it)", kind: "goal_not_met", thresholdCents: first,
-    checked: "every $250 up to +$25,000, plus both credit limits exactly; a change between checked points is possible" });
-  const plan2: Plan = { kind: "accept_now", label: "", revenue: c.price, receipts: c.payments.map(p => ({ date: p.date, amount: p.amountCents })),
-    expenses: x.openExpenses.flatMap((amount, i) => (amount > 0 ? [{ yearIndex: i as 0 | 1, amount }] : [])), sep: c.sep, reasons: [], assumptions: [], actions: [] };
-  let uncertainty: DecisionSensitivity["uncertainty"];
-  try { uncertainty = stressPlan(x.ctx, plan2); } catch (e) { if (!(e instanceof EngineStop)) throw e; uncertainty = { status: "not_tested", worstCashDeltaCents: null, checkedDescription: e.message }; }
-  const unconfirmed: string[] = [];
-  for (const m of x.models) for (const p of m.persons) for (const [f, r] of Object.entries(p.ranges)) unconfirmed.push(`${m.year}: ${p.possessive} ${f} is a range (${formatUsd(r!.low)}–${formatUsd(r!.high)}).`);
-  return { items, uncertainty, unconfirmedFacts: unconfirmed };
+  const variantCash = (extra: [number, number], list = pays, sep = sepAmt) =>
+    ([0, 1] as const).reduce<number>((a, yi) => a + evaluateYear(models[yi], { profitDelta: extra[yi] + receiptsIn(yi, list) - p.openExpenses[yi], additionalSep: sepYi === yi ? sep : 0 }).spendable, 0);
+  const items: SensitivityItem[] = [];
+  const forecastPath = (yi: YI) => {
+    const i = ws.forecasts.findIndex(f => f.personId === p.cc.adapted.ownerPersonId && f.year === YEARS[yi]);
+    const f = ws.forecasts[i];
+    return f ? `forecasts[${i}].${f.method === "annual_total" ? "annualNetProfit" : "remainingReceipts"}` : "forecasts";
+  };
+  for (const yi of [0, 1] as const) {
+    let head: number | null = null;
+    try { head = profitHeadroomDollars(models[yi], { profitDelta: receiptsIn(yi) - p.openExpenses[yi], additionalSep: sepYi === yi ? sepAmt : 0 }); } catch { head = null; }
+    if (head === null) continue;
+    const current = p.cc.baseline.years[yi]?.components.filter(c => c.basis === "forecast").reduce((a, c) => a + c.cents, 0) ?? null;
+    items.push({ id: `credit-${YEARS[yi]}`, factKind: "household_income", path: forecastPath(yi), description: `Other ${YEARS[yi]} business profit`,
+      currentCents: current, thresholdCents: current === null ? null : current + (head + 1) * 100, direction: "increase",
+      outcomeChange: `With ${formatUsd((head + 1) * 100)} more ${YEARS[yi]} profit, the ${YEARS[yi]} premium tax credit under these terms is lost.`, checked: "exact_threshold" });
+  }
+  // First extra 2026 profit (in the option and its baseline alike) that breaks the cash goal.
+  try {
+    const points = new Set<number>();
+    for (let e = 0; e <= 2_500_000; e += 25_000) points.add(e);
+    for (const it of items) if (it.id === "credit-2026" && it.thresholdCents !== null && it.currentCents !== null) { points.add(it.thresholdCents - it.currentCents - 100); points.add(it.thresholdCents - it.currentCents); }
+    const bh = profitHeadroomDollars(models[0], { profitDelta: 0, additionalSep: 0 });
+    if (bh !== null) { points.add(bh * 100); points.add((bh + 1) * 100); }
+    let first: number | null = null;
+    for (const e of [...points].filter(v => v >= 0).sort((a, b) => a - b)) {
+      if (variantCash([e, 0]) - baselineCash([e, 0]) < goal.minimumTwoYearCashDeltaCents) { first = e; break; }
+    }
+    items.push({ id: "goal-2026-profit", factKind: "household_income", path: forecastPath(0), description: "Other 2026 business profit (with and without these terms)",
+      currentCents: null, thresholdCents: first, direction: first === null ? null : "increase",
+      outcomeChange: first === null ? "No break of your cash goal found up to +$25,000 (checked every $250 and at both credit limits)." : `From about +${formatUsd(first)} of other 2026 profit, these terms no longer leave your minimum cash (checked every $250 and at both credit limits).`,
+      checked: "interval_checked" });
+  } catch (e) { if (!(e instanceof EngineStop)) throw e; }
+  // A December payment slipping into January.
+  const late = pays.filter(q => q.yi === 0 && q.date >= "2026-12-01");
+  if (late.length) {
+    const moved = pays.map(q => (late.includes(q) ? { ...q, date: firstBusinessDay(2027), yi: 1 as YI } : q));
+    try {
+      const now = variantCash([0, 0]) - baselineCash([0, 0]), then = variantCash([0, 0], moved) - baselineCash([0, 0]);
+      items.push({ id: "december-payment", factKind: "payment_date", path: "dealPlanning.packages.variant.terms.payments", description: "December payment arrives in January",
+        currentCents: now, thresholdCents: then, direction: null,
+        outcomeChange: clip(`If ${formatUsd(late.reduce((a, q) => a + q.amountCents, 0))} arrives on ${firstBusinessDay(2027)} instead, it becomes 2027 income: two-year cash ${formatUsd(then)} instead of ${formatUsd(now)}${then < goal.minimumTwoYearCashDeltaCents ? " — below your goal" : ""}.`, 400),
+        checked: "condition" });
+    } catch (e) { if (!(e instanceof EngineStop)) throw e; }
+  }
+  if (sepAmt > 0 && sepYi !== null) {
+    try {
+      const without = variantCash([0, 0], pays, 0) - baselineCash([0, 0]);
+      const ptcWithout = evaluateYear(models[sepYi], { profitDelta: receiptsIn(sepYi) - p.openExpenses[sepYi], additionalSep: 0 }).credit.ptc.ptc;
+      items.push({ id: "extra-sep", factKind: "sep_cash", path: "retirement.futureContributionBudget", description: `The extra SEP-IRA of ${formatUsd(sepAmt)} for ${YEARS[sepYi]}`,
+        currentCents: sepAmt, thresholdCents: 0, direction: "decrease",
+        outcomeChange: clip(`If it is not paid by ${p.due[sepYi]}, two-year cash is ${formatUsd(without)}${ptcWithout === 0 ? ` and the ${YEARS[sepYi]} premium tax credit is lost` : ""}.`, 400), checked: "condition" });
+    } catch (e) { if (!(e instanceof EngineStop)) throw e; }
+  }
+  // Estimated or ranged forecast facts.
+  ws.forecasts.forEach((f, i) => {
+    const facts = f.method === "annual_total" ? [["annualNetProfit", f.annualNetProfit]] as const
+      : [["ytdNetProfit", f.ytdNetProfit], ["remainingReceipts", f.remainingReceipts], ["remainingExpenses", f.remainingExpenses]] as const;
+    for (const [k, fact] of facts) if (fact.status !== "confirmed" || fact.range) items.push({ id: `fact-${i}-${k}`, factKind: "unconfirmed_fact", path: `forecasts[${i}].${k}`,
+      description: `${f.year} ${k.replace(/([A-Z])/g, " $1").toLowerCase()} is ${fact.status}`, currentCents: fact.valueCents,
+      thresholdCents: null, direction: null, outcomeChange: fact.range ? `Range ${formatUsd(fact.range.lowCents)}–${formatUsd(fact.range.highCents)}; confirm it before relying on the terms.` : "Confirm it before relying on the terms.", checked: "condition" });
+  });
+  const plan: Plan = { kind: "accept_now", label: "", revenue: variant.terms.priceCents - p.received, receipts: pays.map(q => ({ date: q.date, amount: q.amountCents })),
+    expenses: p.openExpenses.flatMap((amount, i) => (amount > 0 ? [{ yearIndex: i as YI, amount }] : [])), sep: sepYi === null ? [0, 0] : sepYi === 0 ? [sepAmt, 0] : [0, sepAmt], reasons: [], assumptions: [], actions: [] };
+  try {
+    const st = stressPlan(ctx, plan);
+    if (st.status === "fails_within_range") items.push({ id: "ranges", factKind: "unconfirmed_fact", path: "forecasts", description: "Declared income ranges", currentCents: null, thresholdCents: null, direction: null,
+      outcomeChange: clip(st.checkedDescription, 400), checked: "interval_checked" });
+  } catch (e) { if (!(e instanceof EngineStop)) throw e; }
+  const numeric = items.filter(i => i.thresholdCents !== null && i.currentCents !== null && i.direction === "increase").sort((a, b) => (a.thresholdCents! - a.currentCents!) - (b.thresholdCents! - b.currentCents!));
+  return { status: "ready", variantId: variant.id, searchFingerprint, items, firstChange: numeric[0]?.outcomeChange ?? items.find(i => i.checked === "condition")?.outcomeChange ?? null };
 }

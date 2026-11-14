@@ -1,7 +1,7 @@
 // Synthetic round 4 household: A agreed with a deposit received, B offered, a partly funded SEP goal.
+import type { CashContext, DateTarget, DealGoal, DealTermsSpace } from "@/domain/deal-planning";
 import type { HouseholdWorkspace, Project, ProjectLine } from "@/domain/household-workspace";
 import { workspaceFixture } from "@/fixtures/workspace";
-import type { DealSearchRequest } from "@/lib/engine";
 import { fact, usd } from "./helpers";
 
 export const T = "2026-11-15T12:00:00.000Z";
@@ -24,13 +24,26 @@ export function dealWorkspace(profit2026 = 112000): HouseholdWorkspace {
   return ws;
 }
 
-/** "Keep at least $4,000 after both returns, get $10,000 by January 10, at most $1,000 more into the SEP." */
-export function dealRequest(overrides: Partial<{ minCash: number; byJan10: number; maxSep: number; maxPrice: number; minPrice: number }> = {}): DealSearchRequest {
+export interface DealOpts { projectId: string; minCash: number; targets: DateTarget[]; maxSep: number | null; minPrice: number; maxPrice: number; step: number;
+  maxPayments: number; newTerms: boolean | null; allowSep: boolean; baseline: DealGoal["baseline"] }
+
+/** "Keep at least $4,000 after both returns, get $10,000 from B by January 10, at most $1,000 more into the SEP." */
+export function deal(o: Partial<DealOpts> = {}): { goal: DealGoal; space: DealTermsSpace } {
+  const projectId = o.projectId ?? "B";
   return {
-    goal: { projectId: "B", minTwoYearCashDeltaCents: usd(overrides.minCash ?? 4000), maxAdditionalSepCents: usd(overrides.maxSep ?? 1000),
-      dateTargets: [{ id: "jan10", kind: "project_receipts", byDate: "2027-01-10", minCents: usd(overrides.byJan10 ?? 10000) }] },
-    terms: { minPriceCents: usd(overrides.minPrice ?? 12000), maxPriceCents: usd(overrides.maxPrice ?? 15000), maxPayments: 2, newTermsConfirmed: true,
-      windows: [{ id: "dec", earliestDate: "2026-12-15", latestDate: "2026-12-31" }, { id: "jan", earliestDate: "2027-01-04", latestDate: "2027-01-10" }] },
-    cash: null,
+    goal: { id: "g", projectId, minimumTwoYearCashDeltaCents: usd(o.minCash ?? 4000), baseline: o.baseline ?? "decline_unpaid_terms",
+      maxAdditionalSepCents: o.maxSep === null ? null : usd(o.maxSep ?? 1000),
+      dateTargets: o.targets ?? [{ id: "jan10", kind: "project_receipts", byDate: "2027-01-10", minimumCents: usd(10000) }], createdAt: T, updatedAt: T },
+    space: { projectId, price: { minCents: usd(o.minPrice ?? 12000), maxCents: usd(o.maxPrice ?? 15000), stepCents: usd(o.step ?? 250) },
+      paymentWindows: [{ id: "dec", earliest: "2026-12-15", latest: "2026-12-31", maxShareBps: 10000 }, { id: "jan", earliest: "2027-01-04", latest: "2027-01-10", maxShareBps: 10000 }],
+      maxPayments: o.maxPayments ?? 2, newTermsConfirmed: o.newTerms === undefined ? true : o.newTerms, allowAdditionalSep: o.allowSep ?? true },
   };
 }
+
+/** A complete household cash context: $20,000 on Nov 20 (a1 already in it), rent −$3,000 Dec 1 and Jan 1, reserve $5,000. */
+export const completeCash = (): CashContext => ({
+  id: "cash", snapshot: { date: "2026-11-20", balanceCents: usd(20000), sourceId: "demo-input" }, includedFactIds: ["a1"],
+  flows: [{ id: "rent-dec", date: "2026-12-01", amountCents: -usd(3000), kind: "expense", status: "confirmed", label: "Rent", sourceId: "demo-input" },
+    { id: "rent-jan", date: "2027-01-01", amountCents: -usd(3000), kind: "expense", status: "confirmed", label: "Rent", sourceId: "demo-input" }],
+  reserveCents: usd(5000), completeness: { confirmed: true, from: "2026-11-20", through: "2027-04-30" },
+});
