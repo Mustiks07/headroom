@@ -54,6 +54,14 @@ export type EngineDealVariant = DealVariant & {
   comparisons: { versusDeclineCents: number; versusOfferedCents: number | null };
   /** Whether the option holds: across declared income ranges (exact credit check + worst checked cash), else by the room policy. */
   robustness: { holds: boolean; basis: "declared_ranges" | "room_policy"; roomCents: number | null; worstCashInRangesCents: number | null };
+  /** Whether these terms need the client's agreement (a new price and/or new payment dates). The household's own SEP never does. */
+  clientAgreement: { required: boolean; changes: Array<"price" | "dates">; note: string | null };
+  /**
+   * Money from THIS project by date, separate from the two-year result after both returns and from retirement:
+   * received = gross money in by that date (incl. money already received); available = received − project costs − extra SEP paid
+   * − the reserve for this project's tax and credit settlement (pro rata as money arrives; it becomes the settlement on the due date).
+   */
+  moneyByDate: Array<{ date: string; receivedCents: number; availableCents: number; event: string }>;
 };
 
 const clip = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
@@ -564,7 +572,31 @@ function exactVariant(c: Candidate, purpose: DealVariant["purpose"], x: ExactEnv
     aca: ([0, 1] as const).map(i => ({ year: YEARS[i], magiCents: ycs[i].credit.magi, ptcCents: ycs[i].credit.ptc.ptc, creditLost: p.models[i].ptcEligible && x.decl[i].ptc > 0 && ycs[i].credit.ptc.ptc === 0 })),
     constraints, actions, differenceFromBestCents: 0, verifiedExact: true, scenario,
     comparisons: { versusDeclineCents: 0, versusOfferedCents: null }, robustness: { holds: false, basis: "room_policy", roomCents: null, worstCashInRangesCents: null },
+    clientAgreement: agreementOf(c, p), moneyByDate: moneyByDate(x, exact, c),
   };
+}
+
+function agreementOf(c: Candidate, p: Prepared): EngineDealVariant["clientAgreement"] {
+  const offered = offeredPayments(p);
+  const priceChanged = c.price !== p.offeredPrice;
+  const datesChanged = !c.payments.every(q => q.windowId === "offered") && JSON.stringify(c.payments.map(q => [q.date, q.amountCents])) !== JSON.stringify(offered.map(q => [q.date, q.amountCents]));
+  const changes = [...(priceChanged ? ["price" as const] : []), ...(datesChanged ? ["dates" as const] : [])];
+  if (!changes.length) return { required: false, changes, note: null };
+  const parts = [priceChanged ? `a total of ${formatUsd(c.price)} instead of ${formatUsd(p.offeredPrice)}` : null,
+    datesChanged ? `payments of ${c.payments.map(q => `${formatUsd(q.amountCents)} on ${q.date}`).join(" and ")} instead of ${offered.map(q => `${formatUsd(q.amountCents)} on ${q.date}`).join(" and ")}` : null].filter(Boolean);
+  return { required: true, changes, note: clip(`Needs the client's agreement: ${parts.join("; ")}. Until the client confirms in writing, the offer as it stands applies.`, 400) };
+}
+
+function moneyByDate(x: ExactEnv, exact: Candidate, c: Candidate): EngineDealVariant["moneyByDate"] {
+  const { p } = x;
+  const points = new Map<string, string>();
+  for (const q of c.payments) points.set(q.date, `Payment of ${formatUsd(q.amountCents)}`);
+  if (!points.has("2026-12-31")) points.set("2026-12-31", "End of 2026");
+  points.set(p.due[0], "2026 return due: this project's 2026 tax and credit settled");
+  points.set(p.due[1], "2027 return due: this project's 2027 tax and credit settled");
+  return [...points.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, event]) => ({ date, event,
+    receivedCents: dateTarget(x.env, exact, x.decl, { id: "r", kind: "project_receipts", byDate: date, minimumCents: 0 }).achievedCents ?? 0,
+    availableCents: dateTarget(x.env, exact, x.decl, { id: "a", kind: "project_available_cash", byDate: date, minimumCents: 0 }).achievedCents ?? 0 }));
 }
 
 // =====================================================================================================

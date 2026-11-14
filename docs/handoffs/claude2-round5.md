@@ -109,3 +109,37 @@ The script recomputes 22 memo figures exactly with rational arithmetic; the memo
 - Lattice search with refinement, not a global optimum. The room policy ($1,000) is a documented choice, not a law.
 - Household balance needs a complete cash context; overdue unpaid expected lines are not added to the balance.
 - The provider path is not exercised here (AI off). Explanations and readiness work without a provider.
+
+## Update — second pass (after `origin/main` `c5f29dd`, design C)
+
+Merged `origin/main` up to `c5f29dd` (design C selected). Design C changes no formulas; the engine is unaffected.
+
+**Confirmed already done (unchanged):**
+- questions only for the years and facts the task needs;
+- two baselines on every option;
+- "More cash, if the client agrees";
+- smallest change that holds;
+- room/range sensitivity;
+- dated cash separate from the two-year result;
+- preview with no-ops and stale detection;
+- explanation packets;
+- insurance resolver.
+
+**Added in this pass:**
+- `EngineDealVariant.clientAgreement` = `{ required, changes: ["price" | "dates"], note }`. The note explicitly says the offer as it stands applies until the client agrees in writing; the household's own SEP never requires the client. Example: the recommended $12,000 split needs only `["dates"]`; the $15,000 option needs `["price", "dates"]`.
+- `EngineDealVariant.moneyByDate`: points at each payment date, December 31, 2026 and both return due dates. Each point has `receivedCents` (gross in by that date) and `availableCents` (after project costs, extra SEP paid and a pro-rata reserve for this project's tax). This is money by a date, kept separate from the two-year result and retirement. The last point equals `comparisons.versusDeclineCents` (tested). Example: by 2026-12-31, $5,400 received and $3,745 available; after both returns, +$8,310.
+- The `deal_choice` explanation states three separate quantities (money by date / after both returns / retirement), the result against the offer as it stands, and which terms need the client's agreement. It uses only referenced facts. For a saved package, the engine fields come from a fresh search on the same fingerprint.
+- Economics: `scripts/business/unit-economics.ts` now also recomputes the 13 figures of `HEADROOM_PAID_VALUE_STRATEGY.md`; all match. Free intake is now counted for non-buyers only, as in the strategy script. Base annual LTV:CAC is 1.76 at a fully loaded CAC of $68.98. The document says to label every figure "modelled" and never call it sales.
+
+**Blocking contract (Claude 3):** `docs/handoffs/claude2-contract-request-round5.md` asks for four optional fields in `DealVariantSchema` (`comparisons`, `robustness`, `clientAgreement`, `moneyByDate`). Until then, saved packages and decision records drop them; explanations of current packages work around it.
+
+**Checks of this pass:** `npx tsc --noEmit` passes, `npx vitest run` passes (28 files / 145 tests), `npm run build` passes, and the economics script reproduces its tables.
+
+## Update — contract `29c6ab4` merged
+
+Merged Claude 3's contract follow-up `29c6ab4ea0bad46b3bd52086e0a16c0bce86c833` normally. As a normal merge of that SHA, it also brought its ancestors on `claude3`, i.e. Claude 3's round 5 backend. No conflicts; no engine change was needed. `comparisons` and `robustness` are now stored with packages and decision records: `DealVariantSchema.parse(variant)` keeps them (tested). `clientAgreement` and `moneyByDate` are not in that commit and are still requested in `claude2-contract-request-round5.md`. Checks: `npx tsc --noEmit` passes, `npx vitest run` passes (29 files / 152 tests), build passes.
+
+## Update — contract `36edf1e` merged
+
+Merged `36edf1e0f352a445948376e67f063cc642581948` normally (with its parent `00beeaf`, Claude 3's backend follow-up). `DealVariantSchema` now has `clientAgreement` and `moneyByDate` with the engine's exact shape, so saved packages and decision records keep all four engine fields (tested). The contract request is closed. The explanation's fresh-search fallback for packages stays as a harmless safeguard for packages saved before this contract.
+

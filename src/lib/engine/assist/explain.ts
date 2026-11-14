@@ -14,7 +14,7 @@ import type { BlockedComparison, TaxYear, YearResult } from "@/domain/contracts"
 import { DecisionRecordSchema, type DecisionRecord, type ExplanationPacket } from "@/domain/assistance";
 import { dealSearchFingerprint, DealGoalSchema, DealVariantSchema, type DealGoal, type DealVariant } from "@/domain/deal-planning";
 import { HouseholdWorkspaceSchema, type HouseholdWorkspace } from "@/domain/household-workspace";
-import { evaluateDecisionSensitivity, evaluateTermsExact, searchDealTerms, type ExactTerms } from "../deal";
+import { evaluateDecisionSensitivity, evaluateTermsExact, searchDealTerms, type EngineDealVariant, type ExactTerms } from "../deal";
 import { buildHouseholdProjection, engineWorkspaceFingerprint, evaluateHouseholdWorkspace } from "../household";
 import { formatUsd } from "../money";
 import { ENGINE_VERSION, RULES_VERSION } from "../rules";
@@ -163,6 +163,11 @@ async function dealChoice(ws: HouseholdWorkspace, refId?: string): Promise<Engin
   if (pkg) {
     if (pkg.searchFingerprint !== fp) return { status: "needs_data", code: "STALE_RESULT", message: "This saved choice was calculated on earlier facts. Its record stays as it was; search again for current figures.", fields: [{ path: `dealPlanning.packages.${pkg.id}`, reason: "Facts, goal or terms changed since it was calculated." }] };
     variant = pkg.variant;
+    // Engine detail (money by date, client agreement) is not stored in packages: the same terms from a fresh search
+    // on the same fingerprint carry it, with identical figures.
+    const fresh = await searchDealTerms(ws, goal, space, cash);
+    const same = fresh.status === "ready" ? fresh.variants.find(v => JSON.stringify(v.terms) === JSON.stringify(pkg.variant.terms)) : undefined;
+    if (same) variant = same;
   } else {
     const r = await searchDealTerms(ws, goal, space, cash);
     if (r.status !== "ready") return r.status === "no_feasible_terms"
@@ -237,6 +242,19 @@ async function dealPacket(ws: HouseholdWorkspace, goal: DealGoal, variant: DealV
   statements.push(ex.receivedCents ? `You ask ${price} in total: ${received} already received and ${unpaid} still to be paid.` : `You ask ${price} in total, all still to be paid.`);
   t.payments.forEach((q, i) => statements.push(`Payment ${i + 1}: ${p.money(`pay_${i + 1}_amount`, `Payment ${i + 1}`, q.amountCents)} on ${p.date(`pay_${i + 1}_date`, `Payment ${i + 1} date`, q.date)}.`));
   statements.push(`Compared with ${base}, these terms leave ${absWord(p, "cash_delta", "Change in spendable cash after both tax years are settled", ex.cashDeltaCents, "more", "less")} spendable cash after both tax returns are settled.`);
+  const extra = variant as Partial<EngineDealVariant>;
+  if (extra.moneyByDate?.length) {
+    const end26 = extra.moneyByDate.find(m => m.date === "2026-12-31");
+    if (end26) statements.push(`By ${p.date("by_date", "Date for money in hand", end26.date)}: ${p.money("by_date_received", "Money received from this project by that date", end26.receivedCents)} received from this project, of which about ${p.money("by_date_available", "Available after project costs, extra SEP and a reserve for this project's tax", end26.availableCents)} is free to spend after costs, extra SEP and a reserve for this project's tax. This is money by a date, not the result after both returns.`);
+  }
+  if (extra.comparisons && extra.comparisons.versusOfferedCents !== null && ex.baselineKind === "decline_unpaid_terms")
+    statements.push(`Compared with the offer as it stands, the change is ${p.money("vs_offered", "Cash change compared with the offer as it stands", extra.comparisons.versusOfferedCents)}.`);
+  if (extra.clientAgreement?.required) {
+    const offeredLines = ws.projects.find(x => x.id === goal.projectId)!.receipts.filter(l => !l.actual && !l.cancelledAt && l.expected).map(l => l.expected!);
+    const what = extra.clientAgreement.changes.map(c => (c === "price" ? "a new price" : "new payment dates")).join(" and ");
+    const offerText = offeredLines.map((l, i) => `${p.money(`offer_pay_${i + 1}_amount`, `Offered payment ${i + 1}`, l.amountCents)} on ${p.date(`offer_pay_${i + 1}_date`, `Offered payment ${i + 1} date`, l.date)}`).join(" and ");
+    statements.push(`These terms ask the client for ${what}. Until the client agrees in writing, the offer as it stands applies (${offerText}).`);
+  }
   if (t.additionalSep) statements.push(`${p.money("sep_extra", "Extra SEP-IRA contribution", t.additionalSep.amountCents)} goes into your SEP-IRA for ${t.additionalSep.year}: retirement money, not spendable cash. It lowers household income for the credit.`);
   for (const [yi, y] of YEARS.entries()) {
     const a = attribution(ex.decline[yi], ex.chosen[yi]);
