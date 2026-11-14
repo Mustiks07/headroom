@@ -1,0 +1,40 @@
+{
+  "taxYear": 2027,
+  "packVersion": "2027.r1",
+  "coverageFplGuidelineYear": 2026,
+  "fpl": { "baseDollars": 15960, "stepDollars": 5680, "region": "contiguous-48-dc", "sourceId": "hhs-fpl-2026" },
+  "applicableFigure": {
+    "method": "interpolated-from-bands",
+    "tableStatus": "Derived: Form 8962 Table 2 for 2027 is not published; computed from Rev. Proc. 2026-26 bands with the method that reproduces all 301 entries of the 2026 draft table.",
+    "bands": [
+      { "fromPct": 0, "toPct": 133, "start": "2.15", "end": "2.15" },
+      { "fromPct": 133, "toPct": 150, "start": "3.23", "end": "4.30" },
+      { "fromPct": 150, "toPct": 200, "start": "4.30", "end": "6.78" },
+      { "fromPct": 200, "toPct": 250, "start": "6.78", "end": "8.66" },
+      { "fromPct": 250, "toPct": 300, "start": "8.66", "end": "10.22" },
+      { "fromPct": 300, "toPct": 400, "start": "10.22", "end": "10.22" }
+    ],
+    "sourceIds": ["irs-rp-2026-26"]
+  },
+  "aptcRepaymentCap": null,
+  "standardDeductionDollars": { "single": 16600, "mfj": 33200 },
+  "brackets": {
+    "single": [[12800, "0.10"], [52025, "0.12"], [109125, "0.22"], [208325, "0.24"]],
+    "mfj": [[25600, "0.10"], [104050, "0.12"], [218250, "0.22"], [416650, "0.24"]],
+    "sourceId": "irs-rp-2026-35"
+  },
+  "taxTableUpperDollars": 100000,
+  "supportedTaxableIncomeBeforeQbiDollars": { "single": 201750, "mfj": 403500 },
+  "supportNote": "The 2027 QBI threshold is not transcribed; the lower 2026 threshold is used as a conservative support limit, which also keeps 2027 inside the transcribed 24% bracket.",
+  "selfEmployment": { "netEarningsFactor": "0.9235", "socialSecurityRate": "0.124", "medicareRate": "0.029", "minimumNetEarningsDollars": 400, "socialSecurityWageBaseDollars": 192300, "sourceIds": ["irs-i1040sse", "ssa-2027"] },
+  "employeeFica": { "socialSecurityRate": "0.062", "medicareRate": "0.0145", "sourceId": "ssa-2027" },
+  "additionalMedicare": { "rate": "0.009", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8959" },
+  "niit": { "rate": "0.038", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8960" },
+  "qbi": { "rate": "0.20", "minimumDeductionDollars": 400, "minimumQbiDollars": 1000, "sourceId": "irs-i8995" },
+  "childTaxCredit": { "perChildDollars": 2300, "refundablePerChildDollars": null, "refundableEarnedIncomeFloorDollars": 2500, "refundableRate": "0.15", "otherDependentDollars": 500, "phaseoutThresholdDollars": { "single": 200000, "mfj": 400000 }, "phaseoutPerThousandDollars": 50, "sourceIds": ["irs-rp-2026-35", "irs-s8812"] },
+  "eitcSupportBoundDollars": { "single": [21000, 55000, 62000, 67000], "mfj": [29000, 63000, 70000, 75000], "sourceId": "headroom-eitc-support-bound" },
+  "sep": { "netEarningsRate": "0.20", "annualCapDollars": 75000, "sourceIds": ["irs-pub-560", "irs-n-2026-66"] },
+  "returnDueDate": "2028-04-18",
+  "returnDueDateNote": "April 15, 2028 is a Saturday and Emancipation Day is observed Monday April 17; confirm the IRS-announced date.",
+  "settlementNote": "2027 income, PTC and APTC settle on the 2027 return filed in 2028."
+}
