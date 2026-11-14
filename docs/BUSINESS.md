@@ -2,9 +2,11 @@
 
 Headroom's core is ACA subsidy protection for self-employed US households with changing income. It is not a generic gig-rate calculator. The complete experience goes from current risk to a feasible decision and later plan updates.
 
+**Current research, November 15:** the [round 5 research memo](research/round5-business-research.md), [evidence register](research/ROUND5_EVIDENCE.csv) and [reproducible arithmetic](research/ROUND5_ECONOMICS_CHECK.py) update the assumptions below. The main paid-job hypothesis is an actionable decision about an open client contract, with household taxes, insurance and cash constraints accounted for. Neither willingness to pay nor repeat purchases have been established. The [participant review](research/COMPETITOR_REPOS_ROUND5.md), [paid-value strategy](research/HEADROOM_PAID_VALUE_STRATEGY.md) and [visual direction](design/round5/design-direction.md) are complete research proposals; their planned features are not current product claims.
+
 ## Payment hypothesis
 
-Launch hypothesis: **$99 per year per household**. The recurring value is maintaining a current household plan when work, pay, family income or insurance changes. A one-time cliff warning is not enough to justify an annual purchase.
+The current demo shows **$99 per year per household**. Compare this hypothesis with **$29 per decision** and **$49 per season**, stating exactly what each purchase includes. These are proposed price tests, not observed willingness to pay or a live billing change. The recurring value is maintaining a current household plan when work, pay, family income or insurance changes. A one-time cliff warning is not enough to justify an annual purchase.
 
 Initial payment: a material personal decision and the ability to keep that decision current. Reuse: new work, canceled payment, spouse bonus, corrected forecast, open enrollment. Renewal: next year's income and insurance differ. If users only have a seasonal one-off need and do not renew, test a per-season/decision purchase rather than disguising low use as monthly retention.
 
@@ -46,7 +48,7 @@ Prioritize an independent professional review of the decisive example and a smal
 
 At $99/year, $100M ARR requires roughly 1.01M paying households. The initial niche does not establish that scale. Expansion can follow the same job—decisions about household income, contracts and changes between employment and self-employment—but each expansion needs evidence. A change in subsidy law may also change willingness to pay, even if the engine is technically adaptable.
 
-Illustrative economics only: $99 × 80% gross margin × (1 + 60% annual renewal) = $126.72 expected gross contribution over two years. CAC target $40 would give about 3.2× over this horizon. Margin, renewal and CAC are assumptions, not measured metrics. Include support, document processing, payments and acquisition cost when testing them.
+Modeled economics, not measured business results: with the existing Anthropic default, 20 documents plus 40 updates/year and a 2× token reserve, estimated annual AI cost is $12.16. At $99/year, assumed refunds, payment/billing fees, 20 support minutes and $540 fixed hosting allocated across 1,000 annual purchases yield $69.47 contribution before acquisition and other operating costs. A chosen 3:1 first-year contribution/CAC target permits $23.16 acquisition cost without assuming renewal. One free document with the reserve costs $0.36. At an assumed 5% conversion, if each visitor uses one document and the payer's intake is already in paid usage, nonpayer AI adds $6.84 per payer; counting it twice would overstate acquisition expense. At hypothetical $1 CPC, media plus nonpayer AI costs $26.84 before acquisition labor, above that target. See the [additional acquisition calculation](research/HEADROOM_PAID_VALUE_ECONOMICS_CHECK.py). Current production AI is off. Rates, usage assumptions, model alternatives and support/scale sensitivities are documented in [section 7](research/round5-business-research.md#7-unit-economics-четыре-модели-с-явными-допущениями); do not present a cheaper alternative model's economics as the current stack.
 
 ## Contest criteria
 

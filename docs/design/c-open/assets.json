@@ -1,0 +1,57 @@
+{
+  "status": "User selected C; derived screens are implementation references, not a released app",
+  "assets": [
+    {
+      "file": "01-home-selected.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGB",
+      "sha256": "79d2f62353e5213cbe7eced65d2685d3edc00014c5d5f192843141c1dd15ca7f"
+    },
+    {
+      "file": "02-review-desktop.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGB",
+      "sha256": "45226ce60b942b3609c909ac75f6be5a04f408f0d2c94b2323bdb470cb123355"
+    },
+    {
+      "file": "03-result-desktop.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGB",
+      "sha256": "be982acf759e91a661575478d64c1a8b2397b5fc20b9d05c072cff12aaf1e762"
+    },
+    {
+      "file": "04-result-mobile.png",
+      "size": [
+        948,
+        1659
+      ],
+      "mode": "RGB",
+      "sha256": "8e125ec02e090dac67af93189688caf59aaec2fca847cac7e5b201cda23fa1ae"
+    },
+    {
+      "file": "05-hero-scene.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "sha256": "523f79f1e428b8900fe6572b58ac88ae4b881d5183be3e08aa1dcc8952cd3b71",
+      "alphaRange": [
+        0,
+        254
+      ],
+      "fullyTransparentPixels": 833958,
+      "fullyOpaquePixels": 0,
+      "pixelCount": 1572864
+    }
+  ]
+}
