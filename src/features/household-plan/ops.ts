@@ -48,6 +48,17 @@ export function setForecast(w0: HouseholdWorkspace, f: ProfitForecast, descripti
   return log(w, newId("evt-forecast"), "forecast_updated", `${description} (${f.year}).`);
 }
 
+/** Replaces one person's non-business income for a year (wages, interest). */
+export function setOtherIncome(w0: HouseholdWorkspace, year: TaxYear, row: HouseholdWorkspace["household"]["years"][number]["otherIncomes"][number]): HouseholdWorkspace {
+  const w = clone(w0);
+  ensureManualEvidence(w);
+  const y = w.household.years.find(x => x.year === year);
+  const i = y?.otherIncomes.findIndex(r => r.personId === row.personId) ?? -1;
+  if (!y || i < 0) throw new Error("This person has no income row for that year.");
+  y.otherIncomes[i] = row;
+  return log(w, newId("evt-income"), "forecast_updated", `Updated wages or interest for ${year}.`);
+}
+
 /* ---------- projects and payments ---------- */
 
 export interface NewLine { label?: string; amountCents: number; date: string }

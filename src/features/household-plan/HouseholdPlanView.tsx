@@ -4,21 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRight, Download, FileSearch, FlaskConical, History, Plus, RefreshCw, Trash2 } from "lucide-react";
-import type { TaxYear } from "@/domain/contracts";
+import type { MoneyFact, TaxYear } from "@/domain/contracts";
 import {
   effectiveLine, forecastTotal, workspaceToCaseInput,
-  type HouseholdProjectionResult, type HouseholdWorkspace, type ProfitForecast, type Project, type WorkspaceComparisonResult,
+  type HouseholdProjectionResult, type HouseholdWorkspace, type OtherIncome, type ProfitForecast, type Project, type WorkspaceComparisonResult, type WorkspaceEvaluationResult,
 } from "@/domain/household-workspace";
 import { dateTime, humanizeDates, money, shortDate, signClass, signedMoney } from "@/features/format";
-import { personName } from "@/features/household/draft";
+import { FIELD_LABELS, personName } from "@/features/household/draft";
 import { LocalInvalidProvider } from "@/features/household/invalidInputs";
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { ComparisonView } from "@/features/results/ComparisonView";
 import { downloadBlob, fileStamp } from "@/features/plan/storage";
 import { ForecastEditor } from "./ForecastEditor";
-import { checkAgreedProjects, compareProject, projectHousehold, sepRows, type AgreedCheck } from "./engine";
+import { MoneyField } from "@/components/MoneyField";
+import { compareProject, evaluatePlan, fixedPlanOf, projectHousehold, sepRows } from "./engine";
 import {
-  addProject, agreeToOption, blankForecast, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
+  addProject, agreeToOption, blankForecast, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
   setProjectStatus, setSepTarget,
 } from "./ops";
 import { commit, describeSaveError, whereText, workspaceRepo, CloudSaveFailedError, WorkspaceConflictError } from "./store";
@@ -27,7 +28,7 @@ import { workspaceFingerprint } from "@/domain/household-workspace";
 import { ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { AddProjectForm, ProjectCard, SepPanel } from "./parts";
 
-type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; agreed?: AgreedCheck[]; error?: string };
+type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
 type Notice = { tone: "ok" | "warn"; text: string } | null;
 
 const RISK_TEXT = { below_cliff: "Below the limit", at_risk: "Close to the limit", over_cliff: "Above the limit", no_credit: "No credit expected" } as const;
@@ -62,8 +63,8 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
     setCalc(c => ({ ...(c ?? {}), key, pending: true }));
     const t = setTimeout(async () => {
       try {
-        const [projection, agreed] = await Promise.all([projectHousehold(ws), checkAgreedProjects(ws)]);
-        if (n === req.current) setCalc({ key, pending: false, projection, agreed });
+        const [projection, evaluation] = await Promise.all([projectHousehold(ws), evaluatePlan(ws)]);
+        if (n === req.current) setCalc({ key, pending: false, projection, evaluation });
       } catch (e) { if (n === req.current) setCalc({ key, pending: false, error: e instanceof Error ? e.message : String(e) }); }
     }, 200);
     return () => clearTimeout(t);
@@ -112,7 +113,8 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const owners = ws.household.people.filter(p => p.role !== "dependent");
   const agreedProjects = ws.projects.filter(p => p.status === "agreed");
   const proposals = ws.projects.filter(p => p.status === "proposed");
-  const sep = sepRows(ws);
+  const sep = sepRows(ws, calc?.evaluation);
+  const evaluation = calc?.evaluation?.status === "ready" ? calc.evaluation : null;
   const next = nextAction(ws);
 
   return <div className="shell plan-page household-plan">
@@ -182,7 +184,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
         return <div key={o.id} className="composition wide">
           {owners.length > 1 && <p className="tile-k">{personName(ws.household, o.id)}</p>}
           {!f ? <p className="small">No forecast yet.</p> : <ul>
-            {(pp?.components ?? []).map((c, i) => <li key={i}><span>{c.amountCents !== null && c.amountCents < 0 ? "− " : i ? "+ " : ""}{c.label}
+            {(pp?.components ?? []).map((c, i) => <li key={i}><span>{c.amountCents !== null && c.amountCents < 0 ? "− " : i ? "+ " : ""}{humanizeDates(c.label)}
               {c.basis && <span className={`basis-tag ${c.basis}`}>{c.basis === "actual" ? "received" : "expected"}</span>}
               <span className="muted small"> · {c.sourceIds.map(s => ws.evidence.find(e => e.id === s)?.label ?? s).join(", ")}</span></span>
               <span className="num">{c.amountCents === null ? <em className="unknown-text">unknown</em> : money(Math.abs(c.amountCents))}{c.status === "estimated" ? " est." : ""}</span></li>)}
@@ -196,7 +198,8 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
         <button type="button" className="link-btn" onClick={() => setForecastEdit({ personId: owners[0].id, year: 2027 })}>Edit the 2027 forecast</button></p>
     </section>
 
-    {forecastEdit && <ForecastChange ws={ws} target={forecastEdit} currentAgreed={calc?.agreed ?? []} currentProjection={projection}
+    {forecastEdit && <ForecastChange ws={ws} target={forecastEdit} currentEvaluation={calc?.evaluation} currentProjection={projection}
+      onKeepOther={(year, row) => { void apply(w => setOtherIncome(w, year, row), "Income updated. Your agreed projects were kept as they are.").then(ok => { if (ok) setForecastEdit(null); }); }}
       onCancel={() => setForecastEdit(null)} onSwitch={setForecastEdit}
       onKeep={f => { void apply(w => setForecast(w, f, "Updated the profit forecast"), "Forecast updated. Your agreed projects were kept as they are.").then(ok => { if (ok) setForecastEdit(null); }); }} />}
 
@@ -204,7 +207,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
     {agreedProjects.length > 0 && <section className="plan-section" aria-labelledby="agreed-title">
       <h2 id="agreed-title" className="section-title small">Your agreed projects, checked on today&apos;s figures</h2>
       <p className="muted small">Same amounts and dates you agreed — not re-optimized. New ideas for proposals are shown separately.</p>
-      <AgreedList checks={calc?.agreed ?? []} stale={stale} />
+      <FixedPlan evaluation={calc?.evaluation} stale={stale} />
     </section>}
 
     {/* ---- projects ---- */}
@@ -242,7 +245,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
     <section className="plan-section" aria-labelledby="sep-title">
       <h2 id="sep-title" className="section-title small">SEP-IRA contributions</h2>
       <p className="muted small">One yearly goal per person and tax year, shared by all projects. Only contributions you record with an amount and date count as paid.</p>
-      <SepPanel ws={ws} rows={sep} legal={new Map()} budgetRemaining={null}
+      <SepPanel ws={ws} rows={sep} legal={new Map(sep.map(r => [`${r.personId}|${r.year}`, r.legalLimitCents]))} budgetRemaining={evaluation?.futureContributionBudgetRemainingCents ?? null}
         onRecord={c => void apply(w => recordContribution(w, c), "Contribution recorded.")}
         onGoal={(personId, year, cents) => void apply(w => setSepTarget(w, personId, year, cents), "Goal updated. Money already contributed is unchanged.")}
         onBudget={(cents, asOf) => void apply(w => setFutureBudget(w, cents, asOf), "Saved.")} />
@@ -286,17 +289,27 @@ function nextAction(ws: HouseholdWorkspace): { title: string; detail: string } |
   return null;
 }
 
-function AgreedList({ checks, stale }: { checks: AgreedCheck[]; stale: boolean }) {
-  if (!checks.length) return <p className="loading-line"><span className="spinner" aria-hidden="true" /> Checking…</p>;
-  return <ul className={`agreed-list ${stale ? "is-stale" : ""}`}>{checks.map(({ project, result }) => <li key={project.id}>
-    <p className="check-title">{project.title}{project.agreedDecision ? <span className="muted small"> · {humanizeDates(project.agreedDecision.label)}</span> : null}</p>
-    {result.status !== "ready" ? <p className="small warn-text">{result.message}</p> : result.agreed ? <>
-      <p className="small">Effect of this agreement: <strong className={`num ${signClass(result.agreed.twoYearCashDeltaCents)}`}>{signedMoney(result.agreed.twoYearCashDeltaCents)}</strong> cash after both tax years, compared with not doing it.
-        {" "}2026 credit with it: <strong className="num">{money(result.agreed.years[0].ptcCents)}</strong>.</p>
-      {result.agreed.years[0].ptcCents === 0 && <p className="notice warn small" role="status">With this agreement your 2026 premium tax credit is $0 on today&apos;s figures.</p>}
-      {!result.stillFeasible && <p className="notice warn small">This agreement no longer fits: {result.reasons.join(" ")}</p>}
-    </> : <p className="small">{result.reasons.join(" ") || "It can't be calculated on the current figures."}</p>}
-  </li>)}</ul>;
+/** The plan as agreed on today's facts (Claude 2's evaluateHouseholdWorkspace) — never re-optimized. */
+function FixedPlan({ evaluation, stale }: { evaluation?: WorkspaceEvaluationResult; stale: boolean }) {
+  if (!evaluation) return <p className="loading-line"><span className="spinner" aria-hidden="true" /> Checking…</p>;
+  if (evaluation.status !== "ready") return <p className="notice warn">{evaluation.message} {evaluation.fields.slice(0, 3).map(f => f.reason).join(" ")}</p>;
+  const fp = fixedPlanOf(evaluation);
+  const a = evaluation.agreed;
+  return <div className={`agreed-list ${stale ? "is-stale" : ""}`}>
+    {a.result && <p className="small">What&apos;s still open (payments not yet received and SEP-IRA money still to contribute) adds <strong className={`num ${signClass(a.result.twoYearCashDeltaCents)}`}>{signedMoney(a.result.twoYearCashDeltaCents)}</strong> cash after both tax years, compared with only what has already happened.</p>}
+    {fp && <div className="table-wrap"><table className="years-table compact">
+      <thead><tr><th scope="col">Plan as agreed</th>{fp.years.map(y => <th scope="col" key={y.year}>{y.year}</th>)}</tr></thead>
+      <tbody>
+        <tr><th scope="row">Income counted for the subsidy</th>{fp.years.map(y => <td key={y.year} className="num">{y.risk ? `${money(y.risk.magiCents)} of ${money(y.risk.thresholdMagiCents)}` : "—"}</td>)}</tr>
+        <tr><th scope="row">Premium tax credit</th>{fp.years.map(y => <td key={y.year} className="num">{y.risk ? money(y.risk.ptcCents) : "—"}</td>)}</tr>
+        <tr><th scope="row">Settlement when you file</th>{fp.years.map(y => <td key={y.year} className="num">{!y.risk ? "—" : y.risk.settlementCents === 0 ? "None" : y.risk.settlementCents > 0 ? `Repay ${money(y.risk.settlementCents)}` : `Extra ${money(-y.risk.settlementCents)}`}</td>)}</tr>
+        <tr><th scope="row">SEP-IRA legal maximum</th>{fp.years.map(y => <td key={y.year} className="num">{y.legalSepLimitCents === null ? "—" : money(y.legalSepLimitCents)}</td>)}</tr>
+      </tbody></table></div>}
+    {a.creditLostYears.length > 0 && <p className="notice warn small" role="status">As agreed, the open payments push {a.creditLostYears.join(" and ")} household income above the limit: that year&apos;s premium tax credit is lost. Keeping your facts accurate is still right — compare options for open proposals or talk to your client about payments that haven&apos;t happened yet.</p>}
+    {!a.stillFeasible && <p className="notice warn small">The plan as agreed no longer fits: {a.reasons.map(humanizeDates).join(" ")}</p>}
+    {fp?.pendingYears.map(y => <p key={y.year} className="hint">{y.year} isn&apos;t calculated yet: {y.fields[0]?.reason ?? "facts are missing"}</p>)}
+    {fp && fp.notChecked.length > 0 && <p className="hint">Not checked: {fp.notChecked.join(" ")}</p>}
+  </div>;
 }
 
 function WorkspaceBlocked({ result, ws, onFix, onFixProject }: { result: Exclude<HouseholdProjectionResult, { status: "ready" }>; ws: HouseholdWorkspace;
@@ -305,54 +318,87 @@ function WorkspaceBlocked({ result, ws, onFix, onFixProject }: { result: Exclude
     <div className="blocked-head"><AlertTriangle size={20} aria-hidden="true" /><div><h3>{result.status === "needs_data" ? "A few facts are needed first" : result.status === "unsupported" ? "Headroom can't give a reliable answer for this yet" : "The calculation isn't available right now"}</h3><p>{result.message}</p></div></div>
     {result.fields.length > 0 && <ul className="missing-list">{result.fields.filter((f, i, all) => all.findIndex(x => x.reason === f.reason) === i).map(f => { const t = forecastTarget(f.path, ws);
       const projectField = /^(opportunity|constraints|projects)/.test(f.path);
-      return <li key={f.path + f.reason}><div><strong>{t ? `${t.year} · ${personName(ws.household, t.personId)} · Business profit forecast` : projectField ? "This project's conditions" : describeWorkspacePath(f.path)}</strong><span>{f.reason}</span></div>
+      return <li key={f.path + f.reason}><div><strong>{t ? `${t.year} · ${personName(ws.household, t.personId)} · Business profit forecast` : projectField ? "Project details" : describeWorkspacePath(f.path, ws)}</strong><span>{f.reason}</span></div>
         {t && <button type="button" className="btn small secondary" onClick={() => onFix(t)}>Fix this</button>}
         {!t && projectField && onFixProject && <button type="button" className="btn small secondary" onClick={onFixProject}>Fix this</button>}</li>; })}</ul>}
   </div>;
 }
 
-function describeWorkspacePath(path: string): string {
-  return path.replace(/^years\.(\d)\./, (_, i) => `${i === "0" ? 2026 : 2027} · `).replace(/\./g, " · ");
+function describeWorkspacePath(path: string, ws?: HouseholdWorkspace): string {
+  const m = /^household\.years\[(\d)\]\.otherIncomes\[(\d+)\]\.(\w+)/.exec(path);
+  if (m && ws) { const y = ws.household.years[Number(m[1])]; const row = y?.otherIncomes[Number(m[2])];
+    return `${y?.year ?? ""} · ${row ? personName(ws.household, row.personId) : "Person"} · ${FIELD_LABELS[m[3]] ?? m[3]}`; }
+  if (/^retirement/.test(path)) return "SEP-IRA records";
+  return path.replace(/^years\.(\d)\./, (_, i) => `${i === "0" ? 2026 : 2027} · `).replace(/[.[\]]+/g, " · ");
 }
 
 function forecastTarget(path: string, ws: HouseholdWorkspace): { personId: string; year: TaxYear } | null {
   const k = /^forecasts\[([^:\]]+):(\d{4})\]/.exec(path); if (k) return { personId: k[1], year: Number(k[2]) as TaxYear };
   const i = /^forecasts\[?\.?(\d+)\]?/.exec(path); if (i) { const f = ws.forecasts[Number(i[1])]; return f ? { personId: f.personId, year: f.year } : null; }
+  const o = /^household\.years\[(\d)\]\.otherIncomes\[(\d+)\]/.exec(path);
+  if (o) { const y = ws.household.years[Number(o[1])]; const row = y?.otherIncomes[Number(o[2])]; return row ? { personId: row.personId, year: y.year } : null; }
   return null;
 }
 
-/** Forecast change: shows the effect on the AGREED plan first; keeping it never requires a new agreement. */
-function ForecastChange({ ws, target, currentAgreed, currentProjection, onCancel, onKeep, onSwitch }: {
-  ws: HouseholdWorkspace; target: { personId: string; year: TaxYear }; currentAgreed: AgreedCheck[]; currentProjection?: HouseholdProjectionResult;
-  onCancel: () => void; onKeep: (f: ProfitForecast) => void; onSwitch: (t: { personId: string; year: TaxYear }) => void;
+const OTHER_FIELDS: Array<[keyof OtherIncome, string, string]> = [
+  ["grossWages", "Gross pay", "Year-to-date from the latest pay stub plus expected remaining paychecks."],
+  ["payrollPretaxDeductions", "Pre-tax payroll deductions", "401(k), HSA and similar."],
+  ["w2Box1", "Taxable wages (W-2 box 1)", "Estimate from pay stubs; no 2026 W-2 needed."],
+  ["socialSecurityWages", "Social Security wages (box 3)", ""],
+  ["medicareWages", "Medicare wages (box 5)", ""],
+  ["taxableInterest", "Taxable interest", ""],
+  ["taxExemptInterest", "Tax-exempt interest", "Still counts toward subsidy income."],
+];
+
+/**
+ * “My income changed”: business profit (forecast) or other income (wages, interest). The effect
+ * on the plan AS AGREED is shown first; keeping the new figures never requires a new agreement.
+ */
+function ForecastChange({ ws, target, currentEvaluation, currentProjection, onCancel, onKeep, onKeepOther, onSwitch }: {
+  ws: HouseholdWorkspace; target: { personId: string; year: TaxYear }; currentEvaluation?: WorkspaceEvaluationResult; currentProjection?: HouseholdProjectionResult;
+  onCancel: () => void; onKeep: (f: ProfitForecast) => void; onKeepOther: (year: TaxYear, row: OtherIncome) => void; onSwitch: (t: { personId: string; year: TaxYear }) => void;
 }) {
+  const [kind, setKind] = useState<"profit" | "other">("profit");
   const existing = ws.forecasts.find(f => f.personId === target.personId && f.year === target.year) ?? blankForecast(target.personId, target.year);
+  const yi = ws.household.years.findIndex(y => y.year === target.year);
+  const existingOther = ws.household.years[yi]?.otherIncomes.find(r => r.personId === target.personId);
   const [f, setF] = useState<ProfitForecast>(existing);
+  const [other, setOther] = useState<OtherIncome | undefined>(existingOther);
   const [invalid, setInvalid] = useState(0);
-  const [review, setReview] = useState<{ projection: HouseholdProjectionResult; agreed: AgreedCheck[]; forKey: string } | null>(null);
+  const [review, setReview] = useState<{ projection: HouseholdProjectionResult; evaluation: WorkspaceEvaluationResult; forKey: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { setF(existing); setReview(null); }, [target.personId, target.year]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setF(existing); setOther(existingOther); setReview(null); }, [target.personId, target.year]); // eslint-disable-line react-hooks/exhaustive-deps
   const managed = ws.projects.filter(p => p.ownerPersonId === target.personId && p.status !== "proposed").map(p => p.title);
-  const fKey = JSON.stringify(f);
-  const changed = JSON.stringify(existing) !== fKey;
+  const editKey = JSON.stringify(kind === "profit" ? f : other);
+  const changed = kind === "profit" ? JSON.stringify(existing) !== editKey : JSON.stringify(existingOther) !== editKey;
+  const candidate = () => kind === "profit" ? setForecast(ws, f) : setOtherIncome(ws, target.year, other!);
 
   async function doReview() {
     setBusy(true);
-    const candidate = setForecast(ws, f);
-    const [projection, agreed] = await Promise.all([projectHousehold(candidate), checkAgreedProjects(candidate)]);
-    setReview({ projection, agreed, forKey: fKey }); setBusy(false);
+    const c = candidate();
+    const [projection, evaluation] = await Promise.all([projectHousehold(c), evaluatePlan(c)]);
+    setReview({ projection, evaluation, forKey: editKey }); setBusy(false);
   }
   const before = currentProjection?.status === "ready" ? currentProjection.currentRisk : null;
   const after = review?.projection.status === "ready" ? review.projection.currentRisk : null;
-  const reviewCurrent = review && review.forKey === fKey;
+  const reviewCurrent = review && review.forKey === editKey;
+  const ev = (e?: WorkspaceEvaluationResult) => e?.status === "ready" ? e : null;
+  const beforeEval = ev(currentEvaluation), afterEval = ev(review?.evaluation);
 
   return <section id="forecast-change" className="plan-section changed" aria-labelledby="fc-title">
-    <h2 id="fc-title" className="section-title small">Update the {target.year} profit forecast · {personName(ws.household, target.personId)}</h2>
+    <h2 id="fc-title" className="section-title small">My income changed · {personName(ws.household, target.personId)} · {target.year}</h2>
     <div className="row gap wrap">{ws.household.people.filter(p => p.role !== "dependent").flatMap(p => ([2026, 2027] as TaxYear[]).map(y =>
-      <button key={p.id + y} type="button" className={`btn small ${p.id === target.personId && y === target.year ? "secondary" : "ghost"}`} onClick={() => onSwitch({ personId: p.id, year: y })}>{personName(ws.household, p.id)} · {y}</button>))}</div>
+      <button key={p.id + y} type="button" className={`btn small ${p.id === target.personId && y === target.year ? "secondary" : "ghost"}`} aria-pressed={p.id === target.personId && y === target.year} onClick={() => onSwitch({ personId: p.id, year: y })}>{personName(ws.household, p.id)} · {y}</button>))}</div>
+    <div className="seg" role="radiogroup" aria-label="Which income changed?">
+      <label className={kind === "profit" ? "on" : ""}><input type="radio" checked={kind === "profit"} onChange={() => { setKind("profit"); setReview(null); }} />Business profit</label>
+      <label className={kind === "other" ? "on" : ""}><input type="radio" checked={kind === "other"} onChange={() => { setKind("other"); setReview(null); }} />Wages or interest</label>
+    </div>
     <LocalInvalidProvider onCountChange={setInvalid}>
-      <ForecastEditor forecast={f} year={target.year} personLabel={personName(ws.household, target.personId)} evidence={ws.evidence}
+      {kind === "profit" ? <ForecastEditor forecast={f} year={target.year} personLabel={personName(ws.household, target.personId)} evidence={ws.evidence}
         pathBase={`forecast-edit.${target.personId}.${target.year}`} managedProjects={managed} onChange={setF} />
+        : other ? <div className="grid-2">{OTHER_FIELDS.map(([k, label, hint]) => <MoneyField key={k} path={`other-edit.${target.personId}.${target.year}.${k}`} label={label} hint={hint || undefined}
+          fact={other[k] as MoneyFact} evidence={ws.evidence} noneLabel="None" onChange={fact => setOther({ ...other, [k]: fact })} />)}</div>
+        : <p className="muted">No income row for this person and year.</p>}
     </LocalInvalidProvider>
     <div className="row gap wrap">
       <button type="button" className="btn primary" disabled={!changed || invalid > 0 || busy} onClick={doReview}>{busy ? "Checking…" : "Check the effect on my plan"}</button>
@@ -362,21 +408,17 @@ function ForecastChange({ ws, target, currentAgreed, currentProjection, onCancel
     {review && !reviewCurrent && <p className="stale-banner">You changed the figures again. Check the effect again before keeping them.</p>}
     {reviewCurrent && <div className="change-review">
       {review.projection.status !== "ready" ? <p className="notice warn">{review.projection.message} {review.projection.fields.map(x => x.reason).join(" ")}</p> : <>
-        <h3 className="small-head">1 · Your agreed plan on the new forecast</h3>
+        <h3 className="small-head">1 · Your plan as agreed, on the new figures</h3>
         <div className="before-after">
           <div><p className="k">Before</p><p className="v num">{before ? money(before.subsidyCents) : "—"}</p><p className="muted small">2026 credit · {before ? RISK_TEXT[before.state] : ""}</p></div>
           <div><p className="k">After</p><p className={`v num ${after && before && after.subsidyCents < before.subsidyCents ? "neg" : ""}`}>{after ? money(after.subsidyCents) : "—"}</p><p className="muted small">2026 credit · {after ? RISK_TEXT[after.state] : ""}</p></div>
         </div>
-        {review.agreed.length > 0 && <div className="table-wrap"><table className="years-table compact">
-          <thead><tr><th scope="col">Agreed project (same terms)</th><th scope="col">Effect before</th><th scope="col">Effect after</th></tr></thead>
-          <tbody>{review.agreed.map(a => { const b = currentAgreed.find(x => x.project.id === a.project.id);
-            const cash = (c?: AgreedCheck) => c?.result.status === "ready" && c.result.agreed ? signedMoney(c.result.agreed.twoYearCashDeltaCents) : "—";
-            return <tr key={a.project.id}><th scope="row">{a.project.title}</th><td className="num">{cash(b)}</td><td className="num">{cash(a)}</td></tr>; })}</tbody>
-        </table></div>}
-        {after && before && before.subsidyCents > 0 && after.subsidyCents === 0 && <p className="notice warn" role="status">On the new forecast your agreed plan loses the 2026 premium tax credit. You can still keep this forecast — it records what you expect. Then compare new options for open proposals, or talk to your client about remaining payments.</p>}
+        {(beforeEval?.agreed.result || afterEval?.agreed.result) && <p className="small">Open agreements (payments not yet received, SEP-IRA still to contribute): {beforeEval?.agreed.result ? signedMoney(beforeEval.agreed.result.twoYearCashDeltaCents) : "—"} → <strong>{afterEval?.agreed.result ? signedMoney(afterEval.agreed.result.twoYearCashDeltaCents) : "—"}</strong> cash after both tax years. Same amounts and dates.</p>}
+        {afterEval && afterEval.agreed.creditLostYears.length > 0 && <p className="notice warn" role="status">On the new figures your plan as agreed loses the {afterEval.agreed.creditLostYears.join(" and ")} premium tax credit. You can still keep these figures — they record what you expect. Then compare options for open proposals, or talk to your client about payments that haven&apos;t happened yet.</p>}
+        {afterEval && !afterEval.agreed.stillFeasible && <p className="notice warn">{afterEval.agreed.reasons.map(humanizeDates).join(" ")}</p>}
         <h3 className="small-head">2 · New options</h3>
-        <p className="small muted">Proposals are compared separately after you keep the forecast. Agreed projects stay exactly as agreed.</p>
-        <div className="row gap"><button type="button" className="btn primary" onClick={() => onKeep(f)}>Keep this forecast</button></div>
+        <p className="small muted">Open proposals are compared separately after you keep the figures. Agreed projects stay exactly as agreed.</p>
+        <div className="row gap"><button type="button" className="btn primary" onClick={() => kind === "profit" ? onKeep(f) : onKeepOther(target.year, other!)}>Keep these figures</button></div>
       </>}
     </div>}
   </section>;
