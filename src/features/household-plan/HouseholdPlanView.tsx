@@ -27,6 +27,7 @@ import { exportForecastPdf, exportWorkspaceJson } from "@/lib/client/api";
 import { workspaceFingerprint } from "@/domain/household-workspace";
 import { ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { AddProjectForm, ProjectCard, SepPanel } from "./parts";
+import { attentionItems, type AttentionItem } from "./attention";
 
 type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
 type Notice = { tone: "ok" | "warn"; text: string } | null;
@@ -115,7 +116,14 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const proposals = ws.projects.filter(p => p.status === "proposed");
   const sep = sepRows(ws, calc?.evaluation);
   const evaluation = calc?.evaluation?.status === "ready" ? calc.evaluation : null;
-  const next = nextAction(ws);
+  const attention = attentionItems(ws, calc?.evaluation);
+  function onAttention(a: AttentionItem) {
+    const go = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+    if (a.action?.kind === "compare" && a.action.projectId) { setCompareId(a.action.projectId); go("compare-panel"); }
+    else if (a.action?.kind === "record_payment" && a.action.projectId) go(`project-${a.action.projectId}`);
+    else if (a.action?.kind === "sep") go("sep-title");
+    else if (a.action?.kind === "review_income") { setForecastEdit({ personId: owners[0].id, year: 2026 }); go("forecast-change"); }
+  }
 
   return <div className="shell plan-page household-plan">
     <div className="plan-head">
@@ -167,8 +175,12 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
           <p className="tile-line">Includes {agreedProjects.length ? `${agreedProjects.length} agreed project${agreedProjects.length > 1 ? "s" : ""}` : "no projects yet"}{proposals.length ? `; ${proposals.length} proposal${proposals.length > 1 ? "s" : ""} not included` : ""}</p>
         </div>
         <div className="tile tile-rec">
-          <p className="tile-k">Next step</p>
-          {next ? <><p className="tile-title">{next.title}</p><p className="tile-sub">{next.detail}</p></> : <p className="tile-line">Nothing is due. Add a client offer or update your forecast when something changes.</p>}
+          <p className="tile-k">What needs attention next</p>
+          {attention.filter(a => a.tone !== "done").length === 0 ? <p className="tile-line">Nothing is due. Add a client offer or update your forecast when something changes.</p>
+            : <ul className="attention">{attention.filter(a => a.tone !== "done").slice(0, 3).map(a => <li key={a.id} className={`att-${a.tone}`}>
+              <p className="tile-title">{a.title}</p><p className="tile-sub">{a.detail}</p>
+              {a.action && <button type="button" className="link-btn" onClick={() => onAttention(a)}>{a.action.label}</button>}</li>)}</ul>}
+          {attention.some(a => a.tone === "done") && <p className="tile-sub done-line">✓ {attention.filter(a => a.tone === "done")[0].detail}</p>}
         </div>
       </div>
       {ready && (ready.assumptions.length > 0 || ready.warnings.length > 0) && <details className="explain"><summary>Conditions and calculation notes ({ready.assumptions.length + ready.warnings.length})</summary>
@@ -277,17 +289,6 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
 }
 
 /* ---------- helpers & sub-views ---------- */
-
-function nextAction(ws: HouseholdWorkspace): { title: string; detail: string } | null {
-  const lines = ws.projects.filter(p => p.status === "agreed").flatMap(p => p.receipts.map(l => ({ p, l, e: effectiveLine(l) })))
-    .filter(x => x.e.basis === "expected" && x.e.date).sort((a, b) => a.e.date!.localeCompare(b.e.date!));
-  if (lines[0]) return { title: `Expect ${money(lines[0].e.amountCents)} from “${lines[0].p.title}”`, detail: `Due ${shortDate(lines[0].e.date)}. When it arrives, record the actual amount and date.` };
-  for (const t of ws.retirement.targets) {
-    const paid = ws.retirement.contributions.filter(c => c.personId === t.personId && c.taxYear === t.year).reduce((s, c) => s + c.amountCents, 0);
-    if (t.targetCents > paid) return { title: `Contribute ${money(t.targetCents - paid)} more to the ${t.year} SEP-IRA`, detail: `Goal ${money(t.targetCents)}, contributed ${money(paid)} so far. Deadline: your ${t.year} tax return due date (with extensions).` };
-  }
-  return null;
-}
 
 /** The plan as agreed on today's facts (Claude 2's evaluateHouseholdWorkspace) — never re-optimized. */
 function FixedPlan({ evaluation, stale }: { evaluation?: WorkspaceEvaluationResult; stale: boolean }) {

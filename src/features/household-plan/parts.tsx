@@ -45,7 +45,7 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
 }) {
   const [open, setOpen] = useState<{ lineId: string; mode: "record" | "correct" } | null>(null);
   const [conditions, setConditions] = useState(editConditions);
-  return <article className={`project-card status-${project.status}`} aria-labelledby={`p-${project.id}`}>
+  return <article id={`project-${project.id}`} className={`project-card status-${project.status}`} aria-labelledby={`p-${project.id}`}>
     <header className="project-head">
       <div>
         <h3 id={`p-${project.id}`}>{project.title}</h3>
