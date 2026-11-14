@@ -24,8 +24,14 @@ describe("round 5 scenarios", () => {
     expect([rec.terms.priceCents, rec.terms.payments.map(p => [p.date, p.amountCents]), rec.twoYearCashDeltaCents, rec.robustness.roomCents])
       .toEqual([usd(12000), [["2026-12-15", usd(5400)], ["2027-01-04", usd(6600)]], usd(8310), usd(3804)]);
     expect(rec.comparisons.versusOfferedCents).toBe(usd(11926));
+    // Same price, new dates: the client must agree to the dates only. Money by date stays separate from the two-year result.
+    expect(rec.clientAgreement).toMatchObject({ required: true, changes: ["dates"] });
+    expect(rec.moneyByDate.find(m => m.date === "2026-12-31")).toMatchObject({ receivedCents: usd(5400), availableCents: usd(3745) });
+    expect(rec.moneyByDate.at(-1)!.availableCents).toBe(rec.comparisons.versusDeclineCents);         // after both returns = two-year result
+    expect(rec.retirementAddedCents).toBe(0);
     const more = r.variants.find(v => v.purpose === "most_cash")!;
     expect([more.label.slice(0, 31), more.twoYearCashDeltaCents]).toEqual(["More cash, if the client agrees", usd(10390)]);
+    expect((more as EngineDealVariant).clientAgreement.changes).toEqual(["price", "dates"]);
   });
 
   it("2. ordinary offer: accept as offered — no manoeuvre, no 2027 facts needed", async () => {

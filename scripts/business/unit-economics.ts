@@ -87,6 +87,23 @@ checks.push(["Opus annual with 120 support minutes", "$19.47", unit(PRODUCTS[2],
 checks.push(["Opus annual with 10 customers/year (infra)", "$16.01", unit(PRODUCTS[2], opus, { units: q(10) }).contribution]);
 checks.push(["Households for $100M ARR at $99", "1,010,102", fr(BigInt(Math.ceil(100_000_000 / 99)))]);
 
+// ------------------------------------------------------------------ 1b. HEADROOM_PAID_VALUE_STRATEGY.md figures
+const strat: Array<[string, string, F | string]> = [];
+const freeDoc = mul(q(2), A("annual_99", opus).doc);                                      // $0.36 with the 2× reserve
+const nonpayerCac = (cpc: F, p: F) => add(div(cpc, p), div(mul(freeDoc, sub(q(1), p)), p));
+strat.push(["Annual contribution, 60 support minutes", "$49.47", unit(PRODUCTS[2], opus, { supportMin: 60 }).contribution]);
+strat.push(["Funnel 30% × 60% × 20% → visitor→paid", "3.6%", `${(num(mul(q("0.30"), q("0.60"), q("0.20"))) * 100).toFixed(1)}%`]);
+strat.push(["  media CAC at $1 CPC", "$27.78", div(q(1), mul(q("0.30"), q("0.60"), q("0.20")))]);
+strat.push(["CAC before labour at 5% visitor→paid, $1 CPC (media $20 + non-payer AI)", "$26.84", nonpayerCac(q(1), q("0.05"))]);
+for (const [id, memo] of [["decision_29", "19.14%"], ["season_49", "11.39%"], ["annual_99", "5.78%"]] as const) {
+  const c3 = div(A(id, opus).contribution, q(3));
+  strat.push([`Minimum visitor→paid for 3:1 at $1 CPC, ${id}`, memo, `${(num(div(add(q(1), freeDoc), add(c3, freeDoc))) * 100).toFixed(2)}%`]);
+}
+strat.push(["Decision, one extra purchase by 40% of buyers", "$28.33", mul(A("decision_29", opus).contribution, q("1.4"))]);
+strat.push(["Season, one extra purchase by 40% of buyers", "$48.62", mul(A("season_49", opus).contribution, q("1.4"))]);
+strat.push(["$100M revenue at $29 / $49 (purchases per year)", "3.45M / 2.04M", `${(1e8 / 29 / 1e6).toFixed(2)}M / ${(1e8 / 49 / 1e6).toFixed(2)}M`]);
+for (const [n, memo] of [[30, "9.5%"], [60, "4.87%"], [100, "2.95%"]] as const) strat.push([`Zero sales in ${n} comparable trials: one-sided 95% upper bound`, memo, `${((1 - 0.05 ** (1 / n)) * 100).toFixed(2)}%`]);
+
 // ------------------------------------------------------------------ 2. three scenarios (current adapter: Opus)
 type Scenario = { id: string; refund: F; supportMin: Record<string, number>; aiMultiplier: F; visitorToQualified: F; qualifiedToPaid: F; cpc: F;
   otherAcquisitionPerPayer: F; freeDocsPerQualified: F; annualRenewal: F; seasonRepeat: F; decisionRepeatPerYear: F };
@@ -104,7 +121,9 @@ function scenarioRow(s: Scenario, p: Product) {
   const factor = p.id === "annual_99" ? add(q(1), s.annualRenewal, mul(s.annualRenewal, s.annualRenewal)) : p.id === "season_49" ? add(q(1), s.seasonRepeat) : add(q(1), s.decisionRepeatPerYear);
   const ltv = mul(u.contribution, factor);
   const mediaCac = div(s.cpc, mul(s.visitorToQualified, s.qualifiedToPaid));                // CAC = CPC / (visitor→qualified × qualified→paid)
-  const freeIntake = div(mul(s.freeDocsPerQualified, mul(s.aiMultiplier, u.doc)), s.qualifiedToPaid);   // free document runs of qualified non-buyers, per payer
+  // Free document runs of qualified NON-buyers, per payer (a payer's own first document is already in paid AI cost):
+  // FreeDocs × DocCostWithReserve × (1 − QualifiedToPaid) / QualifiedToPaid  (same convention as HEADROOM_PAID_VALUE_ECONOMICS_CHECK.py)
+  const freeIntake = div(mul(s.freeDocsPerQualified, mul(s.aiMultiplier, u.doc), sub(q(1), s.qualifiedToPaid)), s.qualifiedToPaid);
   const cac = add(mediaCac, freeIntake, s.otherAcquisitionPerPayer);
   // Payback in purchases: first n with cumulative expected contribution ≥ CAC (annual: n-th year; others: n-th purchase).
   const per = p.id === "annual_99" ? [q(1), s.annualRenewal, mul(s.annualRenewal, s.annualRenewal)] : p.id === "season_49" ? [q(1), s.seasonRepeat] : [q(1), s.decisionRepeatPerYear];
@@ -117,6 +136,8 @@ function scenarioRow(s: Scenario, p: Product) {
 const lines: string[] = [];
 lines.push("## 1. Memo arithmetic, recomputed", "", "| Figure | Memo | Recomputed |", "|---|---:|---:|");
 for (const [name, memo, v] of checks) lines.push(`| ${name} | ${memo} | ${name.startsWith("Households") ? num(v).toLocaleString("en-US") : usd(v, name.startsWith("Gemini") && !name.includes("annual") ? 4 : name.includes("contribution") ? 3 : 2)} |`);
+lines.push("", "## 1b. Paid-value strategy figures, recomputed (HEADROOM_PAID_VALUE_STRATEGY.md)", "", "| Figure | Strategy | Recomputed |", "|---|---:|---:|");
+for (const [name, memo, v] of strat) lines.push(`| ${name} | ${memo} | ${typeof v === "string" ? v : usd(v)} |`);
 lines.push("", "## 2. One billing unit, current adapter (Opus 5.5), memo base assumptions", "", "| | Decision $29 | Season $49 | Annual $99 | Monthly $15 |", "|---|---:|---:|---:|---:|");
 const rows = PRODUCTS.map(p => unit(p, opus));
 for (const [label, k] of [["Net after refunds", "net"], ["Card + billing fees", "fees"], ["Support", "support"], ["AI (budget, ×2)", "ai"], ["Variable contribution", "variable"], ["Base infra share", "infra"], ["Contribution before CAC/OPEX", "contribution"]] as const)
@@ -133,7 +154,7 @@ for (const [label, s] of [["base", baseS], ["qualified→paid 2%", { ...baseS, q
   ["support 60 min", { ...baseS, supportMin: { ...baseS.supportMin, annual_99: 60 } }], ["Sonnet-priced AI", baseS]] as Array<[string, Scenario]>) {
   const r = label === "Sonnet-priced AI" ? (() => { const u = unit(PRODUCTS[2], "claude-sonnet-5-5", { refund: s.refund, supportMin: s.supportMin.annual_99, aiMultiplier: s.aiMultiplier });
     const x = scenarioRow(s, PRODUCTS[2]); const ltv = mul(u.contribution, add(q(1), s.annualRenewal, mul(s.annualRenewal, s.annualRenewal)));
-    const free = div(mul(s.freeDocsPerQualified, mul(s.aiMultiplier, u.doc)), s.qualifiedToPaid); return div(ltv, add(x.mediaCac, free, s.otherAcquisitionPerPayer)); })() : scenarioRow(s, PRODUCTS[2]).ratio;
+    const free = div(mul(s.freeDocsPerQualified, mul(s.aiMultiplier, u.doc), sub(q(1), s.qualifiedToPaid)), s.qualifiedToPaid); return div(ltv, add(x.mediaCac, free, s.otherAcquisitionPerPayer)); })() : scenarioRow(s, PRODUCTS[2]).ratio;
   lines.push(`| ${label} | ${num(r).toFixed(2)} |`);
 }
 console.log(lines.join("\n"));
