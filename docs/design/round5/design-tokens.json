@@ -1,0 +1,201 @@
+{
+  "status": "Archived: user rejected this visual direction on 2026-11-15. Not approved for implementation. Palette and typography are not requirements.",
+  "date": "2026-11-15",
+  "colors": {
+    "canvas": "#F6F5F0",
+    "surface": "#FFFFFF",
+    "ink": "#202824",
+    "muted": "#5A655F",
+    "brand": "#173F36",
+    "brandHover": "#102E28",
+    "selected": "#E7EEE8",
+    "divider": "#D7DCD5",
+    "controlBorder": "#7A867E",
+    "warningInk": "#77510C",
+    "warningSurface": "#FFF0D2",
+    "dangerInk": "#A43235",
+    "dangerSurface": "#FBEDEE",
+    "infoInk": "#285E83",
+    "infoSurface": "#EDF4F8",
+    "focus": "#2168A1"
+  },
+  "contrast": [
+    {
+      "foreground": "ink",
+      "background": "canvas",
+      "ratio": 13.84,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "muted",
+      "background": "canvas",
+      "ratio": 5.56,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "brand",
+      "background": "surface",
+      "ratio": 11.66,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "brand",
+      "background": "selected",
+      "ratio": 9.88,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "warningInk",
+      "background": "warningSurface",
+      "ratio": 6.29,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "dangerInk",
+      "background": "dangerSurface",
+      "ratio": 5.98,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "infoInk",
+      "background": "infoSurface",
+      "ratio": 6.26,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "focus",
+      "background": "canvas",
+      "ratio": 5.4,
+      "role": "text/focus"
+    },
+    {
+      "foreground": "controlBorder",
+      "background": "surface",
+      "ratio": 3.79,
+      "role": "non-text boundary, minimum 3:1"
+    },
+    {
+      "foreground": "divider",
+      "background": "surface",
+      "ratio": 1.39,
+      "role": "decorative only; not a control boundary"
+    }
+  ],
+  "fonts": {
+    "ui": {
+      "family": "Inter",
+      "fallback": "Arial, sans-serif",
+      "weights": [
+        400,
+        500,
+        600,
+        650
+      ],
+      "license": "SIL OFL 1.1",
+      "source": "https://rsms.me/inter/"
+    },
+    "display": {
+      "family": "Instrument Serif",
+      "fallback": "Georgia, serif",
+      "weight": 400,
+      "only": "Marketing headlines >=40px, never financial amounts or controls",
+      "license": "SIL OFL 1.1",
+      "source": "https://github.com/Instrument/instrument-serif"
+    }
+  },
+  "type": {
+    "body": {
+      "size": 16,
+      "lineHeight": 24
+    },
+    "secondary": {
+      "size": 14,
+      "lineHeight": 20
+    },
+    "metadata": {
+      "size": 13,
+      "lineHeight": 18
+    },
+    "label": {
+      "size": 14,
+      "lineHeight": 20,
+      "weight": 600
+    },
+    "appTitle": {
+      "desktop": 36,
+      "mobile": 28,
+      "lineHeight": 1.15
+    },
+    "displayTitle": {
+      "desktop": 64,
+      "mobile": 42,
+      "lineHeight": 1.02,
+      "tracking": "-0.02em"
+    },
+    "result": {
+      "desktop": 56,
+      "mobile": 44,
+      "lineHeight": 1.05,
+      "weight": 600,
+      "numerals": "tabular-nums lining-nums"
+    },
+    "sectionTitle": {
+      "desktop": 24,
+      "mobile": 22,
+      "lineHeight": 1.25
+    },
+    "button": {
+      "size": 15,
+      "lineHeight": 20,
+      "weight": 600
+    }
+  },
+  "space": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64,
+    96
+  ],
+  "layout": {
+    "maxWidth": 1200,
+    "desktopGutter": 40,
+    "mobileGutter": 20,
+    "breakpoints": {
+      "stack": 760,
+      "wide": 1100
+    },
+    "desktopColumns": 12,
+    "gap": 24,
+    "readingMeasure": "64ch",
+    "mobileMinimum": 360
+  },
+  "radius": {
+    "control": 8,
+    "surface": 12,
+    "pill": 999
+  },
+  "controls": {
+    "targetMin": 44,
+    "primaryHeight": 48,
+    "inputHeight": 48,
+    "focusWidth": 3,
+    "focusOffset": 3
+  },
+  "motion": {
+    "feedbackMs": 120,
+    "disclosureMs": 180,
+    "panelMs": 220,
+    "changedRowMs": 600,
+    "enterEasing": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "exitEasing": "cubic-bezier(0.4, 0, 1, 1)",
+    "smallEasing": "cubic-bezier(0.2, 0, 0, 1)",
+    "translationMaxPx": 8,
+    "reducedMotion": "No transform, smooth scroll or amount interpolation; instant states or <=80ms opacity; static progress text",
+    "note": "Proposed Headroom timings, not claimed Apple or Linear values"
+  }
+}
