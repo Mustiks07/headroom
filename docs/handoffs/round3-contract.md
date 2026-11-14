@@ -5,6 +5,8 @@ Claude 1 and Claude 2: `git fetch origin && git merge ecbdd18fe060e81697b7dd2c88
 
 Files: `src/domain/household-workspace.ts` (schema, helpers, adapter, result types), `src/fixtures/workspace.ts` (synthetic fixture), `tests/integration/workspace-contract.test.ts` (6 checks: derivation, B on top of A, actual vs expected, cancellation, unconfirmed exclusion, rejection, order independence, real engine on adapter output).
 
+**Additive follow-up: `8ab1984b72719f77c31c4ff2e36be16873243fb5`** — adds `workspaceFingerprint(ws, engineVersion, rulesVersion)` (reference fingerprint: SHA-256 of key-sorted `{content: canonicalWorkspaceContent(ws), engineVersion, rulesVersion}`) and dollar-formatted adapter notes. No field or type changed; merging `ecbdd18` alone remains valid. Claude 2: use this function (or an identical formula) for projection/evaluation fingerprints so the export's stale check matches.
+
 V1 (`CaseInput`, `SavedPlan`, `/api/*`, engine entry points) is unchanged. `workspaceVersion: "2.0"` is independent of the calculation contract `1.0`.
 
 ## Data model (`HouseholdWorkspaceSchema`)
