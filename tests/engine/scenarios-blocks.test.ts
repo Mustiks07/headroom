@@ -5,7 +5,7 @@ import type { CaseInput, ComparisonResult, ReadyComparison } from "@/domain/cont
 import { missingDataCase, ordinaryCase } from "@/fixtures/cases";
 import { assessCurrentRisk, calculateComparison, calculationFingerprint } from "@/lib/engine";
 import { evaluateYear } from "@/lib/engine/year";
-import { modelAt } from "@/lib/engine/search";
+import { modelAt } from "@/lib/engine/uncertainty";
 import { family, model, setCoverage, setIncome, single, usd } from "./helpers";
 
 function ready(r: ComparisonResult): ReadyComparison {
@@ -81,11 +81,11 @@ describe("structured blocks", () => {
     expect(risk.status).toBe("ready");
     if (risk.status === "ready") {
       expect(risk.risk.state).toBe("at_risk");
-      expect(risk.risk.forecastMagiCents).toBe(9973056);
+      expect(risk.risk.forecastMagiCents).toBe(usd(99730));
       expect(risk.risk.thresholdMagiCents).toBe(usd(106600));
       expect(risk.risk.subsidyCents).toBe(usd(13080));
       expect(risk.risk.advanceSettlementCents).toBe(usd(333));
-      expect(risk.risk.additionalProfitHeadroomCents).toBe(usd(8127));
+      expect(risk.risk.additionalProfitHeadroomCents).toBe(usd(8128));
     }
     const comp = await calculateComparison(c);
     expect(comp.status === "needs_data" && comp.fields[0].path).toMatch(/^years\[1\]\.incomes/);
@@ -109,7 +109,7 @@ describe("uncertainty and ordinary projects", () => {
     c.constraints.maxAdditionalSepCents = usd(20000);
     const risk = await assessCurrentRisk(c);
     expect(risk.status === "ready" && risk.risk.state).toBe("at_risk");
-    if (risk.status === "ready") expect(risk.risk.headroomAssumptions.join(" ")).toMatch(/high end .* credit would be lost/);
+    if (risk.status === "ready") expect(risk.risk.headroomAssumptions.join(" ")).toMatch(/high end.*credit would be lost/);
     const r = ready(await calculateComparison(c));
     const min = kind(r, "sep_minimum")!, buf = kind(r, "sep_buffer")!;
     expect(min.stress.status).toBe("fails_within_range");      // the minimum keeps the credit only at the entered value
@@ -139,6 +139,6 @@ describe("uncertainty and ordinary projects", () => {
     expect(a.calculationFingerprint).toBe(await calculationFingerprint(family()));
     const changed = family(); changed.opportunity.grossRevenueCents += 100;
     expect(await calculationFingerprint(changed)).not.toBe(a.calculationFingerprint);
-    expect(a.rulesVersion).toBe("us-federal-aca-2026-2027.r2");
+    expect(a.rulesVersion).toBe("us-federal-aca-2026-2027.r3");
   });
 });

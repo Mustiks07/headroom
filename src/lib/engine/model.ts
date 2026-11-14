@@ -6,9 +6,30 @@ export const INCOME_FIELDS = ["scheduleCProfit", "w2Box1", "socialSecurityWages"
   "payrollPretaxDeductions", "taxableInterest", "taxExemptInterest", "existingSepContribution"] as const;
 export type IncomeField = typeof INCOME_FIELDS[number];
 
+export const FIELD_LABELS: Record<IncomeField, string> = {
+  scheduleCProfit: "business profit (Schedule C)",
+  w2Box1: "W-2 taxable wages (box 1)",
+  socialSecurityWages: "Social Security wages (W-2 box 3)",
+  medicareWages: "Medicare wages (W-2 box 5)",
+  grossWages: "gross pay",
+  payrollPretaxDeductions: "pre-tax payroll deductions",
+  taxableInterest: "taxable interest",
+  taxExemptInterest: "tax-exempt interest",
+  existingSepContribution: "SEP-IRA contribution already planned",
+};
+export const COVERAGE_LABELS = {
+  enrollmentPremium: "plan premium",
+  benchmarkPremium: "benchmark (second-lowest-cost Silver) premium",
+  advancePtc: "advance premium tax credit",
+} as const;
+
 export interface PersonYear {
   id: string;
   role: "primary" | "spouse" | "dependent";
+  /** Plain-English name for user-facing text ("You", "Your spouse", "Dependent 1"). */
+  label: string;
+  /** Possessive form ("Your", "Your spouse's", "Dependent 1's"). */
+  possessive: string;
   /** Index of the income row in `years[i].incomes`, or -1 when no row (dependents only). */
   row: number;
   amounts: Record<IncomeField, number>;

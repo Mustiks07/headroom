@@ -1,6 +1,6 @@
 {
   "taxYear": 2027,
-  "packVersion": "2027.r2",
+  "packVersion": "2027.r3",
   "coverageFplGuidelineYear": 2026,
   "fpl": { "baseDollars": 15960, "stepDollars": 5680, "region": "contiguous-48-dc", "sourceId": "hhs-fpl-2026" },
   "applicableFigure": {
@@ -24,17 +24,18 @@
     "sourceId": "irs-rp-2026-35"
   },
   "taxTableUpperDollars": 100000,
-  "supportedTaxableIncomeBeforeQbiDollars": { "single": 201750, "mfj": 403500 },
-  "supportNote": "The 2027 QBI threshold is not transcribed; the lower 2026 threshold is used as a conservative support limit, which also keeps 2027 inside the transcribed 24% bracket.",
+  "supportedTaxableIncomeBeforeQbiDollars": { "single": 208300, "mfj": 416600 },
+  "supportedTaxableIncomeSourceId": "irs-rp-2026-35",
+  "supportNote": "Support limit = 2027 QBI threshold (Rev. Proc. 2026-35 section 3.28(1)); it lies inside the 24% bracket, so higher brackets are not needed.",
   "selfEmployment": { "netEarningsFactor": "0.9235", "socialSecurityRate": "0.124", "medicareRate": "0.029", "minimumNetEarningsDollars": 400, "socialSecurityWageBaseDollars": 192300, "sourceIds": ["irs-i1040sse", "ssa-2027"] },
   "employeeFica": { "socialSecurityRate": "0.062", "medicareRate": "0.0145", "sourceId": "ssa-2027" },
   "additionalMedicare": { "rate": "0.009", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8959" },
   "niit": { "rate": "0.038", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8960" },
   "qbi": { "rate": "0.20", "minimumDeductionDollars": 415, "minimumQbiDollars": 1030, "sourceId": "irs-rp-2026-35" },
-  "childTaxCredit": { "perChildDollars": 2300, "refundablePerChildDollars": null, "refundableEarnedIncomeFloorDollars": 2500, "refundableRate": "0.15", "otherDependentDollars": 500, "phaseoutThresholdDollars": { "single": 200000, "mfj": 400000 }, "phaseoutPerThousandDollars": 50, "sourceIds": ["irs-rp-2026-35", "irs-s8812"] },
-  "eitcSupportBoundDollars": { "single": [21000, 55000, 62000, 67000], "mfj": [29000, 63000, 70000, 75000], "sourceId": "headroom-eitc-support-bound" },
+  "childTaxCredit": { "perChildDollars": 2300, "refundablePerChildDollars": 1800, "refundableEarnedIncomeFloorDollars": 2500, "refundableRate": "0.15", "otherDependentDollars": 500, "phaseoutThresholdDollars": { "single": 200000, "mfj": 400000 }, "phaseoutPerThousandDollars": 50, "sourceIds": ["irs-rp-2026-35", "irs-s8812"] },
+  "eitcSupportBoundDollars": { "single": [20164, 53277, 60519, 65002], "mfj": [27684, 60787, 68029, 72512], "sourceId": "irs-rp-2026-35", "note": "EITC completed phaseout amounts (Rev. Proc. 2026-35 section 3.06) for 0/1/2/3+ children; returns below them are refused, not calculated." },
   "sep": { "netEarningsRate": "0.20", "annualCapDollars": 75000, "sourceIds": ["irs-pub-560", "irs-n-2026-66"] },
   "returnDueDate": "2028-04-18",
-  "returnDueDateNote": "April 15, 2028 is a Saturday and Emancipation Day is observed Monday April 17; confirm the IRS-announced date.",
+  "returnDueDateNote": "April 15, 2028 is a Saturday; DC Emancipation Day (Sunday April 16) is observed Monday April 17, so IRC 7503 moves the deadline to Tuesday April 18. Confirm when the IRS announces it.",
   "settlementNote": "2027 income, PTC and APTC settle on the 2027 return filed in 2028."
 }

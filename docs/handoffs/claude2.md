@@ -1,5 +1,7 @@
 # Claude 2 handoff — financial engine
 
+> Round 2 (engine 1.1.0, rules r3) supersedes the versions, rounding policy and sample numbers below: see [claude2-round2.md](claude2-round2.md).
+
 Branch `claude2`. Status: **both entry points implemented and checked**; ready for UI/API integration. No shared contract or fixture was changed.
 
 - Engine version: `headroom-engine-1.0.0`
