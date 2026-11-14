@@ -1,0 +1,29 @@
+{
+  "note": "Source registry for Headroom rule packs. Status describes how each value entered the pack; nothing here is fetched during a calculation.",
+  "sources": [
+    { "id": "hhs-fpl-2025", "title": "HHS 2025 poverty guidelines (used for 2026 coverage)", "url": "https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines", "status": "final" },
+    { "id": "hhs-fpl-2026", "title": "HHS 2026 poverty guidelines (used for 2027 coverage)", "url": "https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines", "status": "final" },
+    { "id": "irs-rp-2025-25", "title": "Rev. Proc. 2025-25, 2026 applicable percentage table", "url": "https://www.irs.gov/pub/irs-drop/rp-25-25.pdf", "status": "final" },
+    { "id": "irs-rp-2026-26", "title": "Rev. Proc. 2026-26, 2027 applicable percentage table", "url": "https://www.irs.gov/pub/irs-drop/rp-26-26.pdf", "status": "final; band values as recorded in docs/ENGINE_SPEC.md and the prototype, primary PDF hash in data/reference/source-manifest.json" },
+    { "id": "irs-i8962-2026-draft", "title": "Instructions for Form 8962 (2026), Worksheet 2 and Table 2", "url": "https://www.irs.gov/pub/irs-dft/i8962--dft.pdf", "status": "DRAFT" },
+    { "id": "irs-rp-2025-32", "title": "Rev. Proc. 2025-32, 2026 inflation adjustments", "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf", "status": "final" },
+    { "id": "irs-rp-2026-35", "title": "Rev. Proc. 2026-35, 2027 inflation adjustments", "url": "https://www.irs.gov/pub/irs-drop/rp-26-35.pdf", "status": "final; standard deduction and CTC verified by the foundation, brackets transcribed by the prototype and not re-read in this build" },
+    { "id": "ssa-2026", "title": "SSA 2026 contribution and benefit base", "url": "https://www.ssa.gov/oact/cola/cbb.html", "status": "final" },
+    { "id": "ssa-2027", "title": "SSA 2027 COLA fact sheet", "url": "https://www.ssa.gov/cola/factsheets/2027.html", "status": "final" },
+    { "id": "irs-n-2025-67", "title": "Notice 2025-67, 2026 retirement plan limits", "url": "https://www.irs.gov/pub/irs-drop/n-25-67.pdf", "status": "final" },
+    { "id": "irs-n-2026-66", "title": "Notice 2026-66, 2027 retirement plan limits", "url": "https://www.irs.gov/pub/irs-drop/n-26-66.pdf", "status": "final" },
+    { "id": "irs-i1040sse", "title": "Instructions for Schedule SE", "url": "https://www.irs.gov/instructions/i1040sse", "status": "final" },
+    { "id": "irs-i8959", "title": "Instructions for Form 8959 (Additional Medicare Tax)", "url": "https://www.irs.gov/forms-pubs/about-form-8959", "status": "final; thresholds are statutory and not indexed" },
+    { "id": "irs-i8960", "title": "Instructions for Form 8960 (Net Investment Income Tax)", "url": "https://www.irs.gov/forms-pubs/about-form-8960", "status": "final; thresholds are statutory and not indexed" },
+    { "id": "irs-i1040-tax-table", "title": "Form 1040 instructions, Tax Table (taxable income under $100,000)", "url": "https://www.irs.gov/instructions/i1040gi", "status": "method; brackets from the year's revenue procedure" },
+    { "id": "irs-i8995", "title": "Instructions for Form 8995 (QBI deduction, simplified)", "url": "https://www.irs.gov/forms-pubs/about-form-8995", "status": "final; IRC 199A(i) $400 minimum applies from 2026" },
+    { "id": "irs-s8812", "title": "Schedule 8812 instructions (child tax credit / ACTC)", "url": "https://www.irs.gov/forms-pubs/about-schedule-8812-form-1040", "status": "final" },
+    { "id": "irs-pub-974", "title": "Publication 974, SEHI deduction and PTC interaction", "url": "https://www.irs.gov/publications/p974", "status": "2025 edition; method only" },
+    { "id": "irs-pub-560", "title": "Publication 560, SEP contributions for the self-employed", "url": "https://www.irs.gov/publications/p560", "status": "final" },
+    { "id": "irs-pub-334", "title": "Publication 334, cash method and constructive receipt", "url": "https://www.irs.gov/publications/p334", "status": "final" },
+    { "id": "irs-ptc-qa", "title": "IRS premium tax credit questions and answers (no repayment cap after 2025)", "url": "https://www.irs.gov/affordable-care-act/individuals-and-families/questions-and-answers-on-the-premium-tax-credit", "status": "final" },
+    { "id": "healthcare-gov-report-changes", "title": "HealthCare.gov: report income changes", "url": "https://www.healthcare.gov/reporting-changes/", "status": "guidance" },
+    { "id": "headroom-eitc-support-bound", "title": "Headroom conservative EITC support bound (not an EITC calculation)", "status": "engine policy: set above the IRS completed-phaseout amounts so any possibly EITC-eligible return is refused" },
+    { "id": "headroom-engine-policy", "title": "Headroom engine policy (search, rounding, scope)", "status": "engine policy, see docs/handoffs/claude2.md" }
+  ]
+}

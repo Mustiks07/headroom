@@ -1,0 +1,39 @@
+{
+  "taxYear": 2026,
+  "packVersion": "2026.r1",
+  "coverageFplGuidelineYear": 2025,
+  "fpl": { "baseDollars": 15650, "stepDollars": 5500, "region": "contiguous-48-dc", "sourceId": "hhs-fpl-2025" },
+  "applicableFigure": {
+    "method": "official-table",
+    "tableFile": "data/reference/2026-8962-table2.json",
+    "tableStatus": "DRAFT",
+    "bands": [
+      { "fromPct": 0, "toPct": 133, "start": "2.10", "end": "2.10" },
+      { "fromPct": 133, "toPct": 150, "start": "3.14", "end": "4.19" },
+      { "fromPct": 150, "toPct": 200, "start": "4.19", "end": "6.60" },
+      { "fromPct": 200, "toPct": 250, "start": "6.60", "end": "8.44" },
+      { "fromPct": 250, "toPct": 300, "start": "8.44", "end": "9.96" },
+      { "fromPct": 300, "toPct": 400, "start": "9.96", "end": "9.96" }
+    ],
+    "sourceIds": ["irs-rp-2025-25", "irs-i8962-2026-draft"]
+  },
+  "aptcRepaymentCap": null,
+  "standardDeductionDollars": { "single": 16100, "mfj": 32200 },
+  "brackets": {
+    "single": [[12400, "0.10"], [50400, "0.12"], [105700, "0.22"], [201775, "0.24"]],
+    "mfj": [[24800, "0.10"], [100800, "0.12"], [211400, "0.22"], [403550, "0.24"]],
+    "sourceId": "irs-rp-2025-32"
+  },
+  "taxTableUpperDollars": 100000,
+  "supportedTaxableIncomeBeforeQbiDollars": { "single": 201750, "mfj": 403500 },
+  "selfEmployment": { "netEarningsFactor": "0.9235", "socialSecurityRate": "0.124", "medicareRate": "0.029", "minimumNetEarningsDollars": 400, "socialSecurityWageBaseDollars": 184500, "sourceIds": ["irs-i1040sse", "ssa-2026"] },
+  "employeeFica": { "socialSecurityRate": "0.062", "medicareRate": "0.0145", "sourceId": "ssa-2026" },
+  "additionalMedicare": { "rate": "0.009", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8959" },
+  "niit": { "rate": "0.038", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8960" },
+  "qbi": { "rate": "0.20", "minimumDeductionDollars": 400, "minimumQbiDollars": 1000, "sourceId": "irs-i8995" },
+  "childTaxCredit": { "perChildDollars": 2200, "refundablePerChildDollars": 1700, "refundableEarnedIncomeFloorDollars": 2500, "refundableRate": "0.15", "otherDependentDollars": 500, "phaseoutThresholdDollars": { "single": 200000, "mfj": 400000 }, "phaseoutPerThousandDollars": 50, "sourceIds": ["irs-rp-2025-32", "irs-s8812"] },
+  "eitcSupportBoundDollars": { "single": [21000, 55000, 62000, 67000], "mfj": [29000, 63000, 70000, 75000], "sourceId": "headroom-eitc-support-bound" },
+  "sep": { "netEarningsRate": "0.20", "annualCapDollars": 72000, "sourceIds": ["irs-pub-560", "irs-n-2025-67"] },
+  "returnDueDate": "2027-04-15",
+  "settlementNote": "2026 income, PTC and APTC settle on the 2026 return filed by 2027-04-15."
+}
