@@ -33,9 +33,10 @@ describe("round 5 scenarios", () => {
     const more = r.variants.find(v => v.purpose === "most_cash")!;
     expect([more.label.slice(0, 31), more.twoYearCashDeltaCents]).toEqual(["More cash, if the client agrees", usd(10390)]);
     expect((more as EngineDealVariant).clientAgreement.changes).toEqual(["price", "dates"]);
-    // Contract 29c6ab4: a stored variant keeps both comparisons and the robustness of the choice.
+    // Contracts 29c6ab4 + 36edf1e: a stored variant keeps both comparisons, robustness, client agreement and money by date.
     const stored = DealVariantSchema.parse(rec);
-    expect([stored.comparisons, stored.robustness]).toEqual([rec.comparisons, rec.robustness]);
+    expect([stored.comparisons, stored.robustness, stored.clientAgreement, stored.moneyByDate])
+      .toEqual([rec.comparisons, rec.robustness, rec.clientAgreement, rec.moneyByDate]);
   });
 
   it("2. ordinary offer: accept as offered — no manoeuvre, no 2027 facts needed", async () => {

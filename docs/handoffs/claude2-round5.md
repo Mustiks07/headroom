@@ -139,3 +139,7 @@ Merged `origin/main` up to `c5f29dd` (design C selected). Design C changes no fo
 
 Merged Claude 3's contract follow-up `29c6ab4ea0bad46b3bd52086e0a16c0bce86c833` normally. As a normal merge of that SHA, it also brought its ancestors on `claude3`, i.e. Claude 3's round 5 backend. No conflicts; no engine change was needed. `comparisons` and `robustness` are now stored with packages and decision records: `DealVariantSchema.parse(variant)` keeps them (tested). `clientAgreement` and `moneyByDate` are not in that commit and are still requested in `claude2-contract-request-round5.md`. Checks: `npx tsc --noEmit` passes, `npx vitest run` passes (29 files / 152 tests), build passes.
 
+## Update — contract `36edf1e` merged
+
+Merged `36edf1e0f352a445948376e67f063cc642581948` normally (with its parent `00beeaf`, Claude 3's backend follow-up). `DealVariantSchema` now has `clientAgreement` and `moneyByDate` with the engine's exact shape, so saved packages and decision records keep all four engine fields (tested). The contract request is closed. The explanation's fresh-search fallback for packages stays as a harmless safeguard for packages saved before this contract.
+
