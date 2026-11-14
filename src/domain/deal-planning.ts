@@ -80,6 +80,7 @@ export const PaymentWindowSchema = z.object({
  */
 export const DealTermsSpaceSchema = z.object({
   projectId: IdSchema,
+  /** Bounds of the TOTAL asked price (including amounts already received). */
   price: z.object({
     minCents: CentsSchema.nonnegative(),
     maxCents: CentsSchema.nonnegative(),
@@ -157,6 +158,10 @@ export const DealVariantSchema = z.object({
   /** Why this variant is shown (distinct trade-offs, not renamed duplicates). */
   purpose: z.enum(["simplest", "most_cash", "earliest_money", "most_retirement", "lowest_risk", "as_offered"]),
   terms: z.object({
+    /**
+     * TOTAL price asked for the project, including amounts already received.
+     * Invariant (checked by the engine and exports): Σ payments = priceCents − already received.
+     */
     priceCents: CentsSchema.nonnegative(),
     /** Only NOT-yet-received payments; already received amounts are fixed and listed in datedFlows. */
     payments: z.array(TermsPaymentSchema).max(4),

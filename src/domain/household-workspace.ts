@@ -186,6 +186,8 @@ export const RetirementSchema = z.object({
 export const WORKSPACE_EVENT_KINDS = [
   "workspace_created", "migrated_from_v1", "forecast_updated", "project_added", "project_updated", "project_status_changed",
   "payment_recorded", "payment_corrected", "sep_target_changed", "sep_contribution_recorded", "document_imported", "rules_updated",
+  // Round 4 (additive): goal/terms/cash edits, a saved action package, a user-confirmed package status change.
+  "deal_planning_updated", "deal_package_saved", "deal_status_changed",
 ] as const;
 
 /**

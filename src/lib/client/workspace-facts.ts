@@ -94,3 +94,102 @@ function finish(next: HouseholdWorkspace, event: Omit<WorkspaceEvent, "id" | "at
   if (!parsed.success) return { status: "rejected", message: parsed.error.issues[0]?.message ?? "The figure doesn't fit this plan." };
   return { status: "applied", workspace: parsed.data, event };
 }
+
+/* ------------------------------------------------------------------ preview (round 4) */
+
+export type FactNeed = "date" | "tax_year" | "as_of_date" | "status" | "correction_reason";
+
+export interface FactOption {
+  id: string;
+  label: string;
+  /** Partial target; the UI fills the listed `needs` from the user before calling applyDocumentFact. */
+  target: Partial<FactTarget> & { kind: FactTarget["kind"] };
+  needs: FactNeed[];
+}
+
+export interface FactPreview {
+  index: number;
+  path: string;
+  found: { amountCents: number | null; date: string | null; period: string | null; label: string; taxYear: 2026 | 2027 | null; source: string; excerpt: string | null };
+  /** Possible destinations. Never pre-selected from a similar amount; the user chooses. */
+  options: FactOption[];
+  /** Why this figure can't become a plan fact as found (shown, not hidden). */
+  blockers: string[];
+  /** The same document figure is already a fact here (re-import): offer "already recorded". */
+  alreadyApplied: string | null;
+}
+
+const TRANSFER = /\btransfer|between (my |your )?accounts|from savings|to savings|internal|own account|zelle from (me|myself)\b/i;
+
+function appliedWhere(ws: HouseholdWorkspace, evidenceId: string): string | null {
+  for (const p of ws.projects) for (const l of [...p.receipts, ...p.expenses]) if (l.actual?.sourceId === evidenceId) return `Recorded as a payment for "${p.title}".`;
+  for (const f of ws.forecasts) for (const v of Object.values(f)) if (v && typeof v === "object" && (v as MoneyFact).sourceId === evidenceId) return `Used in the ${f.year} profit forecast.`;
+  if (ws.retirement.contributions.some(c => c.sourceId === evidenceId)) return "Recorded as a SEP contribution.";
+  return null;
+}
+
+/**
+ * Turn a reviewed extraction into per-figure choices for THIS workspace: found amount/date/period/
+ * source, possible destinations and blockers. Nothing is applied; the user confirms each with
+ * `applyDocumentFact`. Transfers are not income, an unknown period is not 2026, one receipt is not
+ * an annual total, and similar amounts never pick a destination by themselves.
+ */
+export function previewDocumentFacts(ws: HouseholdWorkspace, extraction: ExtractionResult): FactPreview[] {
+  const pairedDate = extraction.fields.find(f => f.path === "project.paymentReceivedDate");
+  const dateOf = (f: Field | undefined) => f && (f.proposedValue as { kind?: string; date?: string })?.kind === "date" ? (f.proposedValue as { date: string }).date : null;
+  const adults = ws.household.people.filter(p => p.role !== "dependent");
+  const who = (id: string) => ws.household.people.find(p => p.id === id)?.role === "spouse" ? "Your spouse" : "You";
+
+  return extraction.fields.map((field, index) => {
+    const v = field.proposedValue as { kind?: string; amountCents?: number; period?: string; date?: string };
+    const taxYear = (field.evidence.taxYear ?? null) as 2026 | 2027 | null;
+    const preview: FactPreview = {
+      index, path: field.path,
+      found: { amountCents: v?.kind === "money" ? v.amountCents ?? null : null, date: v?.kind === "date" ? v.date ?? null : null, period: v?.period ?? null,
+        label: field.path, taxYear, source: field.evidence.label, excerpt: field.evidence.excerpt ?? null },
+      options: [], blockers: [], alreadyApplied: appliedWhere(ws, field.evidence.id),
+    };
+    const yearNeed: FactNeed[] = taxYear ? [] : ["tax_year"];
+
+    if (field.path === "project.paymentReceived") {
+      preview.found.date = dateOf(pairedDate);
+      if (TRANSFER.test(field.evidence.excerpt ?? "")) {
+        preview.blockers.push("This looks like a transfer between your own accounts. Transfers are not business income.");
+        return preview;
+      }
+      for (const p of ws.projects) for (const l of p.receipts) {
+        const recorded = !!l.actual;
+        preview.options.push({ id: `${p.id}:${l.id}`, target: { kind: "payment_received", projectId: p.id, lineId: l.id, ...(preview.found.date ? { date: preview.found.date } : {}) },
+          label: `${p.title} — ${l.label ?? "payment"}${l.expected ? ` (expected ${(l.expected.amountCents / 100).toFixed(2)} USD on ${l.expected.date})` : ""}${recorded ? " — already recorded, would be a correction" : ""}`,
+          needs: [...(preview.found.date ? [] : ["date" as const]), ...(recorded ? ["correction_reason" as const] : [])] });
+      }
+      if (!preview.options.length) preview.blockers.push("Add the project and its expected payment first, then record this receipt.");
+    } else if (field.path === "project.paymentReceivedDate") {
+      preview.blockers.push("Used as the date of the received payment above.");
+    } else if (field.path === "income.existingSepContribution") {
+      for (const a of adults) preview.options.push({ id: `sep:${a.id}`, label: `${who(a.id)}: SEP-IRA contribution actually paid`,
+        target: { kind: "sep_contribution", personId: a.id, ...(taxYear ? { taxYear } : {}) }, needs: [...yearNeed, "date"] });
+    } else if (field.path === "income.scheduleCProfit") {
+      if (v?.period === "year_to_date") {
+        for (const a of adults) {
+          const f = ws.forecasts.find(x => x.personId === a.id && (!taxYear || x.year === taxYear));
+          if (f?.method === "year_to_date_plus_remaining") preview.options.push({ id: `ytd:${a.id}`, label: `${who(a.id)}: net profit so far this year`,
+            target: { kind: "forecast", personId: a.id, field: "ytdNetProfit", ...(taxYear ? { year: taxYear } : {}) }, needs: [...yearNeed, "as_of_date", "status"] });
+        }
+        if (!preview.options.length) preview.blockers.push("This is a year-to-date figure. Switch the profit forecast to “year to date plus the rest of the year” to use it.");
+      } else if (v?.period === "annual") {
+        for (const a of adults) {
+          const f = ws.forecasts.find(x => x.personId === a.id && (!taxYear || x.year === taxYear));
+          if (f?.method === "annual_total") preview.options.push({ id: `annual:${a.id}`, label: `${who(a.id)}: full-year net profit forecast`,
+            target: { kind: "forecast", personId: a.id, field: "annualNetProfit", ...(taxYear ? { year: taxYear } : {}) }, needs: [...yearNeed, "status"] });
+        }
+        if (!preview.options.length) preview.blockers.push("This is a full-year figure; the plan uses year to date plus the rest of the year. Switch methods first.");
+      } else {
+        preview.blockers.push("The document doesn't say whether this covers the year so far or the full year. One payment or a partial period is never used as an annual total.");
+      }
+    } else {
+      preview.blockers.push("Use this figure in the household form (it isn't a project payment, SEP contribution or profit forecast).");
+    }
+    return preview;
+  });
+}
