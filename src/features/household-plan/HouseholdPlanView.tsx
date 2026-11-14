@@ -19,7 +19,7 @@ import { ForecastEditor } from "./ForecastEditor";
 import { MoneyField } from "@/components/MoneyField";
 import { compareProject, evaluatePlan, fixedPlanOf, projectHousehold, sepRows } from "./engine";
 import {
-  addProject, agreeToOption, blankForecast, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
+  addProject, agreeToOption, blankForecast, saveDealGoal, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
   setProjectStatus, setSepTarget,
 } from "./ops";
 import { commit, describeSaveError, whereText, workspaceRepo, CloudSaveFailedError, WorkspaceConflictError } from "./store";
@@ -28,6 +28,9 @@ import { workspaceFingerprint } from "@/domain/household-workspace";
 import { ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { AddProjectForm, ProjectCard, SepPanel } from "./parts";
 import { attentionItems, type AttentionItem } from "./attention";
+import { DealPanel } from "@/features/deal/DealPanel";
+import { ChooseTerms } from "@/features/deal/ChooseTerms";
+import type { DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 
 type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
 type Notice = { tone: "ok" | "warn"; text: string } | null;
@@ -48,6 +51,8 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const [forecastEdit, setForecastEdit] = useState<{ personId: string; year: TaxYear } | null>(null);
   const [adding, setAdding] = useState(false);
   const [fixProject, setFixProject] = useState<string | null>(null);
+  const [dealId, setDealId] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<{ variant: DealVariant; result: ReadyDealSearch } | null>(null);
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
   const req = useRef(0);
 
@@ -119,7 +124,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const attention = attentionItems(ws, calc?.evaluation);
   function onAttention(a: AttentionItem) {
     const go = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
-    if (a.action?.kind === "compare" && a.action.projectId) { setCompareId(a.action.projectId); go("compare-panel"); }
+    if (a.action?.kind === "compare" && a.action.projectId) { setDealId(a.action.projectId); go("deal-panel"); }
     else if (a.action?.kind === "record_payment" && a.action.projectId) go(`project-${a.action.projectId}`);
     else if (a.action?.kind === "sep") go("sep-title");
     else if (a.action?.kind === "review_income") { setForecastEdit({ personId: owners[0].id, year: 2026 }); go("forecast-change"); }
@@ -237,11 +242,22 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
           onCorrect={(lineId, a) => void apply(w => correctActual(w, p.id, lineId, a), "Correction saved. The earlier record stays in the history.")}
           onCancelLine={lineId => void apply(w => cancelExpected(w, p.id, lineId), "Expected payment cancelled.")}
           editConditions={fixProject === p.id}
+          onFindTerms={() => { setDealId(p.id); setChosen(null); setTimeout(() => document.getElementById("deal-panel")?.scrollIntoView({ behavior: "smooth" }), 30); }}
           onConditions={c => { setFixProject(null); void apply(w => setProjectConditions(w, p.id, c), "Conditions saved."); }}
           onStatus={s => void apply(w => setProjectStatus(w, p.id, s), s === "cancelled" ? "Project cancelled. Received payments stay in the forecast." : "Project status updated.")}
           onCompare={() => { setCompareId(p.id); setTimeout(() => document.getElementById("compare-panel")?.scrollIntoView({ behavior: "smooth" }), 30); }} />)}
       </div>
     </section>
+
+    {dealId && ws.projects.some(p => p.id === dealId) && <DealPanel key={dealId} ws={ws} project={ws.projects.find(p => p.id === dealId)!}
+      onClose={() => { setDealId(null); setChosen(null); }} onGoToForecast={() => { setForecastEdit({ personId: owners[0].id, year: 2026 }); setTimeout(() => document.getElementById("forecast-change")?.scrollIntoView({ behavior: "smooth" }), 30); }}
+      onSaveGoal={async built => {
+        if (pending) { setNotice({ tone: "warn", text: "Save or discard the change that didn't go through first." }); return null; }
+        try { const saved = await commit(ws, saveDealGoal(ws, built.goal, built.space, built.cash)); setWs(saved); return saved; }
+        catch (e) { setNotice({ tone: "warn", text: describeSaveError(e) }); if (e instanceof WorkspaceConflictError && e.current) setWs(e.current); return null; }
+      }}
+      onChoose={(variant, result) => { setChosen({ variant, result }); setTimeout(() => document.getElementById("choose-terms")?.scrollIntoView({ behavior: "smooth" }), 30); }} />}
+    {chosen && dealId && <ChooseTerms ws={ws} projectId={dealId} variant={chosen.variant} result={chosen.result} onCancel={() => setChosen(null)} />}
 
     {compareId && <ComparePanel ws={ws} projectId={compareId} state={compare}
       onFixProject={() => { setFixProject(compareId); setTimeout(() => document.getElementById(`conditions-${compareId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} stale={!compare || compare.pending || compare.key !== key} onClose={() => setCompareId(null)} onDrawer={setDrawer}

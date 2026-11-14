@@ -3,6 +3,7 @@ import {
   HouseholdWorkspaceSchema, WORKSPACE_VERSION, captureSepBudgetContributions, sepPosition, withEvent,
   type HouseholdWorkspace, type ProfitForecast, type Project, type ProjectLine, type WorkspaceEvent, type WorkspaceEventKind,
 } from "@/domain/household-workspace";
+import { emptyDealPlanning, type CashContext, type DealGoal, type DealTermsSpace } from "@/domain/deal-planning";
 
 /**
  * Pure edits of a household workspace document (no tax math). Each edit returns a new document
@@ -164,6 +165,21 @@ export function setProjectConditions(w0: HouseholdWorkspace, projectId: string, 
   if (!p) throw new Error("This project is no longer in the plan.");
   p.cashAccountingConfirmed = c.cashAccountingConfirmed; p.timingArrangementConfirmed = c.timingArrangementConfirmed; p.terms = c.terms;
   return log(w, newId("evt-terms"), "project_updated", `Updated the conditions for “${p.title}”.`, { projectId });
+}
+
+/* ---------- deal planning (goal, allowed terms, cash context) ---------- */
+
+/** Saves the goal and allowed terms for one project (and the cash context, if given) with the plan. */
+export function saveDealGoal(w0: HouseholdWorkspace, goal: DealGoal, space: DealTermsSpace, cash: CashContext | null): HouseholdWorkspace {
+  const w = clone(w0);
+  ensureManualEvidence(w);
+  const dp = w.dealPlanning ?? emptyDealPlanning();
+  dp.goals = [...dp.goals.filter(g => g.id !== goal.id), goal];
+  dp.termSpaces = [...dp.termSpaces.filter(t => t.projectId !== space.projectId), space];
+  if (cash) dp.cashContext = cash;
+  w.dealPlanning = dp;
+  const title = w.projects.find(p => p.id === goal.projectId)?.title ?? "the project";
+  return log(w, newId("evt-goal"), "project_updated", `Set the goal and allowed terms for “${title}”.`, { projectId: goal.projectId });
 }
 
 /* ---------- SEP ---------- */
