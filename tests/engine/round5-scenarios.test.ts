@@ -2,6 +2,7 @@
 // Each: input → output → practical action → limitation. Figures are pinned so the handoff/deck numbers stay reproducible.
 import { describe, expect, it } from "vitest";
 import { ChangeProposalSchema, type ChangeCommand } from "@/domain/assistance";
+import { DealVariantSchema } from "@/domain/deal-planning";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import {
   assessInputReadiness, engineWorkspaceFingerprint, evaluateOfferAsOffered, previewChange, searchDealTerms, validateAndApply, type EngineDealVariant,
@@ -32,6 +33,9 @@ describe("round 5 scenarios", () => {
     const more = r.variants.find(v => v.purpose === "most_cash")!;
     expect([more.label.slice(0, 31), more.twoYearCashDeltaCents]).toEqual(["More cash, if the client agrees", usd(10390)]);
     expect((more as EngineDealVariant).clientAgreement.changes).toEqual(["price", "dates"]);
+    // Contract 29c6ab4: a stored variant keeps both comparisons and the robustness of the choice.
+    const stored = DealVariantSchema.parse(rec);
+    expect([stored.comparisons, stored.robustness]).toEqual([rec.comparisons, rec.robustness]);
   });
 
   it("2. ordinary offer: accept as offered — no manoeuvre, no 2027 facts needed", async () => {

@@ -134,3 +134,8 @@ Merged `origin/main` up to `c5f29dd` (design C selected). Design C changes no fo
 **Blocking contract (Claude 3):** `docs/handoffs/claude2-contract-request-round5.md` asks for four optional fields in `DealVariantSchema` (`comparisons`, `robustness`, `clientAgreement`, `moneyByDate`). Until then, saved packages and decision records drop them; explanations of current packages work around it.
 
 **Checks of this pass:** `npx tsc --noEmit` passes, `npx vitest run` passes (28 files / 145 tests), `npm run build` passes, and the economics script reproduces its tables.
+
+## Update — contract `29c6ab4` merged
+
+Merged Claude 3's contract follow-up `29c6ab4ea0bad46b3bd52086e0a16c0bce86c833` normally. As a normal merge of that SHA, it also brought its ancestors on `claude3`, i.e. Claude 3's round 5 backend. No conflicts; no engine change was needed. `comparisons` and `robustness` are now stored with packages and decision records: `DealVariantSchema.parse(variant)` keeps them (tested). `clientAgreement` and `moneyByDate` are not in that commit and are still requested in `claude2-contract-request-round5.md`. Checks: `npx tsc --noEmit` passes, `npx vitest run` passes (29 files / 152 tests), build passes.
+
