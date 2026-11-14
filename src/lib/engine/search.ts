@@ -12,16 +12,15 @@
  *  2. Between thresholds the objective is piecewise linear (tax brackets,
  *     phase-ins) with |slope| ≤ 2 per dollar; a uniform grid (≤ 4,000 points)
  *     plus a dollar-exact scan around the best point bounds the residual error
- *     by 2 × grid step, plus ≤ $20 of form rounding noise (Tax Table $50
+ *     by 2 × grid step, plus ≤ $30 of form rounding noise (Tax Table $50
  *     bands, whole-dollar Form 8962 contribution).
- * Ranges ≤ $4,000 are therefore scanned exhaustively at $1.
+ * Ranges ≤ $8,000 are therefore scanned exhaustively at $1.
  */
-import { mulRatio } from "./money";
 import { EngineStop, type Variation, type YearModel } from "./model";
 import { solveCredit } from "./year";
 
-export const GRID_POINTS = 4000;
-export const ROUNDING_NOISE_CENTS = 2000;
+export const GRID_POINTS = 8000;
+export const ROUNDING_NOISE_CENTS = 3000;
 
 /** Structural thresholds on MAGI (cents): solution is "favourable" when MAGI ≤ threshold. */
 export function magiThresholds(model: YearModel): number[] {
@@ -99,45 +98,25 @@ export function optimize(lo: number, hi: number, objective: (v: number) => numbe
   return { v: b.v, value: b.value, evaluated, step };
 }
 
-/** Smallest whole-dollar v in [lo, hi] with pred(v) true, assuming pred is "increasing between thresholds". */
-export function firstMeeting(lo: number, hi: number, pred: (v: number) => boolean, magis: MonotoneMagi[]): { v: number | null; step: number } {
+/**
+ * Smallest whole-dollar v in [lo, hi] with pred(v) true. Candidates (grid + threshold
+ * crossings) locate the first qualifying region; then every dollar from lo up to it is
+ * checked when that span is ≤ exhaustiveLimit, so the answer is the exact minimum.
+ * Otherwise only the dollars after the previous candidate are checked (exact = false).
+ */
+export function firstMeeting(lo: number, hi: number, pred: (v: number) => boolean, magis: MonotoneMagi[],
+  exhaustiveLimit = 20000): { v: number | null; step: number; exact: boolean } {
   const { points, step } = candidateSet(lo, hi, magis);
   let prev = lo - 1;
   for (const c of points) {
     if (tryValue(() => pred(c))) {
-      for (let v = prev + 1; v < c; v++) if (tryValue(() => pred(v))) return { v, step };
-      return { v: c, step };
+      const exact = c - lo <= exhaustiveLimit;
+      for (let v = exact ? lo : prev + 1; v < c; v++) if (tryValue(() => pred(v))) return { v, step, exact };
+      return { v: c, step, exact };
     }
     prev = c;
   }
-  return { v: null, step };
-}
-
-// ------------------------------------------------------------ uncertainty --
-export const UNCERTAINTY_SCALE = 1000;
-
-export function hasRanges(model: YearModel): boolean {
-  return model.persons.some(p => Object.keys(p.ranges).length > 0);
-}
-
-/**
- * Household with every declared income range moved together to position k:
- * k = −1000 → all low ends, 0 → entered values, +1000 → all high ends.
- * Every income field raises MAGI, so solved MAGI is monotone in k.
- */
-export function modelAt(model: YearModel, k: number): YearModel {
-  if (k === 0 || !hasRanges(model)) return model;
-  return {
-    ...model,
-    persons: model.persons.map(p => {
-      const amounts = { ...p.amounts };
-      for (const [f, r] of Object.entries(p.ranges) as Array<[keyof typeof amounts, { low: number; high: number }]>) {
-        const v = p.amounts[f];
-        amounts[f] = k < 0 ? v + mulRatio(v - r.low, k, UNCERTAINTY_SCALE) : v + mulRatio(r.high - v, k, UNCERTAINTY_SCALE);
-      }
-      return { ...p, amounts };
-    }),
-  };
+  return { v: null, step, exact: hi - lo <= exhaustiveLimit && step === 1 };
 }
 
 /**

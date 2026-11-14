@@ -12,9 +12,9 @@ describe("Social Security wage base per individual", () => {
   it("does not let a spouse's wages reduce the owner's cap (prototype error)", () => {
     const r = rulesFor(2026);
     const own = scheduleSe(r, "primary", usd(150000), 0);
-    expect(own.total).toBe(2119433);                   // $21,194.33 (spec: 21,194.325 before cent rounding)
+    expect(own.total).toBe(2119400);                   // $21,194 on a whole-dollar return (spec: 21,194.325 unrounded)
     const withOwnWages = scheduleSe(r, "primary", usd(150000), usd(100000));
-    expect(withOwnWages.ssPart).toBe(Math.round((184500 - 100000) * 0.124 * 100)); // own room only
+    expect(withOwnWages.ssPart).toBe(usd(10478));       // (184,500 − 100,000) × 12.4%: own room only
   });
 
   it("includes spouse wages in cash, FICA and MAGI but not in the owner's SE cap or SEP base", () => {
@@ -22,9 +22,9 @@ describe("Social Security wage base per individual", () => {
     setIncome(c, 0, "spouse", wages(usd(80000)));
     const m = model(c);
     const y = evaluateYear(m, NO_VARIATION);
-    expect(y.credit.seTotal).toBe(2119433);
+    expect(y.credit.seTotal).toBe(2119400);
     expect(y.employeeFica).toBe(usd(6120));            // 80,000 × 7.65%
-    expect(y.credit.sepMax).toBe(Math.floor((usd(150000) - y.credit.ownerHalfSe) * 0.2));
+    expect(y.credit.sepMax).toBe(Math.floor((usd(150000) - y.credit.ownerHalfSe) * 0.2 / 100) * 100);
     expect(y.credit.magi).toBe(usd(150000) + usd(80000) - y.credit.ownerHalfSe - y.credit.sehi);
     expect(y.credit.ptc.ptc).toBe(0);                  // far above 400%
     // Cash identity: wages and profit counted once; premiums net of the final credit (no second APTC deduction).
@@ -68,7 +68,7 @@ it("uses the 2027 indexed QBI minimum only above the 2027 qualifying amount", ()
   c.years[1].coverage.forEach(month => { month.sehiEligibilityConfirmed = false; });
   const below = evaluateYear(model(c, 1), NO_VARIATION);
   expect(below.qbi).toBeLessThan(usd(1030));
-  expect(below.qbiDeduction).toBe(20446);
+  expect(below.qbiDeduction).toBe(usd(204));          // 20% of $1,022 QBI on a whole-dollar return
   setIncome(c, 1, "primary", { scheduleCProfit: usd(2000) });
   const above = evaluateYear(model(c, 1), NO_VARIATION);
   expect(above.qbiDeduction).toBe(usd(415));

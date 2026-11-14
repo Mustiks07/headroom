@@ -1,12 +1,12 @@
 {
   "taxYear": 2026,
-  "packVersion": "2026.r1",
+  "packVersion": "2026.r3",
   "coverageFplGuidelineYear": 2025,
   "fpl": { "baseDollars": 15650, "stepDollars": 5500, "region": "contiguous-48-dc", "sourceId": "hhs-fpl-2025" },
   "applicableFigure": {
     "method": "official-table",
     "tableFile": "data/reference/2026-8962-table2.json",
-    "tableStatus": "DRAFT",
+    "tableStatus": "Figure from Table 2 of the DRAFT 2026 Form 8962 instructions.",
     "bands": [
       { "fromPct": 0, "toPct": 133, "start": "2.10", "end": "2.10" },
       { "fromPct": 133, "toPct": 150, "start": "3.14", "end": "4.19" },
@@ -26,13 +26,14 @@
   },
   "taxTableUpperDollars": 100000,
   "supportedTaxableIncomeBeforeQbiDollars": { "single": 201750, "mfj": 403500 },
+  "supportedTaxableIncomeSourceId": "irs-rp-2025-32",
   "selfEmployment": { "netEarningsFactor": "0.9235", "socialSecurityRate": "0.124", "medicareRate": "0.029", "minimumNetEarningsDollars": 400, "socialSecurityWageBaseDollars": 184500, "sourceIds": ["irs-i1040sse", "ssa-2026"] },
   "employeeFica": { "socialSecurityRate": "0.062", "medicareRate": "0.0145", "sourceId": "ssa-2026" },
   "additionalMedicare": { "rate": "0.009", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8959" },
   "niit": { "rate": "0.038", "thresholdDollars": { "single": 200000, "mfj": 250000 }, "sourceId": "irs-i8960" },
-  "qbi": { "rate": "0.20", "minimumDeductionDollars": 400, "minimumQbiDollars": 1000, "sourceId": "irs-i8995" },
+  "qbi": { "rate": "0.20", "minimumDeductionDollars": 400, "minimumQbiDollars": 1000, "sourceId": "irs-i8995", "note": "Form 8995 (2026) line 17: greater of line 15 (after the taxable-income limit) and the minimum." },
   "childTaxCredit": { "perChildDollars": 2200, "refundablePerChildDollars": 1700, "refundableEarnedIncomeFloorDollars": 2500, "refundableRate": "0.15", "otherDependentDollars": 500, "phaseoutThresholdDollars": { "single": 200000, "mfj": 400000 }, "phaseoutPerThousandDollars": 50, "sourceIds": ["irs-rp-2025-32", "irs-s8812"] },
-  "eitcSupportBoundDollars": { "single": [21000, 55000, 62000, 67000], "mfj": [29000, 63000, 70000, 75000], "sourceId": "headroom-eitc-support-bound" },
+  "eitcSupportBoundDollars": { "single": [19540, 51593, 58629, 62974], "mfj": [26820, 58863, 65899, 70244], "sourceId": "irs-rp-2025-32", "note": "EITC completed phaseout amounts (Rev. Proc. 2025-32 section 3.06) for 0/1/2/3+ children; returns below them are refused, not calculated." },
   "sep": { "netEarningsRate": "0.20", "annualCapDollars": 72000, "sourceIds": ["irs-pub-560", "irs-n-2025-67"] },
   "returnDueDate": "2027-04-15",
   "settlementNote": "2026 income, PTC and APTC settle on the 2026 return filed by 2027-04-15."

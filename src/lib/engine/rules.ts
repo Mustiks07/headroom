@@ -7,8 +7,8 @@ import sourcesFile from "../../../data/rules/sources.json";
 import table2026 from "../../../data/reference/2026-8962-table2.json";
 import { dollars, rate, type Rate } from "./money";
 
-export const ENGINE_VERSION = "headroom-engine-1.0.1";
-export const RULES_VERSION = "us-federal-aca-2026-2027.r2";
+export const ENGINE_VERSION = "headroom-engine-1.1.0";
+export const RULES_VERSION = "us-federal-aca-2026-2027.r3";
 
 export type Filing = "single" | "mfj";
 
@@ -18,6 +18,8 @@ type RawPack = typeof pack2026 | typeof pack2027;
 export interface RulePack {
   year: TaxYear;
   packVersion: string;
+  /** HHS guideline year used for this coverage year (prior calendar year). */
+  coverageFplGuidelineYear: number;
   fplDollars(familySize: number): number;
   fplSourceId: string;
   /** Applicable figure × 10000 for a Form 8962 line 5 value in 0..400. */
@@ -68,6 +70,7 @@ function build(raw: RawPack): RulePack {
   return {
     year: raw.taxYear as TaxYear,
     packVersion: raw.packVersion,
+    coverageFplGuidelineYear: raw.coverageFplGuidelineYear,
     fplDollars: (n: number) => raw.fpl.baseDollars + raw.fpl.stepDollars * (n - 1),
     fplSourceId: raw.fpl.sourceId,
     applicableFigure: (line5: number) => {

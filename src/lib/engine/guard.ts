@@ -4,7 +4,7 @@
  * no excluded situation applies. Unknown is never turned into zero.
  */
 import { CaseInputSchema, type BlockedComparison, type CaseInput, type MoneyFact } from "@/domain/contracts";
-import { INCOME_FIELDS, type IncomeField, type PersonYear, type YearModel } from "./model";
+import { COVERAGE_LABELS, FIELD_LABELS, INCOME_FIELDS, type IncomeField, type PersonYear, type YearModel } from "./model";
 import { rulesFor } from "./rules";
 
 export const SUPPORTED_STATES = ["TX", "FL", "TN"] as const;
@@ -55,6 +55,16 @@ export function parseCase(raw: unknown, issues: Issues): CaseInput | null {
   return input;
 }
 
+/** Plain-English names for people; ids stay in machine paths only. */
+export function personNames(input: CaseInput, id: string): { label: string; possessive: string } {
+  const p = input.people.find(x => x.id === id);
+  if (!p || p.role === "primary") return { label: "You", possessive: "Your" };
+  if (p.role === "spouse") return { label: "Your spouse", possessive: "Your spouse's" };
+  const n = input.people.filter(x => x.role === "dependent").indexOf(p) + 1;
+  return { label: `Dependent ${n} (age ${p.ageAt2026Start} in 2026)`, possessive: `Dependent ${n}'s` };
+}
+const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
 const factOk = (f: MoneyFact): f is MoneyFact & { valueCents: number } => f.status !== "unknown" && f.valueCents !== null;
 
 /** Build the supported model for one tax year, adding any blocking issue. */
@@ -66,7 +76,7 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
   const evidence = new Set(input.evidence.map(e => e.id));
   const usedEvidence = new Set<string>();
   const checkSource = (f: MoneyFact, path: string) => {
-    if (!evidence.has(f.sourceId)) issues.need("SOURCE_MISSING", `${path}.sourceId`, `Source "${f.sourceId}" is not in the evidence list.`);
+    if (!evidence.has(f.sourceId)) issues.need("SOURCE_MISSING", `${path}.sourceId`, `The source reference "${f.sourceId}" for this amount is missing from the household's evidence list.`);
     else usedEvidence.add(f.sourceId);
   };
 
@@ -83,18 +93,18 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
 
   input.people.forEach((p, i) => {
     if (p.role !== "dependent" && p.ageAt2026Start + (year.year - 2026) + 1 >= 65) {
-      issues.bad("AGE_65", `people[${i}].ageAt2026Start`, `${p.id} may reach 65 during ${year.year} (Medicare eligibility, senior deductions); not supported.`);
+      issues.bad("AGE_65", `people[${i}].ageAt2026Start`, `${personNames(input, p.id).label} may reach 65 during ${year.year} (Medicare eligibility and senior deductions); this is not supported.`);
     }
   });
   let qualifyingChildren = 0, otherDependents = 0;
   const dependents = input.people.filter(p => p.role === "dependent");
   input.people.forEach((p, i) => {
     if (p.role !== "dependent") return;
-    if (p.qualifyingChildForCtc === null) { issues.need("CTC_UNKNOWN", `people[${i}].qualifyingChildForCtc`, `Say whether ${p.id} is a qualifying child for the child tax credit.`); return; }
+    if (p.qualifyingChildForCtc === null) { issues.need("CTC_UNKNOWN", `people[${i}].qualifyingChildForCtc`, `Say whether ${lc(personNames(input, p.id).label)} is a qualifying child for the child tax credit.`); return; }
     if (p.qualifyingChildForCtc) {
       const minAge = p.ageAt2026Start + (year.year - 2026);
-      if (minAge >= 17) issues.bad("CTC_AGE", `people[${i}].ageAt2026Start`, `${p.id} is 17 or older at the end of ${year.year} and cannot be a CTC qualifying child.`);
-      else if (minAge + 1 >= 17) issues.need("CTC_AGE", `people[${i}].ageAt2026Start`, `${p.id} may turn 17 during ${year.year}; confirm the child is under 17 on December 31.`);
+      if (minAge >= 17) issues.bad("CTC_AGE", `people[${i}].ageAt2026Start`, `${personNames(input, p.id).label} is 17 or older at the end of ${year.year} and cannot be a qualifying child for the child tax credit.`);
+      else if (minAge + 1 >= 17) issues.need("CTC_AGE", `people[${i}].ageAt2026Start`, `${personNames(input, p.id).label} may turn 17 during ${year.year}; confirm the child is under 17 on December 31.`);
       else qualifyingChildren++;
     } else otherDependents++;
   });
@@ -106,27 +116,27 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
     const ranges: PersonYear["ranges"] = {};
     if (row < 0) {
       if (p.role !== "dependent") {
-        issues.need("INCOME_ROW_MISSING", `${base}.incomes`, `No ${year.year} income entry for ${p.id}. A missing entry is not zero income; enter amounts or confirm $0.`);
+        issues.need("INCOME_ROW_MISSING", `${base}.incomes`, `${personNames(input, p.id).possessive} ${year.year} income is missing. A missing entry is not zero income; enter amounts or confirm $0.`);
       }
-      persons.push({ id: p.id, role: p.role, row, amounts, ranges });
+      persons.push({ id: p.id, role: p.role, ...personNames(input, p.id), row, amounts, ranges });
       continue;
     }
     const income = year.incomes[row];
     for (const f of INCOME_FIELDS) {
       const fact = income[f];
       const path = `${base}.incomes[${row}].${f}`;
-      if (!factOk(fact)) { issues.need("FACT_UNKNOWN", path, `${p.id}: ${f} is unknown for ${year.year}. Enter it, an estimate, or confirm $0.`); continue; }
+      if (!factOk(fact)) { issues.need("FACT_UNKNOWN", path, `${personNames(input, p.id).possessive} ${FIELD_LABELS[f]} for ${year.year} is unknown. Enter it, an estimate, or confirm $0.`); continue; }
       checkSource(fact, path);
       if (fact.valueCents < 0) {
         if (f === "scheduleCProfit") issues.bad("LOSS", path, "A Schedule C loss is not supported.");
-        else issues.need("NEGATIVE", path, `${f} cannot be negative.`);
+        else issues.need("NEGATIVE", path, `${personNames(input, p.id).possessive} ${FIELD_LABELS[f]} cannot be negative.`);
       }
       amounts[f] = fact.valueCents;
       if (fact.range && fact.range.lowCents !== fact.range.highCents) {
         const supported = p.role !== "dependent" && ((f === "scheduleCProfit" && p.id === input.opportunity.ownerPersonId)
           || f === "taxableInterest" || f === "taxExemptInterest");
         if (!supported) issues.need("RANGE_NOT_SUPPORTED", path,
-          "Ranges are supported for the business owner's profit and adult interest income. Remove this range and use separate scenarios for payroll or retirement changes.");
+          `A range on ${lc(personNames(input, p.id).possessive)} ${FIELD_LABELS[f]} is not calculated. Ranges are supported for the business owner's profit and adult interest income; remove this range and compare separate scenarios for payroll or retirement changes.`);
         else if (fact.range.lowCents < 0) issues.need("NEGATIVE_RANGE", path, "The income range cannot include a loss or negative interest.");
         else ranges[f] = { low: fact.range.lowCents, high: fact.range.highCents };
       }
@@ -141,19 +151,19 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
     const wagesUsed = amounts.grossWages || amounts.w2Box1 || amounts.socialSecurityWages || amounts.medicareWages || amounts.payrollPretaxDeductions;
     if (wagesUsed) {
       const path = `${base}.incomes[${row}]`;
-      if (amounts.payrollPretaxDeductions > amounts.grossWages) issues.need("PAYROLL", `${path}.payrollPretaxDeductions`, "Pre-tax deductions exceed gross wages.");
+      if (amounts.payrollPretaxDeductions > amounts.grossWages) issues.need("PAYROLL", `${path}.payrollPretaxDeductions`, `${personNames(input, p.id).possessive} pre-tax payroll deductions exceed gross pay.`);
       if (Math.abs(amounts.grossWages - amounts.payrollPretaxDeductions - amounts.w2Box1) > 100) {
-        issues.bad("PAYROLL_MODEL", `${path}.w2Box1`, "W-2 box 1 does not equal gross wages minus pre-tax deductions; other payroll arrangements are not modeled.");
+        issues.bad("PAYROLL_MODEL", `${path}.w2Box1`, `${personNames(input, p.id).possessive} W-2 taxable wages (box 1) do not equal gross pay minus pre-tax payroll deductions; other payroll arrangements are not modeled.`);
       }
       if (amounts.medicareWages < amounts.w2Box1 || amounts.medicareWages > amounts.grossWages) {
-        issues.bad("PAYROLL_MODEL", `${path}.medicareWages`, "Medicare wages must lie between W-2 box 1 and gross wages in the supported payroll model.");
+        issues.bad("PAYROLL_MODEL", `${path}.medicareWages`, `${personNames(input, p.id).possessive} Medicare wages (box 5) must lie between taxable wages (box 1) and gross pay in the supported payroll model.`);
       }
-      if (amounts.socialSecurityWages > amounts.medicareWages) issues.bad("PAYROLL_MODEL", `${path}.socialSecurityWages`, "Social Security wages above Medicare wages are not modeled.");
+      if (amounts.socialSecurityWages > amounts.medicareWages) issues.bad("PAYROLL_MODEL", `${path}.socialSecurityWages`, `${personNames(input, p.id).possessive} Social Security wages (box 3) above Medicare wages (box 5) are not modeled.`);
       if (amounts.socialSecurityWages > rules.se.wageBase) {
         issues.bad("EXCESS_SS", `${path}.socialSecurityWages`, `Social Security wages above the ${year.year} wage base (several employers / excess withholding credit) are not modeled.`);
       }
     }
-    persons.push({ id: p.id, role: p.role, row, amounts, ranges });
+    persons.push({ id: p.id, role: p.role, ...personNames(input, p.id), row, amounts, ranges });
   }
 
   const months = [...year.coverage].sort((a, b) => a.month - b.month);
@@ -165,10 +175,10 @@ export function buildYearModel(input: CaseInput, yi: 0 | 1, issues: Issues): Yea
     const vals: number[] = [];
     for (const f of ["enrollmentPremium", "benchmarkPremium", "advancePtc"] as const) {
       const fact = m[f];
-      if (!factOk(fact)) { issues.need("COVERAGE_UNKNOWN", `${path}.${f}`, `${f} for month ${m.month} of ${year.year} is unknown.`); vals.push(0); continue; }
+      if (!factOk(fact)) { issues.need("COVERAGE_UNKNOWN", `${path}.${f}`, `The ${COVERAGE_LABELS[f]} for month ${m.month} of ${year.year} is unknown.`); vals.push(0); continue; }
       checkSource(fact, `${path}.${f}`);
       if (fact.range && fact.range.lowCents !== fact.range.highCents) issues.need("RANGE_NOT_SUPPORTED", `${path}.${f}`,
-        "Insurance amount ranges are not calculated. Remove this range and compare separate insurance forecasts instead.");
+        `A range on the ${COVERAGE_LABELS[f]} is not calculated. Remove this range and compare separate insurance forecasts instead.`);
       vals.push(fact.valueCents);
     }
     const [prem, bench, adv] = vals;

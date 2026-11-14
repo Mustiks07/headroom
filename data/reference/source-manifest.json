@@ -17,13 +17,15 @@
       "filename": "rp-26-26.pdf",
       "source": "https://www.irs.gov/pub/irs-drop/rp-26-26.pdf",
       "bytes": 106799,
-      "sha256": "b3ce6c8c10450371df5c07921de4c32c8e8ceff79fa57a42e6362c09e727ed60"
+      "sha256": "b3ce6c8c10450371df5c07921de4c32c8e8ceff79fa57a42e6362c09e727ed60",
+      "rechecked_2026_11_14": true
     },
     {
       "filename": "rp-26-35.pdf",
       "source": "https://www.irs.gov/pub/irs-drop/rp-26-35.pdf",
       "bytes": 216025,
-      "sha256": "87b383c6ce6e616fd006a61f5eed46fe67099b9c23fb1e1c42ff5359474513b8"
+      "sha256": "87b383c6ce6e616fd006a61f5eed46fe67099b9c23fb1e1c42ff5359474513b8",
+      "rechecked_2026_11_14": true
     },
     {
       "filename": "cms-age-curve.pdf",
@@ -35,7 +37,64 @@
       "filename": "i8962-2026-draft.pdf",
       "source": "https://www.irs.gov/pub/irs-dft/i8962--dft.pdf",
       "bytes": 582503,
-      "sha256": "06eb732540186302b2146e0ac61d86e39e4c9d28dc8b05969043e940797459fe"
+      "sha256": "06eb732540186302b2146e0ac61d86e39e4c9d28dc8b05969043e940797459fe",
+      "rechecked_2026_11_14": true
+    },
+    {
+      "filename": "rp-25-32.pdf",
+      "source": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "bytes": 260406,
+      "sha256": "e9ada115fb43a4af5ea326ca91edd40ab0bf29b9be01d2c13d7b8fa96214635b",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "rp-25-25.pdf",
+      "source": "https://www.irs.gov/pub/irs-drop/rp-25-25.pdf",
+      "bytes": 110035,
+      "sha256": "ba950034c6d6d7f6ca70b9dc94754d923acc34f3d5646593fd12340fb6b67697",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "i8995--dft.pdf",
+      "source": "https://www.irs.gov/pub/irs-dft/i8995--dft.pdf",
+      "bytes": 391879,
+      "sha256": "7fd77be32b9dfd5ee07338e19f21adad6f71c672ee1fc3ddd325480d70ea219b",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "f8995--dft.pdf",
+      "source": "https://www.irs.gov/pub/irs-dft/f8995--dft.pdf",
+      "bytes": 237458,
+      "sha256": "d698390e2990de21b8df9ccb485f9309b817707d4871581118337bf7c1b14fd8",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "i1040gi--dft.pdf",
+      "source": "https://www.irs.gov/pub/irs-dft/i1040gi--dft.pdf",
+      "bytes": 4550250,
+      "sha256": "24ad652c8f89a778990720873c13ff0d7fa35485a991a288bd9625804e5d932f",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "f8962--dft.pdf",
+      "source": "https://www.irs.gov/pub/irs-dft/f8962--dft.pdf",
+      "bytes": 226489,
+      "sha256": "5b692171ee43a4596eabfcaad83bea920e6356c492656a1648f2aaf018cd1d35",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "p974.pdf",
+      "source": "https://www.irs.gov/pub/irs-pdf/p974.pdf",
+      "bytes": 1861233,
+      "sha256": "e17265a7ff82e0b2541dbf7bd90797bdaa1eb5678c3d23d059f42939274f0845",
+      "retrieved_date": "2026-11-14"
+    },
+    {
+      "filename": "i1040s8--dft.pdf",
+      "source": "https://www.irs.gov/pub/irs-dft/i1040s8--dft.pdf",
+      "bytes": 502615,
+      "sha256": "d1b1893ee232e2cd909a94ac2ef3ba9f2bb2a9591f8f238a6c61b75db3bf4335",
+      "retrieved_date": "2026-11-14"
     }
   ]
 }

@@ -30,6 +30,8 @@ describe("applicable figure and line 5", () => {
     const atLine = ptcFor(m, 400 * fpl);
     expect(atLine.ptc).toBeGreaterThan(0);              // credit continues at exactly 400%
     expect(atLine.contribution8a).toBe(1061700);        // 106,600 × 0.0996 = 10,617.36 → $10,617
-    expect(ptcFor(m, 400 * fpl + 1).ptc).toBe(0);
+    // Form 8962 takes whole dollars: $106,600.49 is entered as $106,600 (credit), $106,600.50 as $106,601 (none).
+    expect(ptcFor(m, 400 * fpl + 49).ptc).toBeGreaterThan(0);
+    expect(ptcFor(m, 400 * fpl + 50).ptc).toBe(0);
   });
 });

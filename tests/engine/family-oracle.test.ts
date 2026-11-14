@@ -20,13 +20,17 @@ const Y = {
   } },
 } as const;
 
-/** Best valid (SEHI, PTC) for profit P and SEP s (all cents), by scanning every whole-dollar deduction. */
+/**
+ * Best valid (SEHI, PTC) for profit P and SEP s (all cents), by scanning every whole-dollar deduction.
+ * Whole-dollar return (Form 1040 "Rounding Off to Whole Dollars"; Form 8962 accepts dollars only).
+ */
 function oracle(year: 2026 | 2027, P: number, s: number, prem: number, bench: number) {
   const k = Y[year];
-  const net = rh(P * 9235, 10000);
-  const se = rh(net * 124, 1000) + rh(net * 29, 1000);
-  const half = rh(se, 2);
+  const net = rh(P * 9235, 1000000) * 100;                       // Schedule SE line 4a, whole dollars
+  const se = rh(net * 124, 100000) * 100 + rh(net * 29, 100000) * 100;
+  const half = rh(se, 200) * 100;
   const base = P - half - s;
+  const premW = rh(prem, 100) * 100, benchW = rh(bench, 100) * 100;  // Form 1095-A annual totals in whole dollars
   let best: { d: number; magi: number; ptc: number; tax: number; cash: number } | null = null;
   for (let d = 0; d <= Math.floor(Math.min(prem, base) / 100); d++) {
     const M = base - d * 100;
@@ -34,11 +38,11 @@ function oracle(year: 2026 | 2027, P: number, s: number, prem: number, bench: nu
     if (M <= 4 * k.fpl * 100) {
       const pct = Math.floor(M / k.fpl);
       if (pct < 250) throw new Error("oracle scope");
-      ptc = Math.min(prem, Math.max(0, bench - rh(M * k.fig(pct), 1000000) * 100));
+      ptc = Math.min(premW, Math.max(0, benchW - rh(M * k.fig(pct), 1000000) * 100));
     }
-    if (d * 100 + ptc > prem) continue;
+    if (d * 100 + ptc > premW) continue;
     const ti0 = Math.max(0, M - k.std * 100);
-    const ti = ti0 - Math.min(rh((base - d * 100) * 2, 10), rh(ti0 * 2, 10));
+    const ti = ti0 - Math.min(rh((base - d * 100) * 2, 1000) * 100, rh(ti0 * 2, 1000) * 100);
     if (ti < 300000 || ti >= 10000000) throw new Error("oracle scope");
     const mid = 300000 + Math.floor((ti - 300000) / 5000) * 5000 + 2500;
     if (mid > k.b2 * 100) throw new Error("oracle scope");
@@ -118,7 +122,7 @@ describe("independent family scenario (synthetic TN household)", async () => {
   });
 
   it("stays within documented rounding of the historical prototype audit at its decisions", () => {
-    // Differences come from formal rounding: Tax Table midpoints (< $100k taxable) and cent-rounded Schedule SE lines.
+    // Differences come from formal rounding: Tax Table midpoints (< $100k taxable) and the whole-dollar return (r3).
     const cases: Array<[string, number, number, number]> = [
       ["decline", 0, 0, 0], ["accept December", 12000, 0, 0], ["accept SEP 3600", 12000, 3600, 0],
       ["accept SEP 5500", 12000, 5500, 0], ["4000 December / 8000 January", 4000, 0, 8000]];
@@ -128,8 +132,8 @@ describe("independent family scenario (synthetic TN household)", async () => {
       const ours = [evaluateYear(m0, { profitDelta: usd(r26), additionalSep: usd(sep) }), evaluateYear(m1, { profitDelta: usd(r27), additionalSep: 0 })];
       ours.forEach((y, i) => {
         const ref = row.years[i].reference;
-        expect(y.credit.sehi).toBe(usd(ref.sehi));
-        expect(y.credit.ptc.ptc).toBe(usd(ref.ptc));
+        expect(Math.abs(y.credit.sehi - usd(ref.sehi))).toBeLessThanOrEqual(usd(2));
+        expect(Math.abs(y.credit.ptc.ptc - usd(ref.ptc))).toBeLessThanOrEqual(usd(2));
         expect(Math.abs(y.spendable - usd(ref.cash))).toBeLessThanOrEqual(usd(5));
       });
     }

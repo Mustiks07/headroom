@@ -1,14 +1,17 @@
 import { CONTRACT_VERSION, type BlockedComparison, type CaseInput, type ComparisonResult, type CurrentRisk,
-  type RiskAssessment } from "@/domain/contracts";
+  type RiskAssessment, type ScenarioResult } from "@/domain/contracts";
+import { evaluateAgreed, type AgreedPlan, type AgreedPlanOutcome } from "./agreed";
 import { compare } from "./comparison";
 import { buildYearModel, checkOpportunity, Issues, parseCase } from "./guard";
 import { formatUsd } from "./money";
 import { EngineStop, NO_VARIATION, type YearModel } from "./model";
 import { ENGINE_VERSION, RULES_VERSION } from "./rules";
-import { UNCERTAINTY_SCALE, hasRanges, modelAt, profitHeadroomDollars } from "./search";
+import { profitHeadroomDollars } from "./search";
+import { UNCERTAINTY_SCALE, hasRanges, modelAt } from "./uncertainty";
 import { creditTrace, evaluateYear, solveCredit } from "./year";
 
 export { ENGINE_VERSION, RULES_VERSION } from "./rules";
+export type { AgreedPlan, AgreedPlanChange, AgreedPlanOutcome } from "./agreed";
 
 /** Share of the 400% threshold below which remaining profit headroom is labelled "at risk". */
 export const AT_RISK_SHARE = 0.10;
@@ -66,9 +69,9 @@ export async function assessCurrentRisk(raw: CaseInput): Promise<RiskAssessment>
     const fpl = c.fplDollars;
     const threshold = 400 * fpl;
     const assumptions = [
-      `Extra profit is Schedule C profit for ${model.ownerId} in ${model.year}, after expenses — not gross revenue or bank deposits.`,
+      `Extra profit means additional business profit (Schedule C) for ${model.persons.find(p => p.id === model.ownerId)!.label.toLowerCase()} in ${model.year}, after expenses — not gross revenue or bank deposits.`,
       "Re-solved with the self-employed health insurance deduction and credit recalculated at each amount.",
-      "No additional SEP contribution; other income, premiums and household as entered.",
+      "No additional SEP-IRA contribution; other income, premiums and household as entered.",
       `The credit stops when ACA household income is above ${formatUsd(threshold)} (400% of the $${fpl.toLocaleString("en-US")} poverty line for ${model.familySize}).`,
     ];
     const warnings = modelWarnings([model], input);
@@ -94,7 +97,7 @@ export async function assessCurrentRisk(raw: CaseInput): Promise<RiskAssessment>
       if (hasRanges(model)) {
         const high = solveCredit(modelAt(model, UNCERTAINTY_SCALE), NO_VARIATION, false);
         highCrosses = high.ptc.ptc === 0;
-        assumptions.push(highCrosses ? "At the high end of your declared income ranges the credit would be lost." : "The credit holds at the high end of your declared income ranges.");
+        assumptions.push(highCrosses ? "With every declared income range at its high end, the credit would be lost." : "The credit holds for every combination of your declared income ranges (checked at the all-high combination, the highest possible household income).");
       }
       state = highCrosses || (headroom !== null && headroom * 100 < threshold * AT_RISK_SHARE) ? "at_risk" : "below_cliff";
       assumptions.push(`"At risk" means the remaining profit headroom is under ${AT_RISK_SHARE * 100}% of the threshold, or a declared range reaches it.`);
@@ -134,6 +137,39 @@ export async function calculateComparison(raw: CaseInput): Promise<ComparisonRes
       baselineScenarioId: out.baselineScenarioId, recommendedScenarioId: out.recommendedScenarioId,
       scenarios: out.scenarios, warnings: [...modelWarnings([m0, m1], input), ...out.warnings],
     };
+  } catch (e) {
+    if (e instanceof EngineStop) return stopToBlocked(e, "years");
+    throw e;
+  }
+}
+
+export interface ReadyAgreedPlanEvaluation extends AgreedPlanOutcome {
+  status: "ready";
+  engineVersion: string;
+  rulesVersion: string;
+  calculationFingerprint: string;
+  caseId: string;
+}
+export type AgreedPlanEvaluation = ReadyAgreedPlanEvaluation | BlockedComparison;
+
+/**
+ * Re-evaluate an agreed plan's fixed decisions (receipts, expenses, SEP) on the current
+ * facts, without re-optimizing. Pass the previously saved scenario to get the changes.
+ * Call calculateComparison separately to see new options.
+ */
+export async function evaluateAgreedPlan(raw: CaseInput, plan: AgreedPlan, previous: ScenarioResult | null = null): Promise<AgreedPlanEvaluation> {
+  const issues = new Issues();
+  const input = parseCase(raw, issues);
+  const m0 = input ? buildYearModel(input, 0, issues) : null;
+  const m1 = input ? buildYearModel(input, 1, issues) : null;
+  if (input && plan.decisions.receipts.some(r => r.amountCents > 0)) checkOpportunity(input, issues);
+  const blocked = issues.toBlocked();
+  if (blocked || !input || !m0 || !m1) return blocked!;
+  try {
+    const out = evaluateAgreed(input, [m0, m1], plan, previous);
+    return { status: "ready", engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION,
+      calculationFingerprint: await calculationFingerprint(input), caseId: input.id, ...out,
+      warnings: [...modelWarnings([m0, m1], input), ...out.warnings] };
   } catch (e) {
     if (e instanceof EngineStop) return stopToBlocked(e, "years");
     throw e;

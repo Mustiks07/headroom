@@ -2,55 +2,85 @@
  * One tax year: Schedule SE, SEP limit, coupled SEHI/PTC solution (Form 8962 +
  * Pub. 974 inequality), federal income tax in the supported range, and
  * spendable cash after the final APTC settlement.
+ *
+ * Rounding policy (r3): the return is prepared in whole dollars. Form 8962 and
+ * IRS e-file accept dollars only (2026 Form 8962 instructions, "Entering amounts
+ * from Form 1095-A"), and the Form 1040 instructions ("Rounding Off to Whole
+ * Dollars") require that, once any amount is rounded, all amounts are: add with
+ * cents, round only each line's total, 50 cents and up rounds up. Cash that
+ * actually moves (gross pay, payroll withholding, premiums, APTC paid to the
+ * insurer) stays in cents.
  */
 import type { TraceItem, YearResult } from "@/domain/contracts";
-import { divRound, formatUsd, mulRate, mulRatio, sum, toWholeDollars } from "./money";
+import { divRound, formatUsd, mulRate, sum, toWholeDollars, type Rate } from "./money";
 import { EngineStop, type Variation, type YearModel } from "./model";
 import type { Filing, RulePack } from "./rules";
+
+/** Whole-dollar line amount (cents in, cents out). */
+export const W = (cents: number): number => toWholeDollars(cents, "half_up");
+/** Exact cents × rate, rounded once to whole dollars (no intermediate cent rounding). */
+export const mulW = (cents: number, r: Rate, mode: "half_up" | "floor" = "half_up"): number =>
+  divRound(cents * r.num, r.den * 100, mode) * 100;
 
 // ---------------------------------------------------------------- Schedule SE --
 export interface SeResult { personId: string; netEarnings: number; ssPart: number; medicarePart: number; total: number; half: number }
 
 /** Schedule SE for one individual. The Social Security cap uses THAT person's own SS wages only. */
 export function scheduleSe(rules: RulePack, personId: string, profit: number, ownSocialSecurityWages: number): SeResult {
-  const netEarnings = mulRate(Math.max(0, profit), rules.se.factor);              // line 4a/6
+  const netEarnings = mulW(Math.max(0, W(profit)), rules.se.factor);              // line 4a/6
   if (netEarnings < rules.se.minimumNet) return { personId, netEarnings: 0, ssPart: 0, medicarePart: 0, total: 0, half: 0 };
-  const ssRoom = Math.max(0, rules.se.wageBase - ownSocialSecurityWages);         // lines 7-9
-  const ssPart = mulRate(Math.min(netEarnings, ssRoom), rules.se.ss);              // line 10
-  const medicarePart = mulRate(netEarnings, rules.se.medicare);                    // line 11
+  const ssRoom = Math.max(0, rules.se.wageBase - W(ownSocialSecurityWages));       // lines 7-9
+  const ssPart = mulW(Math.min(netEarnings, ssRoom), rules.se.ss);                 // line 10
+  const medicarePart = mulW(netEarnings, rules.se.medicare);                       // line 11
   const total = ssPart + medicarePart;                                             // line 12
-  return { personId, netEarnings, ssPart, medicarePart, total, half: divRound(total, 2, "half_up") }; // line 13
+  return { personId, netEarnings, ssPart, medicarePart, total, half: divRound(total, 200, "half_up") * 100 }; // line 13
 }
 
 // ----------------------------------------------------------------- Form 8962 --
 export interface PtcResult { line5: number; figure: number; contribution8a: number; contribution8b: number | null; ptc: number }
 
-export function line5Of(magiCents: number, fplDollars: number): number {
-  // line 5 = household income ÷ FPL × 100, truncated; above 4 × FPL → 401.
-  if (magiCents > 400 * fplDollars) return 401;
-  return Math.floor(Math.max(0, magiCents) / fplDollars);
+/** Form 8962 columns (a) premium, (b) SLCSP, (c) APTC in whole dollars: annual totals (line 11) or each month (lines 12–23). */
+export interface Form8962Amounts { premium: number[]; benchmark: number[]; aptc: number[]; premiumTotal: number; benchmarkTotal: number; aptcTotal: number }
+const amountsCache = new WeakMap<YearModel, Form8962Amounts>();
+export function form8962Amounts(model: YearModel): Form8962Amounts {
+  const hit = amountsCache.get(model);
+  if (hit) return hit;
+  const premium = model.premium.map(W), benchmark = model.benchmark.map(W), aptc = model.aptc.map(W);
+  const out = model.uniformCoverage
+    ? { premium, benchmark, aptc, premiumTotal: W(sum(model.premium)), benchmarkTotal: W(sum(model.benchmark)), aptcTotal: W(sum(model.aptc)) }
+    : { premium, benchmark, aptc, premiumTotal: sum(premium), benchmarkTotal: sum(benchmark), aptcTotal: sum(aptc) };
+  amountsCache.set(model, out);
+  return out;
 }
 
-/** Premium tax credit for a household income, Form 8962 lines 1–24. Below 100% returns no credit (exception not modeled). */
+export function line5Of(householdIncomeCents: number, fplDollars: number): number {
+  // Worksheet 2: above 4 × FPL → 401; otherwise income ÷ FPL × 100 with decimals dropped.
+  if (householdIncomeCents > 400 * fplDollars) return 401;
+  return Math.floor(Math.max(0, householdIncomeCents) / fplDollars);
+}
+
+/** Premium tax credit for household income (line 3, whole dollars). Below 100% returns no credit (exception not modeled). */
 export function ptcFor(model: YearModel, magiCents: number): PtcResult {
   const fpl = model.rules.fplDollars(model.familySize);
-  const line5 = line5Of(magiCents, fpl);
+  const line3 = W(magiCents);
+  const line5 = line5Of(line3, fpl);
   if (!model.ptcEligible || line5 > 400 || line5 < 100) return { line5, figure: 0, contribution8a: 0, contribution8b: null, ptc: 0 };
   const figure = model.rules.applicableFigure(line5);
-  const contribution8a = toWholeDollars(mulRatio(magiCents, figure, 10000, "half_up"));  // line 8a, whole dollars
-  if (model.uniformCoverage) {                                                            // line 11 (annual)
-    const maxAssist = Math.max(0, sum(model.benchmark) - contribution8a);
-    return { line5, figure, contribution8a, contribution8b: null, ptc: Math.min(sum(model.premium), maxAssist) };
+  const contribution8a = divRound(line3 * figure, 1000000, "half_up") * 100;               // line 8a, whole dollars
+  const a = form8962Amounts(model);
+  if (model.uniformCoverage) {                                                             // line 11 (annual)
+    return { line5, figure, contribution8a, contribution8b: null, ptc: Math.min(a.premiumTotal, Math.max(0, a.benchmarkTotal - contribution8a)) };
   }
-  const contribution8b = toWholeDollars(divRound(contribution8a, 12, "half_up"));         // line 8b, whole dollars
-  let ptc = 0;                                                                             // lines 12-23 (monthly)
-  for (let m = 0; m < 12; m++) ptc += Math.min(model.premium[m], Math.max(0, model.benchmark[m] - contribution8b));
+  const contribution8b = W(divRound(contribution8a, 12, "half_up"));                        // line 8b, whole dollars
+  let ptc = 0;                                                                              // lines 12-23 (monthly)
+  for (let m = 0; m < 12; m++) ptc += Math.min(a.premium[m], Math.max(0, a.benchmark[m] - contribution8b));
   return { line5, figure, contribution8a, contribution8b, ptc };
 }
 
 // ------------------------------------------------------ SEHI / PTC solution --
 export interface CreditSolution {
   ownerProfit: number;
+  profitLine: number;
   se: SeResult[];
   seTotal: number;
   halfSe: number;
@@ -58,7 +88,9 @@ export interface CreditSolution {
   sepExisting: number;
   sepAdditional: number;
   sepTotal: number;
+  sepLine: number;
   sepMax: number;
+  wagesLine: number;
   agiBeforeSehi: number;
   magiBeforeSehi: number;
   sehiLimit: number;
@@ -69,29 +101,33 @@ export interface CreditSolution {
   magi: number;
   fplDollars: number;
   ptc: PtcResult;
+  /** Form 8962 premium and APTC totals (whole dollars). */
   premiumTotal: number;
   aptcTotal: number;
   below100: boolean;
 }
 
-/** Legal owner SEP maximum for a profit: 20% of (net profit − deductible half of SE tax), Pub. 560, capped. */
-export function sepMaximum(rules: RulePack, profit: number, ownerHalfSe: number): number {
-  return Math.min(rules.sep.cap, mulRate(Math.max(0, profit - ownerHalfSe), rules.sep.rate, "down"));
+/** Legal owner SEP maximum: 20% of (net profit − deductible half of SE tax), Pub. 560 rate worksheet; whole dollars down; annual cap. */
+export function sepMaximum(rules: RulePack, profitLine: number, ownerHalfSe: number): number {
+  return Math.min(rules.sep.cap, mulW(Math.max(0, profitLine - ownerHalfSe), rules.sep.rate, "floor"));
 }
 
 /**
  * Coupled SEHI deduction and PTC.
  *
- * Valid pairs (Pub. 974 / Rev. Proc. 2014-41): 0 ≤ d ≤ earned-income and premium
- * limit, PTC computed from MAGI after d, and d + PTC ≤ eligible premiums. Equality
- * is NOT required. Choice: the largest valid whole-dollar d. Proof of optimality
- * inside the supported region (household income ≥ 100% FPL):
- *  - MAGI falls 1:1 with d; line 5 and the applicable figure are non-increasing
- *    in d, so the required contribution is non-increasing and PTC non-decreasing;
- *  - income tax after credits is non-increasing in d (taxable income and AGI-based
- *    phaseouts only fall);
- *  - hence spendable cash is non-decreasing in d, and g(d) = d + PTC(d) is strictly
- *    increasing, so the valid set is an interval [0, d*] found exactly by bisection
+ * Valid pairs (Pub. 974, 2025, "Self-Employed Health Insurance Deduction and PTC":
+ * "you may use any computation method that results in reporting amounts that
+ * satisfy the rules for both the deduction and PTC, as long as the sum of the
+ * deduction claimed for the premiums and the PTC computed, taking the deduction
+ * into account, is less than or equal to the enrollment premiums"):
+ * 0 ≤ d ≤ earned-income and premium limit, PTC from household income after d,
+ * d + PTC ≤ enrollment premiums. Equality is NOT required. Choice: the largest
+ * valid whole-dollar d. Proof of optimality inside household income ≥ 100% FPL:
+ *  - household income falls 1:1 with d; line 5 and the applicable figure are
+ *    non-increasing in d, so the contribution is non-increasing and PTC non-decreasing;
+ *  - income tax after credits is non-increasing in d;
+ *  - so spendable cash is non-decreasing in d, and g(d) = d + PTC(d) is strictly
+ *    increasing; the valid set is an interval [0, d*] found exactly by bisection
  *    even across PTC discontinuities (133%, 400%, rounding steps).
  * Deductions that would push income below 100% FPL are not considered because
  * the below-100% eligibility exception is not modeled (reported in the trace).
@@ -100,27 +136,30 @@ export function solveCredit(model: YearModel, v: Variation, checkSepLimit = true
   const rules = model.rules;
   const owner = model.persons.find(p => p.id === model.ownerId)!;
   const ownerProfit = owner.amounts.scheduleCProfit + v.profitDelta;
-  if (ownerProfit < 0) throw new EngineStop("infeasible", "LOSS", "This option would create a Schedule C loss, which is not supported.");
+  if (ownerProfit < 0) throw new EngineStop("infeasible", "LOSS", "This option would create a business loss (Schedule C), which is not supported.");
+  const profitLine = W(ownerProfit);
   const se = model.persons.map(p => scheduleSe(rules, p.id, p.id === model.ownerId ? ownerProfit : p.amounts.scheduleCProfit,
     p.amounts.socialSecurityWages));
   const seTotal = sum(se.map(s => s.total));
   const halfSe = sum(se.map(s => s.half));
   const ownerHalfSe = se.find(s => s.personId === model.ownerId)!.half;
   const sepExisting = owner.amounts.existingSepContribution;
-  if (v.additionalSep < 0) throw new EngineStop("infeasible", "SEP_NEGATIVE", "A SEP contribution cannot be negative.");
+  if (v.additionalSep < 0) throw new EngineStop("infeasible", "SEP_NEGATIVE", "A SEP-IRA contribution cannot be negative.");
   const sepTotal = sepExisting + v.additionalSep;
-  const sepMax = sepMaximum(rules, ownerProfit, ownerHalfSe);
+  const sepMax = sepMaximum(rules, profitLine, ownerHalfSe);
   if (checkSepLimit && sepTotal > sepMax) {
     throw new EngineStop("infeasible", "SEP_OVER_LIMIT",
-      `Total SEP contributions ${formatUsd(sepTotal)} exceed the ${model.year} owner limit ${formatUsd(sepMax)}.`);
+      `Total SEP-IRA contributions of ${formatUsd(sepTotal)} would exceed the ${model.year} limit of ${formatUsd(sepMax)} for this business profit.`);
   }
+  const sepLine = W(sepTotal);
   const all = (f: keyof typeof owner.amounts) => sum(model.persons.map(p => p.amounts[f]));
-  const otherProfit = sum(model.persons.filter(p => p.id !== model.ownerId).map(p => p.amounts.scheduleCProfit));
-  const agiBeforeSehi = all("w2Box1") + all("taxableInterest") + ownerProfit + otherProfit - halfSe - sepTotal;
-  const magiBeforeSehi = agiBeforeSehi + all("taxExemptInterest");
-  const premiumTotal = sum(model.premium);
+  const otherProfit = W(sum(model.persons.filter(p => p.id !== model.ownerId).map(p => p.amounts.scheduleCProfit)));
+  const wagesLine = W(all("w2Box1"));
+  const agiBeforeSehi = wagesLine + W(all("taxableInterest")) + profitLine + otherProfit - halfSe - sepLine;
+  const magiBeforeSehi = agiBeforeSehi + W(all("taxExemptInterest"));
+  const a = form8962Amounts(model);
   const sehiLimit = model.sehiEligible
-    ? toWholeDollars(Math.min(premiumTotal, Math.max(0, ownerProfit - ownerHalfSe - sepTotal)), "floor") : 0;
+    ? toWholeDollars(Math.min(sum(model.premium), Math.max(0, profitLine - ownerHalfSe - sepLine)), "floor") : 0;
   const fplDollars = rules.fplDollars(model.familySize);
   const below100 = model.ptcEligible && magiBeforeSehi < 100 * fplDollars;
   let dMax = sehiLimit / 100;
@@ -133,17 +172,17 @@ export function solveCredit(model: YearModel, v: Variation, checkSepLimit = true
   let lo = 0, hi = dMax;                       // g(0) ≤ premiums always (PTC ≤ premiums)
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (g(mid) <= premiumTotal) lo = mid; else hi = mid - 1;
+    if (g(mid) <= a.premiumTotal) lo = mid; else hi = mid - 1;
   }
   const sehi = lo * 100;
   const magi = magiBeforeSehi - sehi;
-  return { ownerProfit, se, seTotal, halfSe, ownerHalfSe, sepExisting, sepAdditional: v.additionalSep, sepTotal, sepMax,
-    agiBeforeSehi, magiBeforeSehi, sehiLimit, sehi, sehiCappedAt100: sehiCappedAt100 && lo === dMax,
-    agi: agiBeforeSehi - sehi, magi, fplDollars, ptc: ptcFor(model, magi), premiumTotal, aptcTotal: sum(model.aptc), below100 };
+  return { ownerProfit, profitLine, se, seTotal, halfSe, ownerHalfSe, sepExisting, sepAdditional: v.additionalSep, sepTotal, sepLine, sepMax,
+    wagesLine, agiBeforeSehi, magiBeforeSehi, sehiLimit, sehi, sehiCappedAt100: sehiCappedAt100 && lo === dMax,
+    agi: agiBeforeSehi - sehi, magi, fplDollars, ptc: ptcFor(model, magi), premiumTotal: a.premiumTotal, aptcTotal: a.aptcTotal, below100 };
 }
 
 // ------------------------------------------------------------ income tax --
-function scheduleTax(brackets: Array<{ top: number; rate: { num: number; den: number } }>, taxable: number): { tax: number; exact: [number, number] } {
+function scheduleTax(brackets: Array<{ top: number; rate: { num: number; den: number } }>, taxable: number): [number, number] {
   // Exact sum of bracket portions as a single rational with the common denominator.
   const den = Math.max(...brackets.map(b => b.rate.den));
   let numerator = 0, prev = 0;
@@ -153,20 +192,24 @@ function scheduleTax(brackets: Array<{ top: number; rate: { num: number; den: nu
     prev = b.top;
   }
   if (taxable > prev) throw new EngineStop("unsupported", "TAX_RANGE", "Taxable income is above the transcribed tax brackets.");
-  return { tax: divRound(numerator, den, "half_up"), exact: [numerator, den] };
+  return [numerator, den];
 }
 
-/** Tax Table (under $100,000: tax on the band midpoint, rounded to whole dollars) or Tax Computation Worksheet. */
+/**
+ * Tax Table below $100,000 (tax on the band midpoint, whole dollars: $5/$10 bands
+ * to $25, $25 bands to $3,000, $50 bands to $100,000), else the Tax Computation
+ * Worksheet rounded to whole dollars. Verified against every row of the 2026 draft table.
+ */
 export function regularTax(rules: RulePack, filing: Filing, taxable: number): number {
   const brackets = rules.brackets[filing];
-  if (taxable >= rules.taxTableUpper) return scheduleTax(brackets, taxable).tax;
+  const exact = (x: number) => { const [num, den] = scheduleTax(brackets, x); return divRound(num, den * 100, "half_up") * 100; };
+  if (taxable >= rules.taxTableUpper) return exact(taxable);
   if (taxable < 500) return 0;
   let lo: number, width: number;
   if (taxable < 2500) { width = 1000; lo = 500 + Math.floor((taxable - 500) / width) * width; }
   else if (taxable < 300000) { width = 2500; lo = 2500 + Math.floor((taxable - 2500) / width) * width; }
   else { width = 5000; lo = 300000 + Math.floor((taxable - 300000) / width) * width; }
-  const [num, den] = scheduleTax(brackets, lo + width / 2).exact;
-  return toWholeDollars(divRound(num, den, "half_up"));
+  return exact(lo + width / 2);
 }
 
 // ------------------------------------------------------------- full year --
@@ -175,6 +218,7 @@ export interface YearComputation {
   standardDeduction: number;
   taxableBeforeQbi: number;
   qbi: number;
+  qbiBeforeMinimum: number;
   qbiDeduction: number;
   taxable: number;
   regularTax: number;
@@ -204,20 +248,22 @@ export function evaluateYear(model: YearModel, v: Variation): YearComputation {
   const taxableBeforeQbi = Math.max(0, c.agi - standardDeduction);
   if (taxableBeforeQbi > rules.supportedTaxableBeforeQbi[f]) {
     throw new EngineStop("unsupported", "TAX_RANGE",
-      `${model.year} taxable income would exceed ${formatUsd(rules.supportedTaxableBeforeQbi[f])}, where QBI wage/SSTB limits and higher brackets apply; this range is not supported.`);
+      `${model.year} taxable income would exceed ${formatUsd(rules.supportedTaxableBeforeQbi[f])}, the QBI threshold where wage and specified-service limits begin; this range is not supported.`);
   }
-  const qbi = Math.max(0, c.ownerProfit - c.ownerHalfSe - c.sepTotal - c.sehi);
-  let qbiComponent = mulRate(qbi, rules.qbi.rate);
-  if (qbi >= rules.qbi.minimumQbi) qbiComponent = Math.max(qbiComponent, rules.qbi.minimumDeduction);
-  const qbiDeduction = Math.min(qbiComponent, mulRate(taxableBeforeQbi, rules.qbi.rate));
-  const taxable = taxableBeforeQbi - qbiDeduction;
+  // Form 8995 (2026+): line 15 = smaller of 20% of QBI and 20% of taxable income; line 17 = greater of line 15
+  // and the minimum deduction when active QBI is at least the qualifying amount (material participation assumed).
+  const qbi = Math.max(0, c.profitLine - c.ownerHalfSe - c.sepLine - c.sehi);
+  const qbiBeforeMinimum = Math.min(mulW(qbi, rules.qbi.rate), mulW(taxableBeforeQbi, rules.qbi.rate));
+  const qbiDeduction = qbi >= rules.qbi.minimumQbi ? Math.max(qbiBeforeMinimum, rules.qbi.minimumDeduction) : qbiBeforeMinimum;
+  const taxable = Math.max(0, taxableBeforeQbi - qbiDeduction);
   const tax = regularTax(rules, f, taxable);
 
-  const earnedIncome = sum(model.persons.map(p => p.amounts.w2Box1)) + Math.max(0, c.ownerProfit - c.ownerHalfSe);
+  // Schedule 8812 Earned Income Worksheet: wages + Schedule C profit − deductible half of SE tax.
+  const earnedIncome = Math.max(0, c.wagesLine + c.profitLine - c.halfSe);
   const eitcBound = rules.eitcBound[f][Math.min(3, model.eitcChildren)];
   if (Math.max(c.agi, earnedIncome) < eitcBound) {
     throw new EngineStop("unsupported", "EITC_POSSIBLE",
-      `${model.year} income is low enough that the earned income tax credit may apply; it is not calculated, so take-home results are not supported here.`);
+      `${model.year} income is below ${formatUsd(eitcBound)}, where the earned income tax credit can apply; it is not calculated, so take-home results are not supported here.`);
   }
   const ctcGross = model.qualifyingChildren * rules.ctc.perChild + model.otherDependents * rules.ctc.otherDependent;
   const excess = Math.max(0, c.agi - rules.ctc.phaseoutThreshold[f]);
@@ -231,102 +277,108 @@ export function evaluateYear(model: YearModel, v: Variation): YearComputation {
         `The ${model.year} refundable child tax credit amount is not in this rule pack; this income level is not supported for ${model.year}.`);
     }
     if (model.qualifyingChildren >= 3) {
-      throw new EngineStop("unsupported", "ACTC_THREE_PLUS", "The refundable child tax credit for three or more children (Part II-B) is not modeled.");
+      throw new EngineStop("unsupported", "ACTC_THREE_PLUS", "The refundable child tax credit for three or more children (Schedule 8812 Part II-B) is not modeled.");
     }
     refundableCtc = Math.min(unused, model.qualifyingChildren * rules.ctc.refundablePerChild,
-      mulRate(Math.max(0, earnedIncome - rules.ctc.earnedFloor), rules.ctc.refundableRate));
+      mulW(Math.max(0, earnedIncome - rules.ctc.earnedFloor), rules.ctc.refundableRate));
   }
-  const medicareWages = sum(model.persons.map(p => p.amounts.medicareWages));
+  const medicareWages = W(sum(model.persons.map(p => p.amounts.medicareWages)));
   const thr = rules.addlMedicare.threshold[f];
   const seIncome = sum(c.se.map(s => s.netEarnings));
-  const additionalMedicare = mulRate(Math.max(0, medicareWages - thr), rules.addlMedicare.rate)
-    + mulRate(Math.max(0, seIncome - Math.max(0, thr - medicareWages)), rules.addlMedicare.rate);
-  const nii = sum(model.persons.map(p => p.amounts.taxableInterest));
-  const niit = mulRate(Math.min(nii, Math.max(0, c.agi - rules.niit.threshold[f])), rules.niit.rate);
+  const additionalMedicare = mulW(Math.max(0, medicareWages - thr), rules.addlMedicare.rate)        // Form 8959 Part I
+    + mulW(Math.max(0, seIncome - Math.max(0, thr - medicareWages)), rules.addlMedicare.rate);    // Part II
+  const nii = W(sum(model.persons.map(p => p.amounts.taxableInterest)));
+  const niit = mulW(Math.min(nii, Math.max(0, c.agi - rules.niit.threshold[f])), rules.niit.rate);
   const federalIncomeTax = tax - nonrefundableCredit - refundableCtc + additionalMedicare + niit;
   const employeeFica = sum(model.persons.map(p => mulRate(p.amounts.socialSecurityWages, rules.fica.ss) + mulRate(p.amounts.medicareWages, rules.fica.medicare)));
   const cashIncome = sum(model.persons.map(p => p.amounts.grossWages - p.amounts.payrollPretaxDeductions
     + p.amounts.taxableInterest + p.amounts.taxExemptInterest + (p.id === model.ownerId ? c.ownerProfit : p.amounts.scheduleCProfit)));
-  const netPremium = c.premiumTotal - c.ptc.ptc;          // = premiums paid net of APTC + settlement; counted once
-  const settlement = c.aptcTotal - c.ptc.ptc;
+  const settlement = c.aptcTotal - c.ptc.ptc;                                       // Form 8962 line 29 / 26
+  // Premiums actually paid net of the advance, plus the settlement: equals premiums − allowed credit, counted once.
+  const netPremium = sum(model.premium) - sum(model.aptc) + settlement;
   const spendable = cashIncome - employeeFica - c.seTotal - federalIncomeTax - netPremium - c.sepTotal;
-  return { credit: c, standardDeduction, taxableBeforeQbi, qbi, qbiDeduction, taxable, regularTax: tax, childCredits,
+  return { credit: c, standardDeduction, taxableBeforeQbi, qbi, qbiBeforeMinimum, qbiDeduction, taxable, regularTax: tax, childCredits,
     nonrefundableCredit, refundableCtc, additionalMedicare, niit, federalIncomeTax, employeeFica, earnedIncome, cashIncome,
     netPremium, settlement, spendable, additionalRetirement: v.additionalSep };
 }
 
 // ------------------------------------------------------------------ trace --
+type T = (id: string, label: string, amountCents: number | null, inputPaths: string[], sourceIds: string[], explanation: string) => TraceItem;
+const maker = (year: number): T => (id, label, amountCents, inputPaths, sourceIds, explanation) =>
+  ({ id: `${year}.${id}`, label: `${label} (${year})`, amountCents, inputPaths, sourceIds: [...new Set(sourceIds)], explanation });
+
 export function creditTrace(model: YearModel, c: CreditSolution, extraPaths: string[] = []): TraceItem[] {
-  const y = model.year, yi = model.yearIndex, r = model.rules;
+  const y = model.year, yi = model.yearIndex, r = model.rules, t = maker(y);
   const inc = (field: string) => model.persons.filter(p => p.row >= 0).map(p => `years[${yi}].incomes[${p.row}].${field}`);
   const owner = model.persons.find(p => p.id === model.ownerId)!;
   const cov = (field: string) => [`years[${yi}].coverage[*].${field}`];
   const ev = model.evidenceIds;
-  const t = (id: string, label: string, amountCents: number | null, inputPaths: string[], sourceIds: string[], explanation: string): TraceItem =>
-    ({ id: `${y}.${id}`, label, amountCents, inputPaths, sourceIds: [...new Set(sourceIds)], explanation });
-  const items: TraceItem[] = [
-    t("owner_profit", "Schedule C net profit (business owner)", c.ownerProfit, [`years[${yi}].incomes[${owner.row}].scheduleCProfit`, ...extraPaths], ev,
-      "Forecast net profit for the full year, plus this option's receipts minus its expenses paid this year."),
-    ...c.se.filter(s => s.total > 0).map(s => t(`se_tax.${s.personId}`, `Self-employment tax (${s.personId})`, s.total,
-      [`years[${yi}].incomes[${model.persons.find(p => p.id === s.personId)!.row}].socialSecurityWages`], r.se.sourceIds,
-      `Schedule SE: net earnings ${formatUsd(s.netEarnings)} (92.35% of profit). Social Security part ${formatUsd(s.ssPart)} uses this person's own wage-base room; Medicare part ${formatUsd(s.medicarePart)}.`)),
-    t("half_se", "Deductible half of SE tax", c.halfSe, [], r.se.sourceIds, "Schedule SE line 13, an adjustment to income."),
-    t("sep", "SEP contributions deducted", c.sepTotal, [`years[${yi}].incomes[${owner.row}].existingSepContribution`], r.sep.sourceIds,
-      `Existing ${formatUsd(c.sepExisting)} + additional ${formatUsd(c.sepAdditional)}. Owner limit ${formatUsd(c.sepMax)} (20% of net profit after half SE tax). Retirement money, not spendable cash.`),
+  const form = ["irs-i8962-2026-draft", ...r.applicableFigureSourceIds];
+  const fplLabel = `${r.coverageFplGuidelineYear} HHS poverty guideline`;
+  return [
+    t("owner_profit", `${owner.possessive} business profit`, c.ownerProfit, [`years[${yi}].incomes[${owner.row}].scheduleCProfit`, ...extraPaths], ev,
+      `Full-year Schedule C net profit forecast, plus this option's receipts minus its expenses paid in ${y}. Entered on the return as ${formatUsd(c.profitLine)}.`),
+    ...c.se.filter(s => s.total > 0).map(s => {
+      const person = model.persons.find(p => p.id === s.personId)!;
+      return t(`se_tax.${s.personId}`, `${person.possessive} self-employment tax`, s.total,
+        [`years[${yi}].incomes[${person.row}].socialSecurityWages`], r.se.sourceIds,
+        `Schedule SE: net earnings ${formatUsd(s.netEarnings)} (92.35% of profit). Social Security part ${formatUsd(s.ssPart)} uses only this person's own room under the ${y} wage base of ${formatUsd(r.se.wageBase)}; Medicare part ${formatUsd(s.medicarePart)}.`);
+    }),
+    t("half_se", "Deductible half of self-employment tax", c.halfSe, [], r.se.sourceIds, "Schedule SE line 13, an adjustment to income."),
+    t("sep", "SEP-IRA contributions deducted", c.sepTotal, [`years[${yi}].incomes[${owner.row}].existingSepContribution`], r.sep.sourceIds,
+      `Already planned ${formatUsd(c.sepExisting)} + this option ${formatUsd(c.sepAdditional)}. ${y} limit for this profit: ${formatUsd(c.sepMax)} (20% of net profit after half of SE tax, at most ${formatUsd(r.sep.cap)}). Retirement money, not spendable cash.`),
     t("sehi", "Self-employed health insurance deduction", c.sehi, [...cov("enrollmentPremium"), ...cov("sehiEligibilityConfirmed")], ["irs-pub-974", "headroom-engine-policy"],
-      `Largest whole-dollar deduction with deduction + PTC ≤ premiums (${formatUsd(c.premiumTotal)}) and deduction ≤ ${formatUsd(c.sehiLimit)} (premiums and net profit after half SE tax and SEP). Equality is not required.` +
-      (c.sehiCappedAt100 ? " Capped so household income stays at 100% FPL: the below-100% exception is not modeled, so the result may understate the household's options." : "")),
-    t("magi", "ACA household income (MAGI)", c.magi, [...inc("w2Box1"), ...inc("taxableInterest"), ...inc("taxExemptInterest")], ["irs-i8962-2026-draft"],
-      "AGI plus tax-exempt interest. Standard deduction and QBI do not reduce ACA income. Dependents have no income in the supported case."),
-    t("fpl", `Poverty line, family of ${model.familySize}`, c.fplDollars * 100, [`years[${yi}].taxFamilySize`], [r.fplSourceId],
-      `Prior-year HHS guideline, contiguous states. Credit requires income at or below 400% (${formatUsd(c.fplDollars * 400)}).`),
-    t("line5", "Income as % of poverty line (Form 8962 line 5)", null, [], ["irs-i8962-2026-draft"],
-      c.ptc.line5 > 400 ? "Above 400% → 401: no premium tax credit." : `${c.ptc.line5}% (truncated, not rounded).`),
-    t("contribution", "Required contribution (line 8a)", c.ptc.contribution8a, [], [...r.applicableFigureSourceIds],
+      `Largest whole-dollar deduction where deduction + premium tax credit ≤ enrollment premiums (${formatUsd(c.premiumTotal)}) and deduction ≤ ${formatUsd(c.sehiLimit)} (premiums, and profit after half of SE tax and SEP). Equality is not required.` +
+      (c.sehiCappedAt100 ? " Capped so household income stays at 100% of the poverty line: the below-100% exception is not modeled, so the household may have more options than shown." : "")),
+    t("magi", "Household income for the premium tax credit (ACA MAGI)", c.magi, [...inc("w2Box1"), ...inc("taxableInterest"), ...inc("taxExemptInterest")], form,
+      "Adjusted gross income plus tax-exempt interest (Form 8962 line 3). The standard deduction and QBI deduction do not reduce it. Dependents have no income in the supported case."),
+    t("fpl", `Poverty line for a family of ${model.familySize}`, c.fplDollars * 100, [`years[${yi}].taxFamilySize`], [r.fplSourceId],
+      `${fplLabel}, contiguous states (Form 8962 line 4). The credit requires household income at or below 400%: ${formatUsd(c.fplDollars * 400)}.`),
+    t("line5", "Income as a percentage of the poverty line (Form 8962 line 5)", null, [], form,
+      c.ptc.line5 > 400 ? "Above 400%: entered as 401, so no premium tax credit." : `${c.ptc.line5}% (decimals dropped, not rounded).`),
+    t("contribution", "Your required contribution (Form 8962 line 8a)", c.ptc.contribution8a, [], form,
       c.ptc.line5 > 400 || !model.ptcEligible ? "Not applicable." :
         `Household income × applicable figure ${(c.ptc.figure / 10000).toFixed(4)}, rounded to whole dollars. ${r.applicableFigureStatus}`),
-    t("ptc", "Premium tax credit allowed", c.ptc.ptc, [...cov("benchmarkPremium"), ...cov("enrollmentPremium"), ...cov("ptcEligibilityConfirmed")],
-      ["irs-i8962-2026-draft", ...r.applicableFigureSourceIds],
+    t("ptc", "Premium tax credit allowed", c.ptc.ptc, [...cov("benchmarkPremium"), ...cov("enrollmentPremium"), ...cov("ptcEligibilityConfirmed")], form,
       !model.ptcEligible ? "Not eligible for the credit in any month (as entered)." :
-        model.uniformCoverage ? "Annual calculation (line 11): smaller of enrollment premiums and benchmark minus contribution."
-          : `Monthly calculation (lines 12–23) with monthly contribution ${formatUsd(c.ptc.contribution8b ?? 0)}.`),
-    t("aptc", "Advance credit paid during the year", c.aptcTotal, cov("advancePtc"), ev, "Sum of monthly advance payments."),
-    t("settlement", "Settlement at filing (+ repay / − receive)", c.aptcTotal - c.ptc.ptc, [], ["irs-ptc-qa"],
-      `Advance minus allowed credit. No repayment cap applies after 2025. Already inside net premium cost; not subtracted again. Settled on the ${y} return (${r.returnDueDate}).`),
+        model.uniformCoverage ? "Annual calculation (line 11): the smaller of enrollment premiums and benchmark premium minus your contribution, in whole dollars."
+          : `Monthly calculation (lines 12–23) with a monthly contribution of ${formatUsd(c.ptc.contribution8b ?? 0)}.`),
+    t("aptc", "Advance credit paid to your insurer", c.aptcTotal, cov("advancePtc"), ev, "Sum of the monthly advance payments (whole dollars on Form 8962)."),
+    t("settlement", "Settlement on the return (+ repay / − receive)", c.aptcTotal - c.ptc.ptc, [], ["irs-ptc-qa", "irs-rp-2025-32"],
+      `Advance minus allowed credit. From 2026 there is no repayment cap. Already included in the net premium cost and not subtracted again. Settled on the ${y} return due ${r.returnDueDate}.`),
   ];
-  return items;
 }
 
 export function yearTrace(model: YearModel, yc: YearComputation, extraPaths: string[] = []): TraceItem[] {
-  const y = model.year, r = model.rules, ev = model.evidenceIds, yi = model.yearIndex;
-  const t = (id: string, label: string, amountCents: number | null, inputPaths: string[], sourceIds: string[], explanation: string): TraceItem =>
-    ({ id: `${y}.${id}`, label, amountCents, inputPaths, sourceIds: [...new Set(sourceIds)], explanation });
+  const y = model.year, r = model.rules, ev = model.evidenceIds, yi = model.yearIndex, t = maker(y);
   const inc = (field: string) => model.persons.filter(p => p.row >= 0).map(p => `years[${yi}].incomes[${p.row}].${field}`);
   return [
     ...creditTrace(model, yc.credit, extraPaths),
-    t("agi", "Adjusted gross income", yc.credit.agi, inc("w2Box1"), ev, "W-2 box 1 + taxable interest + net profit − half SE tax − SEP − SEHI."),
-    t("standard_deduction", "Standard deduction", yc.standardDeduction, ["filingStatus"], [r.bracketSourceId], "Itemizing is outside the supported case."),
-    t("qbi_deduction", "Qualified business income deduction", yc.qbiDeduction, [], [r.qbi.sourceId],
-      `20% of QBI ${formatUsd(yc.qbi)} (profit after half SE tax, SEP and SEHI), limited to 20% of taxable income before QBI; ${formatUsd(r.qbi.minimumDeduction)} minimum when QBI ≥ ${formatUsd(r.qbi.minimumQbi)} (material participation assumed). Below the wage/SSTB threshold.`),
-    t("taxable_income", "Taxable income", yc.taxable, [], [r.bracketSourceId], "AGI − standard deduction − QBI deduction."),
+    t("agi", "Adjusted gross income", yc.credit.agi, inc("w2Box1"), ev, "W-2 taxable wages + taxable interest + business profit − half of SE tax − SEP − health insurance deduction, in whole dollars."),
+    t("standard_deduction", "Standard deduction", yc.standardDeduction, ["filingStatus"], [r.bracketSourceId], `${y} amount for this filing status. Itemizing is outside the supported case.`),
+    t("qbi_deduction", "Qualified business income deduction", yc.qbiDeduction, [], [r.qbi.sourceId, "irs-i8995"],
+      `Form 8995: 20% of qualified business income ${formatUsd(yc.qbi)} (profit after half of SE tax, SEP and the health insurance deduction), limited to 20% of taxable income before this deduction (${formatUsd(yc.qbiBeforeMinimum)}); ` +
+      `then at least ${formatUsd(r.qbi.minimumDeduction)} when that income is ${formatUsd(r.qbi.minimumQbi)} or more (${y} amounts; assumes you materially participate in the business). Below the ${formatUsd(r.supportedTaxableBeforeQbi[model.filing])} threshold.`),
+    t("taxable_income", "Taxable income", yc.taxable, [], [r.bracketSourceId], "Adjusted gross income − standard deduction − QBI deduction (not below zero)."),
     t("regular_tax", "Income tax before credits", yc.regularTax, [], [r.bracketSourceId, "irs-i1040-tax-table"],
-      yc.taxable < r.taxTableUpper ? "Tax Table method: rate schedule at the $50 band midpoint, rounded to whole dollars." : "Tax Computation Worksheet (rate schedule)."),
-    t("child_credits", "Child tax credit / credit for other dependents", yc.nonrefundableCredit + yc.refundableCtc, ["people[*].qualifyingChildForCtc"], r.ctc.sourceIds,
-      `Credit after phaseout ${formatUsd(yc.childCredits)}: nonrefundable ${formatUsd(yc.nonrefundableCredit)}, refundable ${formatUsd(yc.refundableCtc)}. Required SSNs assumed.`),
-    t("other_taxes", "Additional Medicare tax + net investment income tax", yc.additionalMedicare + yc.niit, inc("medicareWages"), [r.addlMedicare.sourceId, r.niit.sourceId],
-      `Additional Medicare ${formatUsd(yc.additionalMedicare)}; NIIT ${formatUsd(yc.niit)}.`),
+      yc.taxable < r.taxTableUpper ? `Tax Table method with ${y} brackets: tax at the midpoint of the $50 (or smaller) band, rounded to whole dollars.` : `Tax Computation Worksheet with ${y} brackets.`),
+    t("child_credits", "Child tax credit and credit for other dependents", yc.nonrefundableCredit + yc.refundableCtc, ["people[*].qualifyingChildForCtc"], r.ctc.sourceIds,
+      `${y}: ${formatUsd(r.ctc.perChild)} per qualifying child, ${formatUsd(r.ctc.otherDependent)} per other dependent, after phaseout ${formatUsd(yc.childCredits)}. Used against tax ${formatUsd(yc.nonrefundableCredit)}; refundable part ${formatUsd(yc.refundableCtc)}` +
+      (r.ctc.refundablePerChild !== null ? ` (up to ${formatUsd(r.ctc.refundablePerChild)} per child, 15% of earned income over ${formatUsd(r.ctc.earnedFloor)}).` : ".") + " Required Social Security numbers assumed."),
+    t("other_taxes", "Additional Medicare tax and net investment income tax", yc.additionalMedicare + yc.niit, inc("medicareWages"), [r.addlMedicare.sourceId, r.niit.sourceId],
+      `Additional Medicare tax ${formatUsd(yc.additionalMedicare)}; net investment income tax ${formatUsd(yc.niit)}.`),
     t("federal_income_tax", "Federal income tax after credits", yc.federalIncomeTax, [], [r.bracketSourceId],
-      "Regular tax − child credits (incl. refundable part) + additional Medicare + NIIT. Excludes SE tax and the PTC settlement. State income tax: none in TX/FL/TN."),
-    t("employee_fica", "Employee Social Security and Medicare withheld", yc.employeeFica, [...inc("socialSecurityWages"), ...inc("medicareWages")], [r.fica.sourceId],
-      "6.2% of each person's SS wages + 1.45% of Medicare wages (single employer per person)."),
+      "Tax − child credits (including the refundable part) + additional Medicare tax + net investment income tax. Excludes SE tax and the premium tax credit settlement. No state income tax in TX, FL or TN."),
+    t("employee_fica", "Social Security and Medicare withheld from pay", yc.employeeFica, [...inc("socialSecurityWages"), ...inc("medicareWages")], [r.fica.sourceId],
+      "6.2% of each person's Social Security wages + 1.45% of Medicare wages (one employer per person)."),
     t("cash_income", "Cash income before taxes and premiums", yc.cashIncome, [...inc("grossWages"), ...inc("payrollPretaxDeductions")], ev,
-      "Gross pay − payroll pre-tax deductions + net profit + taxable and tax-exempt interest."),
-    t("net_premium", "Health premiums after final credit", yc.netPremium, [`years[${yi}].coverage[*].enrollmentPremium`], ["irs-i8962-2026-draft"],
-      "Enrollment premiums − allowed PTC. Equals premiums paid net of advance + settlement, so the settlement is not counted twice."),
-    t("spendable", "Spendable cash after final settlement", yc.spendable, [], ["headroom-engine-policy"],
-      `Cash income − FICA − SE tax − federal income tax − net premiums − SEP contributions. After eventual settlement of the ${y} return, not a December 31 bank balance.`),
+      "Gross pay − pre-tax payroll deductions + business profit + taxable and tax-exempt interest."),
+    t("net_premium", "Health premiums after the final credit", yc.netPremium, [`years[${yi}].coverage[*].enrollmentPremium`], ["irs-i8962-2026-draft"],
+      "Premiums paid during the year net of the advance, plus the settlement. The settlement is counted here once."),
+    t("spendable", "Spendable cash after the final settlement", yc.spendable, [], ["headroom-engine-policy"],
+      `Cash income − payroll taxes − SE tax − federal income tax − net premiums − SEP contributions. Measured after the ${y} return settles, not a December 31 bank balance.`),
     t("retirement", "Additional retirement contribution (not spendable)", yc.additionalRetirement, [], ["irs-pub-560"],
-      "Held in the SEP-IRA, taxable on future withdrawal; shown separately from spendable cash."),
+      "Held in the SEP-IRA and taxed on future withdrawal; shown separately from spendable cash."),
   ];
 }
 
