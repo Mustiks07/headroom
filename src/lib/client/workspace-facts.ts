@@ -1,5 +1,5 @@
 import type { ExtractionResult, MoneyFact, TaxYear } from "@/domain/contracts";
-import { HouseholdWorkspaceSchema, type HouseholdWorkspace, type WorkspaceEvent } from "@/domain/household-workspace";
+import { HouseholdWorkspaceSchema, captureSepBudgetContributions, type HouseholdWorkspace, type WorkspaceEvent } from "@/domain/household-workspace";
 import type { ProposedFieldValue } from "./extraction-fields";
 
 type Field = ExtractionResult["fields"][number];
@@ -80,6 +80,9 @@ export function applyDocumentFact(ws: HouseholdWorkspace, field: Field, target: 
   // SEP contribution: id derived from the evidence, so the same confirmation can't be counted twice.
   const id = `sep-${evidenceId}`;
   if (next.retirement.contributions.some(c => c.id === id)) return { status: "duplicate", workspace: ws };
+  captureSepBudgetContributions(next);
+  if (next.retirement.futureContributionBudget.asOfDate && target.paidDate < next.retirement.futureContributionBudget.asOfDate)
+    next.retirement.futureContributionBudget.includedContributionIds!.push(id);
   next.retirement.contributions.push({ id, personId: target.personId, taxYear: target.taxYear, amountCents: amount, paidDate: target.paidDate,
     sourceId: evidenceId, recordedAt: at });
   return finish(next, { kind: "sep_contribution_recorded", description: `Recorded a ${target.taxYear} SEP contribution from a document.`,

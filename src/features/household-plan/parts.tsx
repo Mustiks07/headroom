@@ -54,7 +54,7 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
       </div>
       <span className={`pill ${STATUS_TONE[project.status]}`}>{STATUS_TEXT[project.status]}</span>
     </header>
-    {project.status === "proposed" && <p className="small muted">Not part of your forecast yet. Compare it to see what it adds on top of your agreed projects.</p>}
+    {project.status === "proposed" && <p className="small muted">Unpaid proposal amounts are not in your forecast yet. Any payments already received stay included. Compare the remaining offer on top of your plan.</p>}
     {project.status === "cancelled" && <p className="small muted">Payments already received stay in your forecast; expected ones are dropped.</p>}
 
     <div className="table-wrap"><table className="lines-table">
@@ -86,7 +86,7 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
       : <p className="small muted">Cash-basis accounting: {yn(project.cashAccountingConfirmed)} · Payment dates match when money is available: {yn(project.timingArrangementConfirmed)} · Split possible: {project.terms.canSplitPayment ? "yes" : "no"} · Price negotiable: {project.terms.canRenegotiatePrice ? "yes" : "no"}{" "}
         <button type="button" className="link-btn" onClick={() => setConditions(true)}>Edit</button></p>)}
     <div className="row gap wrap">
-      {project.status === "proposed" && <button type="button" className="btn primary small" onClick={onCompare} aria-pressed={comparing}>{comparing ? "Comparing below" : "Compare options for this project"}</button>}
+      {project.status !== "cancelled" && project.receipts.some(l => !l.actual && !l.cancelledAt && l.expected) && <button type="button" className="btn primary small" onClick={onCompare} aria-pressed={comparing}>{comparing ? "Comparing below" : project.status === "agreed" ? "Review remaining payments" : "Compare options for this project"}</button>}
       {project.status === "proposed" && <button type="button" className="btn ghost small" onClick={() => { if (window.confirm(`Agree to “${project.title}” exactly as offered?`)) onStatus("agreed"); }}>Agree as offered</button>}
       {project.status === "agreed" && <button type="button" className="link-btn" onClick={() => { if (window.confirm(`Cancel “${project.title}”? Payments already received stay in your forecast.`)) onStatus("cancelled"); }}>Cancel this project</button>}
       {project.status === "cancelled" && <button type="button" className="link-btn" onClick={() => onStatus("agreed")}>Undo cancellation</button>}
@@ -272,8 +272,8 @@ export function SepPanel({ ws, rows, legal, onRecord, onGoal, onBudget, budgetRe
       </form>}
 
     <form className="budget" onSubmit={e => { e.preventDefault(); if (!b.error) onBudget(b.cents, new Date().toISOString().slice(0, 10)); }}>
-      <AmountInput id="budget" label="Money you can still put into SEP-IRAs from today" value={budgetText} onChange={setBudgetText} error={b.error} />
-      <p className="hint">Headroom only suggests extra contributions up to this amount. Contributions already made aren&apos;t subtracted again.{budget.amountCents === null ? " Leave empty if you don't know — then no extra contribution is suggested." : ""}
+      <AmountInput id="budget" label="Cash set aside for future SEP contributions" value={budgetText} onChange={setBudgetText} error={b.error} />
+      <p className="hint">{budget.asOfDate ? `Snapshot as of ${shortDate(budget.asOfDate)}. ` : ""}To update it, enter the cash available today after the contributions you've recorded. Payments made since the snapshot use that cash; older payments already reflected in it are not deducted twice.{budget.amountCents === null ? " Leave empty if you don't know — then no extra contribution is suggested." : ""}
         {budgetRemaining !== null ? ` After goals you've already accepted: ${money(budgetRemaining)} left.` : ""}</p>
       <button type="submit" className="btn small ghost">Save amount</button>
     </form>

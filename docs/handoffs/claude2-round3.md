@@ -1,5 +1,7 @@
 # Claude 2 — round 3 handoff (household engine)
 
+**Subsequent integration correction:** the [combined review](integration-round3.md) resolves the adapter differences listed below and fixes SEP cash consumption. In the workflow example, free capacity after the $1,000 payment is **$402**, not $1,402. Current versions are engine 1.2.0 / household 1.0.1; the rest of this handoff records the branch as delivered.
+
 Branch `claude2`: normal merge of `origin/main` (`6161510`), then of Claude 3's contract commit **`ecbdd18`** (`src/domain/household-workspace.ts`, fixture, contract test). Nothing reset or force-pushed; main untouched. The integrator's round 2 corrections (engine 1.1.1, AgreedPlan validation, 2025 Tax Table attribution) are kept — and I accept that correction: the downloaded Form 1040 instructions were the 2025 edition, not 2026 as my round 2 handoff said.
 
 - Versions: v1 `ENGINE_VERSION` stays **`headroom-engine-1.1.1`**, rules **r3**, because no v1 result changed (round 2 parity is tested). The household layer is new code, labelled `headroom-household-1.0.0`; any future change of household results must ship with a new `ENGINE_VERSION`.

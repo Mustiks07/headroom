@@ -1,6 +1,6 @@
 import type { CaseInput, MoneyFact, ScenarioResult, TaxYear } from "@/domain/contracts";
 import {
-  HouseholdWorkspaceSchema, WORKSPACE_VERSION, sepPosition, withEvent,
+  HouseholdWorkspaceSchema, WORKSPACE_VERSION, captureSepBudgetContributions, sepPosition, withEvent,
   type HouseholdWorkspace, type ProfitForecast, type Project, type ProjectLine, type WorkspaceEvent, type WorkspaceEventKind,
 } from "@/domain/household-workspace";
 
@@ -138,10 +138,12 @@ export function agreeToOption(w0: HouseholdWorkspace, projectId: string, s: Scen
   const w = clone(w0);
   const p = w.projects.find(x => x.id === projectId);
   if (!p) throw new Error("This project is no longer in the plan.");
-  if (p.receipts.some(l => l.actual)) throw new Error("Part of this project was already paid; its received payments can't be rearranged.");
+  if (!s.feasible || s.kind === "decline") throw new Error("Choose an available agreement before saving it.");
+  if (fingerprint && p.agreedDecision?.fingerprint === fingerprint && p.agreedDecision.kind === s.kind) return w0;
+  const paid = p.receipts.filter(l => l.actual);
   const sourceId = p.receipts[0]?.sourceId ?? ensureManualEvidence(w);
-  p.receipts = s.decisions.receipts.map((r, i) => ({ id: newId("line"), label: s.decisions.receipts.length > 1 ? `Payment ${i + 1} of ${s.decisions.receipts.length}` : "Payment",
-    expected: { amountCents: r.amountCents, date: r.date }, actual: null, cancelledAt: null, sourceId, corrections: [] }));
+  p.receipts = [...paid, ...s.decisions.receipts.map((r, i) => ({ id: newId("line"), label: s.decisions.receipts.length > 1 ? `Payment ${i + 1} of ${s.decisions.receipts.length}` : "Payment",
+    expected: { amountCents: r.amountCents, date: r.date }, actual: null, cancelledAt: null, sourceId, corrections: [] }))];
   p.status = "agreed"; p.statusChangedAt = now();
   p.agreedDecision = { kind: s.kind, label: s.label, chosenAt: now(), fingerprint };
   for (const sep of s.decisions.additionalSep) {
@@ -168,8 +170,11 @@ export function setProjectConditions(w0: HouseholdWorkspace, projectId: string, 
 
 export function recordContribution(w0: HouseholdWorkspace, c: { personId: string; taxYear: TaxYear; amountCents: number; paidDate: string; sourceLabel: string }): HouseholdWorkspace {
   const w = clone(w0);
+  captureSepBudgetContributions(w);
   const sourceId = addEvidence(w, c.sourceLabel || "SEP-IRA contribution entered by you", "manual", c.taxYear);
   const id = newId("sep-paid");
+  if (w.retirement.futureContributionBudget.asOfDate && c.paidDate < w.retirement.futureContributionBudget.asOfDate)
+    w.retirement.futureContributionBudget.includedContributionIds!.push(id);
   w.retirement.contributions.push({ id, personId: c.personId, taxYear: c.taxYear, amountCents: c.amountCents, paidDate: c.paidDate, sourceId, recordedAt: now() });
   return log(w, `evt-${id}`, "sep_contribution_recorded", `Recorded a ${c.taxYear} SEP-IRA contribution of ${dollars(c.amountCents)} paid ${c.paidDate}.`, { contributionId: id });
 }
@@ -184,7 +189,8 @@ export function setSepTarget(w0: HouseholdWorkspace, personId: string, year: Tax
 
 export function setFutureBudget(w0: HouseholdWorkspace, amountCents: number | null, asOfDate: string): HouseholdWorkspace {
   const w = clone(w0);
-  w.retirement.futureContributionBudget = { amountCents, asOfDate, sourceId: ensureManualEvidence(w) };
+  w.retirement.futureContributionBudget = { amountCents, asOfDate, sourceId: ensureManualEvidence(w),
+    includedContributionIds: w.retirement.contributions.filter(c => c.paidDate <= asOfDate).map(c => c.id) };
   return log(w, newId("evt-budget"), "sep_target_changed", amountCents === null ? "Cleared the budget for future SEP contributions." : `Set the money available for future SEP contributions to ${dollars(amountCents)} as of ${asOfDate}.`);
 }
 

@@ -29,8 +29,8 @@ describe("household workspace contract v2.0", () => {
     expect(input.opportunity).toMatchObject({ title: "December design project", grossRevenueCents: 1_200_000, plannedReceiptDate: "2026-12-20" });
     expect(input.years[0].incomes.find(i => i.personId === "primary")!.scheduleCProfit.valueCents).toBe(12_500_000);
     const editA = workspaceToCaseInput(clone(), { candidateProjectId: "proj-a" });
-    expect(editA.input.years[0].incomes.find(i => i.personId === "primary")!.scheduleCProfit.valueCents).toBe(11_800_000); // A removed from base
-    expect(editA.input.opportunity.grossRevenueCents).toBe(700_000);
+    expect(editA.input.years[0].incomes.find(i => i.personId === "primary")!.scheduleCProfit.valueCents).toBe(12_200_000); // received A stays in base
+    expect(editA.input.opportunity.grossRevenueCents).toBe(300_000); // only the unpaid balance can change
   });
 
   it("actual replaces expected; cancellation keeps money already received", () => {

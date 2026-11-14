@@ -66,7 +66,7 @@ const ForecastBase = {
   year: TaxYearSchema,
   /**
    * The entered amounts EXCLUDE receipts/expenses of projects managed in this workspace.
-   * `null` = not yet confirmed → no ready result while any non-proposed project exists for this owner/year.
+   * `null` = not yet confirmed → no ready result while a managed project has lines for this owner/year.
    */
   excludesManagedProjects: z.boolean().nullable(),
 };
@@ -122,7 +122,7 @@ export const ProjectSchema = z.object({
   id: IdSchema,
   title: z.string().min(1).max(200),
   ownerPersonId: IdSchema,
-  /** proposed = what-if only; agreed = part of the current forecast; cancelled = only received amounts remain. */
+  /** Unpaid proposed lines are what-if only; agreed expected lines and actuals of every status enter the forecast. */
   status: z.enum(["proposed", "agreed", "cancelled"]),
   createdAt: DateTimeSchema,
   statusChangedAt: DateTimeSchema,
@@ -175,7 +175,9 @@ export const RetirementSchema = z.object({
    * as of a date). Unpaid accepted targets reduce it; contributions paid before `asOfDate` are not
    * subtracted again. `amountCents: null` = unknown (not zero).
    */
-  futureContributionBudget: z.object({ amountCents: CentsSchema.nonnegative().nullable(), asOfDate: DateSchema.nullable(), sourceId: IdSchema }),
+  futureContributionBudget: z.object({ amountCents: CentsSchema.nonnegative().nullable(), asOfDate: DateSchema.nullable(), sourceId: IdSchema,
+    /** Contributions already reflected in this cash snapshot; explicit ids also disambiguate same-day payments. */
+    includedContributionIds: z.array(IdSchema).optional() }),
 });
 
 /* ------------------------------------------------------------------ events, calculation, origin */
@@ -340,16 +342,15 @@ export function effectiveLine(line: ProjectLine): { basis: LineBasis; amountCent
 
 /**
  * What a project contributes to the CURRENT forecast for a year: agreed → actual or expected
- * lines; cancelled → only received (actual) lines; proposed → nothing (what-if only).
+ * lines; cancelled/proposed → actual lines only. Facts survive any project status.
  */
 export function projectYearAmounts(project: Project, year: TaxYear): { receiptsCents: number; expensesCents: number; allActual: boolean } {
   let receiptsCents = 0, expensesCents = 0, allActual = true;
-  if (project.status === "proposed") return { receiptsCents, expensesCents, allActual };
   for (const [kind, lines] of [["receipts", project.receipts], ["expenses", project.expenses]] as const) {
     for (const line of lines) {
       const e = effectiveLine(line);
       if (e.basis === "cancelled" || !e.date?.startsWith(`${year}-`)) continue;
-      if (project.status === "cancelled" && e.basis !== "actual") continue;
+      if (project.status !== "agreed" && e.basis !== "actual") continue;
       if (e.basis !== "actual") allActual = false;
       if (kind === "receipts") receiptsCents += e.amountCents; else expensesCents += e.amountCents;
     }
@@ -364,6 +365,23 @@ export function sepPosition(ws: HouseholdWorkspace, personId: string, year: TaxY
   return { targetCents: target?.targetCents ?? null, paidCents, remainingCents: target ? Math.max(0, target.targetCents - paidCents) : 0 };
 }
 
+/** Legacy snapshots include payments through the as-of day. Freeze that set before recording a new payment. */
+export function captureSepBudgetContributions(ws: HouseholdWorkspace): void {
+  const budget = ws.retirement.futureContributionBudget;
+  budget.includedContributionIds ??= ws.retirement.contributions
+    .filter(c => budget.asOfDate === null || c.paidDate <= budget.asOfDate).map(c => c.id);
+}
+
+/** Actual payments made since the cash snapshot consume cash, as well as satisfying a target. */
+export function remainingSepCash(ws: HouseholdWorkspace): number | null {
+  const budget = ws.retirement.futureContributionBudget;
+  if (budget.amountCents === null) return null;
+  const included = budget.includedContributionIds && new Set(budget.includedContributionIds);
+  const spent = ws.retirement.contributions.filter(c => included ? !included.has(c.id)
+    : budget.asOfDate !== null && c.paidDate > budget.asOfDate).reduce((s, c) => s + c.amountCents, 0);
+  return Math.max(0, budget.amountCents - spent);
+}
+
 /** Canonical, order-independent content for fingerprints (no ids of history, timestamps, revision or stamps). */
 export function canonicalWorkspaceContent(ws: HouseholdWorkspace): unknown {
   const byId = <T extends { id: string }>(xs: T[]) => [...xs].sort((a, b) => a.id.localeCompare(b.id));
@@ -373,7 +391,10 @@ export function canonicalWorkspaceContent(ws: HouseholdWorkspace): unknown {
     projects: byId(ws.projects).map(p => ({ ...p, createdAt: undefined, statusChangedAt: undefined,
       receipts: byId(p.receipts).map(l => ({ ...l, actual: l.actual && { ...l.actual, recordedAt: undefined }, corrections: undefined })),
       expenses: byId(p.expenses).map(l => ({ ...l, actual: l.actual && { ...l.actual, recordedAt: undefined }, corrections: undefined })) })),
-    retirement: { ...ws.retirement, targets: byId(ws.retirement.targets).map(t => ({ ...t, acceptedAt: undefined })),
+    retirement: { ...ws.retirement,
+      futureContributionBudget: { ...ws.retirement.futureContributionBudget,
+        includedContributionIds: ws.retirement.futureContributionBudget.includedContributionIds?.slice().sort() },
+      targets: byId(ws.retirement.targets).map(t => ({ ...t, acceptedAt: undefined })),
       contributions: byId(ws.retirement.contributions).map(c => ({ ...c, recordedAt: undefined })) },
     planning: ws.planning,
     evidence: byId(ws.evidence),
@@ -423,9 +444,9 @@ export interface CaseInputAdapterResult {
 
 /**
  * Build the v1 `CaseInput` the existing engine understands. `scheduleCProfit` = forecast total +
- * agreed/cancelled-but-received project amounts of that owner and year (the candidate excluded);
+ * agreed expected and all actual project amounts of that owner and year (only the candidate's unpaid lines excluded);
  * `existingSepContribution` = max(annual SEP goal, actually paid). With `candidateProjectId`, that
- * project becomes the v1 opportunity (its own lines only); otherwise a zero "current forecast"
+ * project's unpaid lines become the v1 opportunity; otherwise a zero "current forecast"
  * opportunity is used. Financial conclusions stay with the engine.
  */
 export function workspaceToCaseInput(ws: HouseholdWorkspace, options: { candidateProjectId?: string | null } = {}): CaseInputAdapterResult {
@@ -433,7 +454,7 @@ export function workspaceToCaseInput(ws: HouseholdWorkspace, options: { candidat
   const notes: string[] = [];
   const candidate = options.candidateProjectId ? ws.projects.find(p => p.id === options.candidateProjectId) ?? null : null;
   if (options.candidateProjectId && !candidate) missing.push({ path: "projects", reason: "The selected project is not in this plan." });
-  const managed = ws.projects.filter(p => p.id !== candidate?.id && p.status !== "proposed");
+  const managed = ws.projects.map(p => p.id === candidate?.id ? { ...p, status: "proposed" as const } : p);
 
   const years = ws.household.years.map(hy => ({
     year: hy.year, taxFamilySize: hy.taxFamilySize, coveredPersonIds: hy.coveredPersonIds, coverage: hy.coverage,
@@ -448,15 +469,22 @@ export function workspaceToCaseInput(ws: HouseholdWorkspace, options: { candidat
       }, { r: 0, e: 0, actual: true });
       let profit: MoneyFact;
       if (!forecast) {
-        profit = { valueCents: null, status: "unknown", sourceId: DERIVED_PROFIT_SOURCE };
-        missing.push({ path: `forecasts[${other.personId}:${hy.year}]`, reason: `Business profit forecast for ${hy.year} is missing (enter 0 if this person has no business).` });
+        const dependent = ws.household.people.find(p => p.id === other.personId)?.role === "dependent";
+        profit = { valueCents: dependent ? 0 : null, status: dependent ? "confirmed" : "unknown", sourceId: DERIVED_PROFIT_SOURCE };
+        if (!dependent) missing.push({ path: `forecasts[${other.personId}:${hy.year}]`, reason: `Business profit forecast for ${hy.year} is missing (enter 0 if this person has no business).` });
       } else {
-        if (own.length && forecast.excludesManagedProjects !== true) {
+        if (own.some(p => [...p.receipts, ...p.expenses].some(l => [l.actual?.date, l.expected?.date].some(d => d?.startsWith(`${hy.year}-`)))) && forecast.excludesManagedProjects !== true) {
           missing.push({ path: `forecasts[${forecastIndex}].excludesManagedProjects`, reason: "Confirm that the forecast does not already include the projects listed in this plan." });
         }
         if (forecast.method === "year_to_date_plus_remaining" && !forecast.asOfConfirmed) {
           missing.push({ path: `forecasts[${forecastIndex}].asOfDate`, reason: "Confirm the date your year-to-date profit refers to." });
         }
+        if (forecast.method === "year_to_date_plus_remaining") own.filter(p => p.status === "agreed").forEach(p => {
+          for (const kind of ["receipts", "expenses"] as const) p[kind].forEach((l, li) => {
+            if (!l.actual && !l.cancelledAt && l.expected?.date.startsWith(`${hy.year}-`) && l.expected.date <= forecast.asOfDate)
+              missing.push({ path: `projects[${ws.projects.findIndex(x => x.id === p.id)}].${kind}[${li}].actual`, reason: `Confirm the actual status of the payment expected on ${l.expected.date}.` });
+          });
+        });
         const base = forecastFacts(forecast);
         const projectPart: MoneyFact = { valueCents: sum.r - sum.e, status: sum.actual ? "confirmed" : "estimated", sourceId: DERIVED_PROFIT_SOURCE };
         profit = combineFacts(own.length ? [...base, { fact: projectPart, sign: 1 }] : base, DERIVED_PROFIT_SOURCE);
@@ -470,8 +498,10 @@ export function workspaceToCaseInput(ws: HouseholdWorkspace, options: { candidat
     }),
   })) as CaseInput["years"];
 
-  const owner = candidate?.ownerPersonId ?? ws.household.people.find(p => p.role === "primary")?.id ?? ws.household.people[0].id;
-  const expectedOf = (lines: ProjectLine[]) => lines.map(effectiveLine).filter(e => e.basis !== "cancelled" && e.date);
+  const owner = candidate?.ownerPersonId ?? ws.projects[0]?.ownerPersonId
+    ?? ws.forecasts.find(f => forecastFacts(f).some(x => x.fact.valueCents !== 0))?.personId
+    ?? ws.household.people.find(p => p.role === "primary")?.id ?? ws.household.people[0].id;
+  const expectedOf = (lines: ProjectLine[]) => lines.filter(l => !l.actual).map(effectiveLine).filter(e => e.basis === "expected" && e.date);
   const receipts = candidate ? expectedOf(candidate.receipts) : [];
   const expenses = candidate ? expectedOf(candidate.expenses) : [];
   const firstDate = (xs: Array<{ date: string | null }>, fallback: string) => xs.map(x => x.date!).sort()[0] ?? fallback;
@@ -483,14 +513,15 @@ export function workspaceToCaseInput(ws: HouseholdWorkspace, options: { candidat
     cashAccountingConfirmed: candidate.cashAccountingConfirmed, timingArrangementConfirmed: candidate.timingArrangementConfirmed,
   } : { title: CURRENT_FORECAST_TITLE, ownerPersonId: owner, grossRevenueCents: 0, incrementalExpensesCents: 0,
     plannedReceiptDate: "2026-12-31", expensePaymentDate: "2026-12-31", cashAccountingConfirmed: true, timingArrangementConfirmed: true };
-  if (candidate && receipts.some(r => r.basis === "actual")) {
+  if (candidate && [...candidate.receipts, ...candidate.expenses].some(l => l.actual)) {
     notes.push("Some of this project's payments were already received; those amounts and dates are fixed and are not candidates for re-timing.");
   }
 
-  const budget = ws.retirement.futureContributionBudget.amountCents;
+  const budget = remainingSepCash(ws);
+  const reserved = ws.retirement.targets.reduce((sum, t) => sum + sepPosition(ws, t.personId, t.year).remainingCents, 0);
   if (budget === null) notes.push("No budget for future SEP contributions was entered, so no additional contribution is assumed possible.");
   const constraints: CaseInput["constraints"] = {
-    maxAdditionalSepCents: budget ?? 0,
+    maxAdditionalSepCents: Math.max(0, (budget ?? 0) - reserved),
     minimumDesiredCashGainCents: ws.planning.minimumDesiredCashGainCents,
     canSplitPayment: candidate?.terms.canSplitPayment ?? false,
     canRenegotiatePrice: candidate?.terms.canRenegotiatePrice ?? false,

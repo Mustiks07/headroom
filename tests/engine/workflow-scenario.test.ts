@@ -41,6 +41,7 @@ it("A agreed, B offered, limited SEP; then SEP paid, A paid and income corrected
   console.info(`STEP 2 feasible ${step2.agreed.stillFeasible}; SEP ${JSON.stringify(step2.sep[0])}; budget left ${dollars(step2.futureContributionBudgetRemainingCents)}; 2026 PTC ${dollars(step2.fixedPlan.years[0].risk?.ptcCents)}`);
   expect(step2.agreed.stillFeasible).toBe(true);
   expect(step2.sep[0]).toMatchObject({ targetCents: target, paidCents: usd(1000), remainingCents: target - usd(1000) });
+  expect(step2.futureContributionBudgetRemainingCents).toBe(usd(4000) - target);
   expect(step2.fixedPlan.years[0].risk!.ptcCents).toBeGreaterThan(0);
 
   // Step 3: the base forecast is corrected upward; the agreed plan is evaluated as agreed, then B is re-evaluated.

@@ -15,17 +15,19 @@ Synthetic household (same as the Headroom demos): Tennessee, married filing join
 
 The questions: what is B worth **on top of A**; which actions are feasible within the $4,000; after step 5, what remains to pay; after step 6, does the agreed plan still protect the credit, and what is the new best option?
 
-### Headroom result (engine `headroom-engine-1.1.1`, household layer `headroom-household-1.0.0`, rules r3)
+### Headroom result (integration correction: engine `headroom-engine-1.2.0`, household layer `headroom-household-1.0.1`, rules r3)
 
 Reproduced by `tests/engine/workflow-scenario.test.ts`.
 
 | Step | Output |
 | --- | --- |
 | B over A (baseline "Your plan without Branding B") | Accept as offered **−$7,597** over two years (2026 credit lost); SEP $3,598 → **+$1,201** cash, $3,598 retirement; SEP $4,000 (set-aside maximum) → +$871; split $1,997 now / $4,003 on 2027-01-04 → **+$4,155** (recommended for spendable cash) |
-| After B agreed with SEP goal $3,598, A paid, $1,000 SEP paid | Plan feasible; SEP goal $3,598, paid $1,000, **still to pay $2,598**; legal limit on the combined profit $24,163; **$1,402** of the set-aside left for new contributions; 2026 credit $12,396 |
-| Base corrected to $121,000 | The agreed plan, evaluated as agreed, **loses the 2026 credit** (`creditLostYears: [2026]`); paid $1,000 stays paid. New options for B: an *additional* SEP $2,789 would be needed but is marked infeasible (only $1,402 available); a new split $2,959 / $3,041 keeps the credit (+$4,155) |
+| After B agreed with SEP goal $3,598, A paid, $1,000 SEP paid | Plan feasible; SEP goal $3,598, paid $1,000, **still to pay $2,598**; legal limit on the combined profit $24,163; **$402** of the set-aside left for new contributions; 2026 credit $12,396 |
+| Base corrected to $121,000 | The agreed plan, evaluated as agreed, **loses the 2026 credit** (`creditLostYears: [2026]`); paid $1,000 stays paid. New options for B: an *additional* SEP $2,789 would be needed but is marked infeasible (only $402 available); a new split $2,959 / $3,041 keeps the credit (+$4,155) |
 
-No other tool below models steps 2, 5 and 6 (an agreed project, recorded actual payments/contributions, and re-evaluating fixed agreements after a correction). This is a workflow difference, not a claim that their arithmetic is wrong.
+The integration review corrected the available-cash result: the $4,000 snapshot predates the $1,000 payment. Cash left is $3,000; reserving the unpaid $2,598 leaves $402. Paying a contribution does not create new capacity. The regression now asserts this amount.
+
+The free calculator workflows exercised below did not expose steps 2, 5 and 6 together (an agreed project, recorded actual payments/contributions, and re-evaluating fixed agreements after a correction). ProjectionLab's paid workflow was not exercised; no absence claim is made for it. This is a workflow comparison, not a claim that competitors' arithmetic is wrong.
 
 ## Product competitors
 
@@ -66,8 +68,8 @@ Weights from the supplied contest materials (`docs/BUSINESS.md`); the same five 
 
 | Criterion | Product competitors | Contest projects | Headroom evidence today | Gap to close |
 | --- | --- | --- | --- | --- |
-| Product 40% | Free tools give an instant one-year answer; Bracketsight and ACAIndex are polished and cited | HESTi and Case Desk claim live apps and many tests | Real editable two-year calculation, fixed agreements, A+B without double counting, SEP target/paid/budget, regression and oracle tests | Household screens are Claude 1's round 3; public deployment not yet verified |
-| Value / retention 20% | Recompute from scratch each time; ProjectionLab keeps plans (paid) | HESTi keeps a running total of approved change orders | Same plan updated by events: actual payments, paid SEP, corrected income → consequence for the agreed plan, then new options | Needs the saved workspace journey end-to-end in the UI |
+| Product 40% | Free tools give an instant one-year answer; Bracketsight and ACAIndex are polished and cited | HESTi and Case Desk claim live apps and many tests | Real editable two-year calculation, fixed agreements, A+B without double counting, SEP target/paid/budget, regression and oracle tests | Household screens and local production journey checked during integration; public deployment not yet verified |
+| Value / retention 20% | Free calculator sessions exercised here; ProjectionLab keeps plans (paid) | HESTi keeps a running total of approved change orders | Same plan updated by events: actual payments, paid SEP, corrected income → consequence for the agreed plan, then new options; guest save/reopen checked | Actual repeat usage and willingness to pay remain unmeasured |
 | Problem / user 15% | Generic ACA estimate for anyone | Different problems (contractors, fraud game, resale) | A self-employed family deciding on a specific offer near the cliff | No user interviews yet |
 | Business 15% | Free tools; ProjectionLab $129/year shows paid demand for planning | Subscription claims in READMEs | $99/year hypothesis, assumptions stated in BUSINESS.md | No measured conversion |
 | Originality 10% | A cliff gauge alone is common (all four have one) | — | Decision on a concrete offer with cash limits, received vs expected money and retirement shown separately | Must show it in the deployed demo, not only in tests |

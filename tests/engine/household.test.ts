@@ -120,6 +120,7 @@ describe("shared SEP-IRA target", () => {
     ws.retirement.contributions = [paid];
     ws.retirement.targets = [{ id: "t26", personId: "primary", year: 2026, targetCents: usd(3600), acceptedAt: T, origin: { projectId: null, scenarioKind: null, fingerprint: null } }];
     ws.retirement.futureContributionBudget.amountCents = usd(1000);
+    ws.retirement.futureContributionBudget.asOfDate = "2026-12-30"; // cash still available AFTER the $2,000 payment
     const r = await ready(evaluateHouseholdWorkspace(ws));
     expect(r.sep[0]).toMatchObject({ targetCents: usd(3600), paidCents: usd(2000), remainingCents: usd(1600) });
     expect(r.futureContributionBudgetRemainingCents).toBe(usd(-600));

@@ -1,5 +1,9 @@
 # Round 3 shared contract — household workspace v2.0
 
+**Integration update (current behavior):** see [integration-round3.md](integration-round3.md). The original commit notes below are history. `projectYearAmounts` includes actuals for **every** project status; only agreed unpaid lines enter the current forecast. When comparing a project, its actuals stay in baseline and only unpaid lines become the opportunity. The adapter and engine now agree on these semantics, missing/exclusion checks and owner selection. Additional SEP capacity is remaining cash **minus unpaid accepted targets**, not the raw snapshot amount.
+
+Additive optional field: `retirement.futureContributionBudget.includedContributionIds?: string[]` identifies contributions reflected in the snapshot, including same-day facts. `captureSepBudgetContributions` freezes legacy date-based inclusion before recording; `remainingSepCash` subtracts newly paid contributions. Old snapshots without IDs include contributions through `asOfDate`. A newly entered contribution strictly before that date is historical; a newly entered same-day payment consumes cash unless the user refreshes the snapshot to include it. For late entry of a payment already in a same-day balance, confirm a fresh balance after entry. Fixture: $3,500 cash, $3,000 unpaid goal → $500 free; paying $1,500 leaves $2,000 cash and $1,500 unpaid goal → still $500 free. Never recreate $1,500 of capacity.
+
 **Contract commit: `ecbdd18fe060e81697b7dd2c88c5b3d628926eb2`** on `claude3` (based on `main` @ `6161510`).
 Claude 1 and Claude 2: `git fetch origin && git merge ecbdd18fe060e81697b7dd2c88c5b3d628926eb2` (a normal merge; it touches only the three new files below). Do not define another workspace type; ask for changes in your handoff and Claude 3 publishes a small follow-up contract commit.
 

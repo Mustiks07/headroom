@@ -74,10 +74,10 @@ export function buildForecastModel({ ws, year, risk, fingerprint, engineVersion,
     } else {
       rows.push(["No forecast entered", "Missing", "Unknown", "-"]);
     }
-    for (const project of ws.projects.filter(p => p.ownerPersonId === personId && p.status !== "proposed")) {
+    for (const project of ws.projects.filter(p => p.ownerPersonId === personId)) {
       const lineRows = (lines: ProjectLine[], sign: 1 | -1, noun: string) => lines.forEach(l => {
         const e = effectiveLine(l);
-        if (!e.date?.startsWith(`${year}-`) || e.basis === "cancelled" || (project.status === "cancelled" && e.basis !== "actual")) return;
+        if (!e.date?.startsWith(`${year}-`) || e.basis === "cancelled" || (project.status !== "agreed" && e.basis !== "actual")) return;
         const src = e.basis === "actual" ? l.actual!.sourceId : l.sourceId;
         usedSources.add(src);
         rows.push([`${project.title}: ${l.label ?? noun} (${e.basis === "actual" ? "received" : "expected"} ${e.date})`,
@@ -91,7 +91,7 @@ export function buildForecastModel({ ws, year, risk, fingerprint, engineVersion,
     blocks.push({ type: "table", columns: [{ title: "Part of the forecast", width: 0.36 }, { title: "Basis", width: 0.21 },
       { title: "Amount", width: 0.17, align: "right" }, { title: "Source", width: 0.26 }], rows });
   }
-  blocks.push({ type: "paragraph", tone: "muted", text: "Actual payments replace the expected amount of the same payment; they are never added on top. Proposed (not yet agreed) projects are not included. Received payments stay included even if a project was cancelled." });
+  blocks.push({ type: "paragraph", tone: "muted", text: "Actual payments replace the expected amount of the same payment; they are never added on top. Unpaid proposed amounts are not included. Received payments stay included regardless of project status, including cancellation." });
 
   blocks.push({ type: "heading", text: `${year} subsidy position on this forecast` });
   if (year !== 2026) {
@@ -123,7 +123,7 @@ export function buildForecastModel({ ws, year, risk, fingerprint, engineVersion,
         else if (e.basis === "expected" && p.status !== "cancelled") expected += e.amountCents;
         else cancelled += l.expected?.amountCents ?? 0;
       }
-      return [p.title, p.status === "proposed" ? "Offer only (not included)" : p.status, money(received), money(expected), money(cancelled)];
+      return [p.title, p.status === "proposed" ? received > 0 ? "Offer (received amounts included)" : "Offer only (not included)" : p.status, money(received), money(expected), money(cancelled)];
     }) });
   }
 

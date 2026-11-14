@@ -12,7 +12,7 @@
  */
 import type { CaseInput, MoneyFact } from "@/domain/contracts";
 import { CONTRACT_VERSION } from "@/domain/contracts";
-import { combineFacts, forecastFacts, type HouseholdWorkspace } from "@/domain/household-workspace";
+import { combineFacts, forecastFacts, remainingSepCash, type HouseholdWorkspace } from "@/domain/household-workspace";
 import { DERIVED_SOURCE_ID } from "./projection";
 import { HOUSEHOLD_ENGINE_INPUT_VERSION, type HouseholdEngineInput, type ProjectItem } from "./types";
 
@@ -60,7 +60,7 @@ export function workspaceToEngineInput(ws: HouseholdWorkspace, candidateProjectI
     }),
   })) as CaseInput["years"];
 
-  const budget = ws.retirement.futureContributionBudget.amountCents;
+  const budget = remainingSepCash(ws);
   const household: CaseInput = {
     contractVersion: CONTRACT_VERSION, id: ws.household.caseId, title: ws.household.title, isSynthetic: ws.household.isSynthetic,
     state: ws.household.state, countyFips: ws.household.countyFips, filingStatus: ws.household.filingStatus, people: ws.household.people,

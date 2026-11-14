@@ -26,7 +26,7 @@ import { workspaceToEngineInput, type AdaptedWorkspace } from "./adapter";
 import { countedBasis, projectHousehold, projectionTrace, type HouseholdProjection } from "./projection";
 
 /** Label of the household aggregation layer (informational; fingerprints use ENGINE_VERSION per the contract). */
-export const HOUSEHOLD_ENGINE_VERSION = "headroom-household-1.0.0";
+export const HOUSEHOLD_ENGINE_VERSION = "headroom-household-1.0.1";
 const YEARS: TaxYear[] = [2026, 2027];
 
 /**
@@ -279,6 +279,11 @@ export async function compareWorkspaceOpportunity(raw: HouseholdWorkspace, candi
   derived.constraints = { ...derived.constraints, canSplitPayment: candidate.terms.canSplitPayment,
     canRenegotiatePrice: candidate.terms.canRenegotiatePrice, nextYearPaymentLatestDate: candidate.terms.nextYearPaymentLatestDate };
   const budgetLeft = baseline.sepBudget.availableCents;
+  if (budgetLeft !== null && budgetLeft < 0) return {
+    status: "needs_data", code: "AGREED_SEP_BUDGET_SHORTFALL",
+    message: "Your existing SEP commitments exceed the cash still available. Review the budget or those commitments before choosing another plan.",
+    fields: [{ path: "retirement.futureContributionBudget", reason: `Existing commitments need ${formatUsd(-budgetLeft)} more than the remaining cash budget.` }],
+  };
   if (budgetLeft === null) warnings.push("No money set aside for future SEP-IRA contributions was entered, so no additional contribution is assumed possible.");
   else {
     derived.constraints.maxAdditionalSepCents = Math.max(0, budgetLeft);
