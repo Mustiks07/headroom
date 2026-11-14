@@ -1,4 +1,6 @@
 # Headroom — design direction / Round 5
+> **Archived / rejected by the user on November 15, 2026. Do not implement this direction.** The following selection language records the earlier proposal, not current authorization. Preserving the warm-neutral/forest palette was an inferred choice, not a user requirement. New exploration must consider actual visual references and materially different compositions without a fixed palette. Functional accuracy and accessibility requirements remain useful independently of this style.
+
 **Recommendation:** a calm decision desk, built around clear space, evidence and dates.  
 **Date:** 15 November 2026. **Status:** design proposal, not a released interface.  
 **Reviewed baseline:** `headroom-review` at supplied runtime `6f18c1f`, README, round-5 briefs, current homepage/styles/decision components, round-4 public screenshot, and business research memo. No production files or final user materials were changed.

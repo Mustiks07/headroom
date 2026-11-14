@@ -15,7 +15,8 @@ Additional reviews:
 - [Participant repositories](COMPETITOR_REPOS_ROUND5.md) and [97-candidate register](COMPETITOR_REPOS_ROUND5.csv): 56 self-attributed current entries, 29 likely, one duplicate and 11 excluded. This is not an official complete submission roster. Idea strength and development state are assessed separately.
 - [Paid-value strategy](HEADROOM_PAID_VALUE_STRATEGY.md) and [decision matrix](HEADROOM_PAID_VALUE_DECISION_MATRIX.csv): the original model plus six alternatives, purchase triggers, default recommendation, attribution and tests that could justify changing direction.
 - [Additional economics checks](HEADROOM_PAID_VALUE_ECONOMICS_CHECK.py) with [calculated output](HEADROOM_PAID_VALUE_ECONOMICS_CHECK.json): the strategy's cohort/acquisition sensitivity.
-- [Visual direction](../design/round5/design-direction.md): primary-source design research, generated concepts, tokens and implementation handoff. Proposed, not yet released.
+- [Selected C direction](../design/c-open/README.md): user-selected cobalt/chrome/chartreuse system, desktop/mobile references and implementation handoff. This is not a claim of deployment.
+- [Archived visual direction](../design/round5/design-direction.md): rejected by the user on November 15. Retained as research history; its palette, fonts, logo and screen compositions are not approved for implementation.
 - [Development addendum](../tasks/ROUND5_RESEARCH_ADDENDUM.md): selected implications assigned to the three existing developer roles.
 
 These reports do not silently expand the supported financial scope or replace user-provided final materials. Design screenshots are concepts, and economic scenarios are modeled rather than measured customer results.
