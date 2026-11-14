@@ -187,6 +187,21 @@ export const DealVariantSchema = z.object({
   comparisons: VariantComparisonsSchema.optional(),
   /** Round 5 (additive): whether the option holds across declared ranges / the room policy. */
   robustness: VariantRobustnessSchema.optional(),
+  /** Round 5 (additive): whether the client must agree (new price and/or new dates). The family's own SEP needs no client agreement. */
+  clientAgreement: z.object({
+    required: z.boolean(),
+    changes: z.array(z.enum(["price", "dates"])).max(2),
+    note: z.string().max(400).nullable(),
+  }).optional(),
+  /** Round 5 (additive): money from this project by date — separate from the two-year total and from retirement savings. */
+  moneyByDate: z.array(z.object({
+    date: DateSchema,
+    /** Received by this date (including a deposit already received). */
+    receivedCents: CentsSchema,
+    /** Free after expenses, additional SEP and the tax reserve. */
+    availableCents: CentsSchema,
+    event: z.string().max(200),
+  })).max(12).optional(),
 });
 
 export interface DealSearchMeta {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AssistanceRequestSchema, ChangeCommandSchema, ChangeProposalSchema, ExtractedFactSchema } from "@/domain/assistance";
 import { HouseholdWorkspaceSchema, workspaceFingerprint } from "@/domain/household-workspace";
+import { DealVariantSchema } from "@/domain/deal-planning";
 import { DecisionContextSchema, type OriginalOffer } from "@/domain/decision-context";
 import { LocationQuerySchema } from "@/domain/insurance";
 import { changeProposalFixture, extractedFactsFixture, importDraftFixture } from "@/fixtures/assistance";
@@ -41,5 +42,16 @@ describe("assistance contract v1.0", () => {
       recommendationReasons: [], originalOffer: offer }).success).toBe(true);
     expect(LocationQuerySchema.safeParse({ zip: "3720" }).success).toBe(false);
     expect(LocationQuerySchema.safeParse({ state: "TN", q: "davidson" }).success).toBe(true);
+  });
+
+  it("follow-up: client agreement and money by date survive storing a variant", () => {
+    const base = { id: "v1", label: "Split the payment", purpose: "simplest", terms: { priceCents: 1_200_000, payments: [], additionalSep: null },
+      twoYearCashDeltaCents: 0, retirementAddedCents: 0, datedFlows: [], dateTargets: [], aca: [], constraints: [], actions: [], differenceFromBestCents: 0, verifiedExact: true };
+    expect(DealVariantSchema.safeParse(base).success).toBe(true); // older variants without the fields stay valid
+    const variant = { ...base, clientAgreement: { required: true, changes: ["dates"], note: null },
+      moneyByDate: [{ date: "2026-12-15", receivedCents: 500_000, availableCents: 410_000, event: "First payment" }] };
+    const parsed = DealVariantSchema.parse(variant);
+    expect(parsed.clientAgreement).toEqual(variant.clientAgreement);
+    expect(parsed.moneyByDate).toEqual(variant.moneyByDate);
   });
 });
