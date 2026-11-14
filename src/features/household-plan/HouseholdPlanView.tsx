@@ -19,7 +19,7 @@ import { ForecastEditor } from "./ForecastEditor";
 import { MoneyField } from "@/components/MoneyField";
 import { compareProject, evaluatePlan, fixedPlanOf, projectHousehold, sepRows } from "./engine";
 import {
-  addProject, agreeToOption, blankForecast, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
+  addProject, agreeToOption, blankForecast, ensureManualEvidence, recordClientAgreement, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
   setProjectStatus, setSepTarget,
 } from "./ops";
 import { commit, describeSaveError, whereText, workspaceRepo, CloudSaveFailedError, WorkspaceConflictError } from "./store";
@@ -27,6 +27,11 @@ import { exportForecastPdf, exportWorkspaceJson } from "@/lib/client/api";
 import { workspaceFingerprint } from "@/domain/household-workspace";
 import { ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { AddProjectForm, ProjectCard, SepPanel } from "./parts";
+import { attentionItems, type AttentionItem } from "./attention";
+import { DealPanel } from "@/features/deal/DealPanel";
+import { ChooseTerms, PackageCard } from "@/features/deal/ChooseTerms";
+import { saveActionPackage, saveCashContext, saveDealGoal, setPackageStatus, setReminderStatus } from "@/lib/client/api";
+import type { DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 
 type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
 type Notice = { tone: "ok" | "warn"; text: string } | null;
@@ -47,6 +52,8 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const [forecastEdit, setForecastEdit] = useState<{ personId: string; year: TaxYear } | null>(null);
   const [adding, setAdding] = useState(false);
   const [fixProject, setFixProject] = useState<string | null>(null);
+  const [dealId, setDealId] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<{ variant: DealVariant; result: ReadyDealSearch } | null>(null);
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
   const req = useRef(0);
 
@@ -115,7 +122,23 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const proposals = ws.projects.filter(p => p.status === "proposed");
   const sep = sepRows(ws, calc?.evaluation);
   const evaluation = calc?.evaluation?.status === "ready" ? calc.evaluation : null;
-  const next = nextAction(ws);
+  const attention = attentionItems(ws, calc?.evaluation);
+  const packages = (ws.dealPlanning?.packages ?? []).filter(p => p.status !== "superseded").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  /** Runs one of Claude 3's deal-state saves on the latest revision; failures keep the user's input and say so. */
+  async function runDeal(fn: (base: HouseholdWorkspace) => Promise<HouseholdWorkspace>, okText?: string): Promise<HouseholdWorkspace | null> {
+    if (!ws) return null;
+    if (pending) { setNotice({ tone: "warn", text: "Save or discard the change that didn't go through first." }); return null; }
+    try { const saved = await fn(ws); setWs(saved); if (okText) setNotice({ tone: "ok", text: okText }); return saved; }
+    catch (e) { if (e instanceof WorkspaceConflictError && e.current) setWs(e.current); setNotice({ tone: "warn", text: describeSaveError(e) }); return null; }
+  }
+  function onAttention(a: AttentionItem) {
+    const go = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+    if (a.action?.kind === "compare" && a.action.projectId) { setDealId(a.action.projectId); go("deal-panel"); }
+    else if (a.action?.kind === "record_payment" && a.action.projectId) go(`project-${a.action.projectId}`);
+    else if (a.action?.kind === "sep") go("sep-title");
+    else if (a.action?.kind === "packages") go("packages");
+    else if (a.action?.kind === "review_income") { setForecastEdit({ personId: owners[0].id, year: 2026 }); go("forecast-change"); }
+  }
 
   return <div className="shell plan-page household-plan">
     <div className="plan-head">
@@ -167,8 +190,12 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
           <p className="tile-line">Includes {agreedProjects.length ? `${agreedProjects.length} agreed project${agreedProjects.length > 1 ? "s" : ""}` : "no projects yet"}{proposals.length ? `; ${proposals.length} proposal${proposals.length > 1 ? "s" : ""} not included` : ""}</p>
         </div>
         <div className="tile tile-rec">
-          <p className="tile-k">Next step</p>
-          {next ? <><p className="tile-title">{next.title}</p><p className="tile-sub">{next.detail}</p></> : <p className="tile-line">Nothing is due. Add a client offer or update your forecast when something changes.</p>}
+          <p className="tile-k">What needs attention next</p>
+          {attention.filter(a => a.tone !== "done").length === 0 ? <p className="tile-line">Nothing is due. Add a client offer or update your forecast when something changes.</p>
+            : <ul className="attention">{attention.filter(a => a.tone !== "done").slice(0, 3).map(a => <li key={a.id} className={`att-${a.tone}`}>
+              <p className="tile-title">{a.title}</p><p className="tile-sub">{a.detail}</p>
+              {a.action && <button type="button" className="link-btn" onClick={() => onAttention(a)}>{a.action.label}</button>}</li>)}</ul>}
+          {attention.some(a => a.tone === "done") && <p className="tile-sub done-line">✓ {attention.filter(a => a.tone === "done")[0].detail}</p>}
         </div>
       </div>
       {ready && (ready.assumptions.length > 0 || ready.warnings.length > 0) && <details className="explain"><summary>Conditions and calculation notes ({ready.assumptions.length + ready.warnings.length})</summary>
@@ -225,11 +252,36 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
           onCorrect={(lineId, a) => void apply(w => correctActual(w, p.id, lineId, a), "Correction saved. The earlier record stays in the history.")}
           onCancelLine={lineId => void apply(w => cancelExpected(w, p.id, lineId), "Expected payment cancelled.")}
           editConditions={fixProject === p.id}
+          onFindTerms={() => { setDealId(p.id); setChosen(null); setTimeout(() => document.getElementById("deal-panel")?.scrollIntoView({ behavior: "smooth" }), 30); }}
           onConditions={c => { setFixProject(null); void apply(w => setProjectConditions(w, p.id, c), "Conditions saved."); }}
           onStatus={s => void apply(w => setProjectStatus(w, p.id, s), s === "cancelled" ? "Project cancelled. Received payments stay in the forecast." : "Project status updated.")}
           onCompare={() => { setCompareId(p.id); setTimeout(() => document.getElementById("compare-panel")?.scrollIntoView({ behavior: "smooth" }), 30); }} />)}
       </div>
     </section>
+
+    {dealId && ws.projects.some(p => p.id === dealId) && <DealPanel key={dealId} ws={ws} project={ws.projects.find(p => p.id === dealId)!}
+      onClose={() => { setDealId(null); setChosen(null); }} onGoToForecast={() => { setForecastEdit({ personId: owners[0].id, year: 2026 }); setTimeout(() => document.getElementById("forecast-change")?.scrollIntoView({ behavior: "smooth" }), 30); }}
+      onSaveGoal={async built => runDeal(async base0 => {
+        // Manually entered cash figures cite "manual-entry"; make sure that source exists in the same save.
+        const base = structuredClone(base0); ensureManualEvidence(base);
+        let w = (await saveDealGoal(workspaceRepo(), base, built.goal, built.space)).saved;
+        if (built.cash && JSON.stringify(built.cash) !== JSON.stringify(w.dealPlanning?.cashContext ?? null)) w = (await saveCashContext(workspaceRepo(), w, built.cash)).saved;
+        return w;
+      })}
+      onChoose={(variant, result) => { setChosen({ variant, result }); setTimeout(() => document.getElementById("choose-terms")?.scrollIntoView({ behavior: "smooth" }), 30); }} />}
+    {chosen && dealId && <ChooseTerms ws={ws} variant={chosen.variant} result={chosen.result} onCancel={() => setChosen(null)}
+      onSave={async pkg => { const saved = await runDeal(base => saveActionPackage(workspaceRepo(), base, pkg).then(o => o.saved), "Terms saved to your plan. Nothing was sent to your client.");
+        if (saved) { setChosen(null); setDealId(null); setTimeout(() => document.getElementById("packages")?.scrollIntoView({ behavior: "smooth" }), 30); }
+        return !!saved; }} />}
+
+    {packages.length > 0 && <section id="packages" className="plan-section" aria-labelledby="packages-title">
+      <h2 id="packages-title" className="section-title small">Chosen terms</h2>
+      <p className="muted small">Download the summary and calendar while the terms are current. Headroom never sends anything; only you record what the client said.</p>
+      {packages.map(pkg => <PackageCard key={pkg.id} ws={ws} pkg={pkg} onNotice={(tone, text) => setNotice({ tone, text })}
+        onShared={() => void runDeal(base => setPackageStatus(workspaceRepo(), base, pkg.id, "terms_shared_by_user").then(o => o.saved), "Recorded that you shared the terms.")}
+        onReminder={(uid, done) => void runDeal(base => setReminderStatus(workspaceRepo(), base, pkg.id, uid, done ? "done" : "open").then(o => o.saved), done ? "Marked as done." : "Marked as not done.")}
+        onAgreed={() => { void apply(w => recordClientAgreement(w, pkg.id).workspace, "Recorded the client's agreement. The project's open payments now follow these terms."); }} />)}
+    </section>}
 
     {compareId && <ComparePanel ws={ws} projectId={compareId} state={compare}
       onFixProject={() => { setFixProject(compareId); setTimeout(() => document.getElementById(`conditions-${compareId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} stale={!compare || compare.pending || compare.key !== key} onClose={() => setCompareId(null)} onDrawer={setDrawer}
@@ -277,17 +329,6 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
 }
 
 /* ---------- helpers & sub-views ---------- */
-
-function nextAction(ws: HouseholdWorkspace): { title: string; detail: string } | null {
-  const lines = ws.projects.filter(p => p.status === "agreed").flatMap(p => p.receipts.map(l => ({ p, l, e: effectiveLine(l) })))
-    .filter(x => x.e.basis === "expected" && x.e.date).sort((a, b) => a.e.date!.localeCompare(b.e.date!));
-  if (lines[0]) return { title: `Expect ${money(lines[0].e.amountCents)} from “${lines[0].p.title}”`, detail: `Due ${shortDate(lines[0].e.date)}. When it arrives, record the actual amount and date.` };
-  for (const t of ws.retirement.targets) {
-    const paid = ws.retirement.contributions.filter(c => c.personId === t.personId && c.taxYear === t.year).reduce((s, c) => s + c.amountCents, 0);
-    if (t.targetCents > paid) return { title: `Contribute ${money(t.targetCents - paid)} more to the ${t.year} SEP-IRA`, detail: `Goal ${money(t.targetCents)}, contributed ${money(paid)} so far. Deadline: your ${t.year} tax return due date (with extensions).` };
-  }
-  return null;
-}
 
 /** The plan as agreed on today's facts (Claude 2's evaluateHouseholdWorkspace) — never re-optimized. */
 function FixedPlan({ evaluation, stale }: { evaluation?: WorkspaceEvaluationResult; stale: boolean }) {

@@ -250,7 +250,23 @@ export type WorkspaceComparisonDetails = { baselineProjection: HouseholdProjecti
  * project first removes its not-yet-received items from the baseline; its actual receipts stay.
  * Declining the candidate never cancels another project.
  */
-export async function compareWorkspaceOpportunity(raw: HouseholdWorkspace, candidateProjectId: string): Promise<(ReadyWorkspaceComparison & WorkspaceComparisonDetails) | BlockedComparison> {
+export interface CandidateContext {
+  ws: HouseholdWorkspace;
+  adapted: AdaptedWorkspace;
+  candidate: HouseholdWorkspace["projects"][number];
+  ci: number;
+  /** Everything except the candidate's lines that have not happened yet. */
+  baseline: HouseholdProjection;
+  /** The candidate's open (not received, not cancelled) lines. */
+  receipts: Array<{ id: string; amountCents: number; date: string }>;
+  expenses: Array<{ id: string; amountCents: number; date: string }>;
+  /** Derived v1 input of the baseline, with the candidate's terms and the new-SEP cash limit; opportunity not set. */
+  derived: CaseInput;
+  warnings: string[];
+}
+
+/** Shared preparation for evaluating one candidate on top of all other commitments (comparison and deal search). */
+export function candidateContext(raw: HouseholdWorkspace, candidateProjectId: string): CandidateContext | BlockedComparison {
   const prep = prepare(raw, candidateProjectId);
   if (isBlocked(prep)) return prep;
   const { ws, adapted } = prep;
@@ -297,6 +313,13 @@ export async function compareWorkspaceOpportunity(raw: HouseholdWorkspace, candi
     }
   }
 
+  return { ws, adapted, candidate, ci, baseline, receipts, expenses, derived, warnings };
+}
+
+export async function compareWorkspaceOpportunity(raw: HouseholdWorkspace, candidateProjectId: string): Promise<(ReadyWorkspaceComparison & WorkspaceComparisonDetails) | BlockedComparison> {
+  const cc = candidateContext(raw, candidateProjectId);
+  if ("status" in cc) return cc;
+  const { ws, adapted, candidate, baseline, receipts, expenses, derived, warnings } = cc;
   const byDate = <T extends { date: string }>(xs: T[]) => [...xs].sort((a, b) => a.date.localeCompare(b.date));
   const expenseYears = new Set(expenses.map(e => e.date.slice(0, 4)));
   // Re-negotiating an AGREED project: the remaining amount is one offer on its first date so the usual options

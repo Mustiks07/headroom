@@ -33,7 +33,7 @@ const validDate = (d: string, year?: TaxYear) => /^\d{4}-\d{2}-\d{2}$/.test(d) &
 const STATUS_TEXT = { proposed: "Proposal", agreed: "Agreed", cancelled: "Cancelled" } as const;
 const STATUS_TONE = { proposed: "neutral", agreed: "good", cancelled: "bad" } as const;
 
-export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, onStatus, onCompare, comparing, onConditions, editConditions = false }: {
+export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, onStatus, onCompare, comparing, onConditions, editConditions = false, onFindTerms }: {
   ws: HouseholdWorkspace; project: Project;
   onRecord: (lineId: string, a: { amountCents: number; date: string; sourceLabel: string }) => void;
   onCorrect: (lineId: string, a: { amountCents: number; date: string; reason: string }) => void;
@@ -42,10 +42,11 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
   onCompare: () => void; comparing: boolean;
   onConditions: (c: Pick<Project, "cashAccountingConfirmed" | "timingArrangementConfirmed" | "terms">) => void;
   editConditions?: boolean;
+  onFindTerms?: () => void;
 }) {
   const [open, setOpen] = useState<{ lineId: string; mode: "record" | "correct" } | null>(null);
   const [conditions, setConditions] = useState(editConditions);
-  return <article className={`project-card status-${project.status}`} aria-labelledby={`p-${project.id}`}>
+  return <article id={`project-${project.id}`} className={`project-card status-${project.status}`} aria-labelledby={`p-${project.id}`}>
     <header className="project-head">
       <div>
         <h3 id={`p-${project.id}`}>{project.title}</h3>
@@ -86,7 +87,9 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
       : <p className="small muted">Cash-basis accounting: {yn(project.cashAccountingConfirmed)} · Payment dates match when money is available: {yn(project.timingArrangementConfirmed)} · Split possible: {project.terms.canSplitPayment ? "yes" : "no"} · Price negotiable: {project.terms.canRenegotiatePrice ? "yes" : "no"}{" "}
         <button type="button" className="link-btn" onClick={() => setConditions(true)}>Edit</button></p>)}
     <div className="row gap wrap">
-      {project.status !== "cancelled" && project.receipts.some(l => !l.actual && !l.cancelledAt && l.expected) && <button type="button" className="btn primary small" onClick={onCompare} aria-pressed={comparing}>{comparing ? "Comparing below" : project.status === "agreed" ? "Review remaining payments" : "Compare options for this project"}</button>}
+      {project.status !== "cancelled" && project.receipts.some(l => !l.actual && !l.cancelledAt && l.expected) && <>
+        {onFindTerms && <button type="button" className="btn primary small" onClick={onFindTerms}>Find terms for my goal</button>}
+        <button type="button" className="btn ghost small" onClick={onCompare} aria-pressed={comparing}>{comparing ? "Comparing below" : project.status === "agreed" ? "Review remaining payments" : "Standard comparison"}</button></>}
       {project.status === "proposed" && <button type="button" className="btn ghost small" onClick={() => { if (window.confirm(`Agree to “${project.title}” exactly as offered?`)) onStatus("agreed"); }}>Agree as offered</button>}
       {project.status === "agreed" && <button type="button" className="link-btn" onClick={() => { if (window.confirm(`Cancel “${project.title}”? Payments already received stay in your forecast.`)) onStatus("cancelled"); }}>Cancel this project</button>}
       {project.status === "cancelled" && <button type="button" className="link-btn" onClick={() => onStatus("agreed")}>Undo cancellation</button>}

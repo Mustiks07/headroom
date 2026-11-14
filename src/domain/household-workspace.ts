@@ -15,6 +15,7 @@ import {
   CentsSchema, CONTRACT_VERSION, CoverageMonthSchema, EvidenceSchema, FactSchema, PersonIncomeSchema, PersonSchema, TaxYearSchema,
   type BlockedComparison, type CaseInput, type CurrentRisk, type MoneyFact, type ReadyComparison, type ScenarioKind, type ScenarioResult, type TaxYear,
 } from "./contracts";
+import { DealPlanningStateSchema } from "./deal-planning";
 
 export const WORKSPACE_VERSION = "2.0" as const;
 export const WORKSPACE_FILE_KIND = "headroom.workspace" as const;
@@ -185,6 +186,8 @@ export const RetirementSchema = z.object({
 export const WORKSPACE_EVENT_KINDS = [
   "workspace_created", "migrated_from_v1", "forecast_updated", "project_added", "project_updated", "project_status_changed",
   "payment_recorded", "payment_corrected", "sep_target_changed", "sep_contribution_recorded", "document_imported", "rules_updated",
+  // Round 4 (additive): goal/terms/cash edits, a saved action package, a user-confirmed package status change.
+  "deal_planning_updated", "deal_package_saved", "deal_status_changed",
 ] as const;
 
 /**
@@ -230,6 +233,8 @@ export const HouseholdWorkspaceSchema = z.object({
   /** Version stamp of the last calculation shown/saved; numbers are always recomputed, never stored. */
   calculation: z.object({ engineVersion: z.string().max(100), rulesVersion: z.string().max(100), fingerprint: z.string().max(200), evaluatedAt: DateTimeSchema }).nullable(),
   origin: WorkspaceOriginSchema,
+  /** Round 4 (additive, optional): goals, allowed terms, cash context and action packages. See deal-planning.ts. */
+  dealPlanning: DealPlanningStateSchema.optional(),
 }).superRefine((ws, ctx) => {
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: "custom", path, message });
   const people = new Set(ws.household.people.map(p => p.id));
@@ -284,6 +289,19 @@ export const HouseholdWorkspaceSchema = z.object({
   });
   needSource(ws.retirement.futureContributionBudget.sourceId, ["retirement", "futureContributionBudget", "sourceId"]);
   if (new Set(ws.events.map(e => e.id)).size !== ws.events.length) issue(["events"], "Event ids must be unique.");
+  if (ws.dealPlanning) {
+    const dp = ws.dealPlanning;
+    const factIds = new Set([...lineIds, ...contributionIds]);
+    dp.goals.forEach((g, i) => { if (!projectIds.has(g.projectId)) issue(["dealPlanning", "goals", i, "projectId"], "Goal refers to a project that is not in this plan."); });
+    dp.termSpaces.forEach((t, i) => { if (!projectIds.has(t.projectId)) issue(["dealPlanning", "termSpaces", i, "projectId"], "Terms refer to a project that is not in this plan."); });
+    dp.packages.forEach((p, i) => {
+      if (!projectIds.has(p.projectId)) issue(["dealPlanning", "packages", i, "projectId"], "Package refers to a project that is not in this plan.");
+      if (!dp.goals.some(g => g.id === p.goalId)) issue(["dealPlanning", "packages", i, "goalId"], "Package refers to a goal that is not in this plan.");
+    });
+    dp.cashContext?.includedFactIds.forEach((id, i) => { if (!factIds.has(id)) issue(["dealPlanning", "cashContext", "includedFactIds", i], `Fact "${id}" is not in this plan.`); });
+    dp.cashContext?.flows.forEach((f, i) => needSource(f.sourceId, ["dealPlanning", "cashContext", "flows", i, "sourceId"]));
+    if (dp.cashContext?.snapshot) needSource(dp.cashContext.snapshot.sourceId, ["dealPlanning", "cashContext", "snapshot", "sourceId"]);
+  }
 });
 
 export type OtherIncome = z.infer<typeof OtherIncomeSchema>;

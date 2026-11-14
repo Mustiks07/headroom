@@ -166,6 +166,46 @@ export function setProjectConditions(w0: HouseholdWorkspace, projectId: string, 
   return log(w, newId("evt-terms"), "project_updated", `Updated the conditions for “${p.title}”.`, { projectId });
 }
 
+/* ---------- deal planning: the client's agreement ---------- */
+
+/**
+ * The user records that the client agreed to a saved package's terms. In ONE document edit:
+ * the package becomes "client_agreed", the project's not-yet-received payments are replaced by the
+ * package's payments (received amounts stay as facts), the project becomes agreed, and any extra
+ * SEP-IRA in the terms raises that year's goal from max(goal, paid) by the engine's amount.
+ * Headroom never does this on its own; the caller asks the user to confirm first.
+ */
+export function recordClientAgreement(w0: HouseholdWorkspace, packageId: string): { workspace: HouseholdWorkspace; event: WorkspaceEvent } {
+  const w = clone(w0);
+  const pkg = w.dealPlanning?.packages.find(p => p.id === packageId);
+  if (!pkg) throw new Error("These terms are no longer in the plan.");
+  if (pkg.status === "superseded") throw new Error("These terms were replaced by a newer choice.");
+  const p = w.projects.find(x => x.id === pkg.projectId);
+  if (!p) throw new Error("This project is no longer in the plan.");
+  const v = pkg.variant;
+  const sourceId = p.receipts[0]?.sourceId ?? ensureManualEvidence(w);
+  const n = v.terms.payments.length;
+  p.receipts = [...p.receipts.filter(l => l.actual), ...v.terms.payments.map((pay, i) => ({ id: `line-${pay.id}-${pkg.id}`.slice(0, 100),
+    label: n > 1 ? `Payment ${i + 1} of ${n}` : "Payment", expected: { amountCents: pay.amountCents, date: pay.date }, actual: null, cancelledAt: null, sourceId, corrections: [] }))];
+  p.status = "agreed"; p.statusChangedAt = now();
+  const kind: ScenarioResult["kind"] = v.terms.additionalSep ? "sep_minimum" : v.terms.payments.some(x => x.date.startsWith("2027-")) && v.terms.payments.some(x => x.date.startsWith("2026-")) ? "split_payment"
+    : v.purpose === "as_offered" ? "accept_now" : "renegotiate";
+  p.agreedDecision = { kind, label: v.label, chosenAt: now(), fingerprint: pkg.searchFingerprint };
+  if (v.terms.additionalSep) {
+    const { personId, year, amountCents } = v.terms.additionalSep;
+    const pos = sepPosition(w, personId, year);
+    const i = w.retirement.targets.findIndex(t => t.personId === personId && t.year === year);
+    const target = { id: i >= 0 ? w.retirement.targets[i].id : newId("sep-goal"), personId, year, targetCents: Math.max(pos.targetCents ?? 0, pos.paidCents) + amountCents,
+      acceptedAt: now(), origin: { projectId: p.id, scenarioKind: kind, fingerprint: pkg.searchFingerprint } };
+    if (i >= 0) w.retirement.targets[i] = target; else w.retirement.targets.push(target);
+  }
+  pkg.status = "client_agreed";
+  const at = now();
+  const event: WorkspaceEvent = { id: `evt-agreed-${pkg.id}`.slice(0, 100), at, kind: "deal_status_changed",
+    description: `You recorded that the client agreed to “${p.title}”: ${v.label}.`, refs: { projectId: p.id }, previousFingerprint: w0.calculation?.fingerprint ?? null, nextFingerprint: null };
+  return { workspace: { ...withEvent(w, event), updatedAt: at }, event };
+}
+
 /* ---------- SEP ---------- */
 
 export function recordContribution(w0: HouseholdWorkspace, c: { personId: string; taxYear: TaxYear; amountCents: number; paidDate: string; sourceLabel: string }): HouseholdWorkspace {
