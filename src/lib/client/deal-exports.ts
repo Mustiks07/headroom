@@ -13,10 +13,31 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD",
 export const money = (cents: number) => usd.format(cents / 100);
 const longDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
+/** Stored UIDs are limited to 200 characters (Reminder / IssuedCalendarEvent schemas). */
+export const MAX_CALENDAR_UID = 200;
+const UID_DOMAIN = "@headroom.plan";
+
+/** Deterministic 64-bit FNV-1a hex of a string (sync, same result in browser and server). */
+function fnv1a64(text: string): string {
+  let h = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(text)) { h ^= BigInt(byte); h = (h * 0x100000001b3n) & 0xffffffffffffffffn; }
+  return h.toString(16).padStart(16, "0");
+}
+
+/**
+ * Stable calendar UID from its parts. Short UIDs keep the readable form used since round 4 (so
+ * events already issued still match); a UID that would exceed the stored limit keeps a readable
+ * prefix plus a hash of the FULL readable form — still stable across exports and unique per parts.
+ */
+export function calendarUid(...parts: string[]): string {
+  const readable = parts.map(p => p.replace(/[^A-Za-z0-9._-]/g, "-")).join(".");
+  if (readable.length + UID_DOMAIN.length <= MAX_CALENDAR_UID) return `${readable}${UID_DOMAIN}`;
+  return `${readable.slice(0, 150)}.h${fnv1a64(readable)}${UID_DOMAIN}`;
+}
+
 /** Stable calendar UID per workspace + project + action (re-exports update the same event). */
 export function reminderUid(workspaceId: string, projectId: string, actionId: string): string {
-  const clean = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, "-");
-  return `${clean(workspaceId)}.${clean(projectId)}.${clean(actionId)}@headroom.plan`;
+  return calendarUid(workspaceId, projectId, actionId);
 }
 
 export interface ClientDraft { subject: string; body: string; includesHouseholdDetails: boolean; generatedAt: string }
@@ -235,7 +256,7 @@ const RETURN_DUE: Record<number, string> = { 2026: "2027-04-15", 2027: "2028-04-
  */
 export function currentPlanEvents(ws: HouseholdWorkspace): PlanCalendarEvent[] {
   const events: PlanCalendarEvent[] = [];
-  const uid = (...parts: string[]) => `${parts.map(p => p.replace(/[^A-Za-z0-9._-]/g, "-")).join(".")}@headroom.plan`;
+  const uid = calendarUid;
   for (const p of ws.projects) {
     if (p.status !== "agreed") continue;
     for (const l of p.receipts) {
