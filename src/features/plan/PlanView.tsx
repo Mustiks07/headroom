@@ -9,7 +9,8 @@ import { resolveSource } from "@/domain/sources";
 import { calculateComparison } from "@/lib/engine";
 import { exportPlanPdf } from "@/lib/client/api";
 import { dateTime, money, shortDate, shortFingerprint, signClass, signedMoney } from "@/features/format";
-import { adults, buildCaseInput, draftFromCase, fieldId, normalizePath, personName, type Draft } from "@/features/household/draft";
+import { adults, buildCaseInput, draftFromCase, fieldId, invalidProblems, normalizePath, personName, pruneInvalid, type Draft } from "@/features/household/draft";
+import { InvalidInputsProvider } from "@/features/household/invalidInputs";
 import { CoverageEditor, IncomeEditor, type Update } from "@/features/household/editors";
 import { ProjectEditor } from "@/features/household/projectEditors";
 import { BlockedResult, ErrorNotice, ProblemsList } from "@/features/results/BlockedResult";
@@ -175,6 +176,7 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
     </section>
 
     {showAll && <section className="plan-section"><ComparisonView comparison={c} input={plan.input} stale={outdated} onShowCalc={onDrawer}
+      useLabel="Switch my plan to this" currentId={plan.chosenScenarioId}
       onUse={id => { if (id !== plan.chosenScenarioId) void switchScenario(id); }} busyScenarioId={busy && c.scenarios.some(s => s.id === busy) ? busy : null} /></section>}
 
     <div className="plan-grid">
@@ -281,7 +283,7 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
   const [saving, setSaving] = useState(false);
   const hasSpouse = plan.input.people.some(p => p.role === "spouse");
 
-  const update: Update = useCallback(mutate => { setDraft(prev => { const n = structuredClone(prev); mutate(n); return n; }); setVersion(v => v + 1); }, []);
+  const update: Update = useCallback(mutate => { setDraft(prev => { const n = structuredClone(prev); mutate(n); pruneInvalid(n); return n; }); setVersion(v => v + 1); }, []);
   useEffect(() => { onDirty(version > 0); }, [version, onDirty]);
 
   const problems = useMemo(() => calc?.problems ?? (calc?.result && calc.result.status !== "ready" ? calc.result.fields : []), [calc]);
@@ -316,7 +318,8 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
     }
   }
 
-  return <section id="changed" className="plan-section changed" aria-labelledby="changed-title">
+  const invalidCount = invalidProblems(draft).length;
+  return <InvalidInputsProvider draft={draft} update={update}><section id="changed" className="plan-section changed" aria-labelledby="changed-title">
     <h2 id="changed-title" className="section-title small">Something changed</h2>
     <p className="muted">Pick what happened, update the figures, and Headroom recalculates your plan. Nothing is saved until you choose “Save the updated plan”.</p>
     <div className="change-kinds" role="radiogroup" aria-label="What changed?">
@@ -340,9 +343,10 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
       <div className="field"><label className="field-label" htmlFor="change-desc">What happened? <span className="optional">for your history</span></label>
         <input id="change-desc" maxLength={200} value={description} onChange={e => setDescription(e.target.value)} /></div>
       <div className="row gap wrap">
-        <button type="button" className="btn primary" disabled={calc?.pending || version === 0} onClick={recalc}><RefreshCw size={16} /> Recalculate</button>
+        <button type="button" className="btn primary" disabled={calc?.pending || version === 0 || invalidCount > 0} onClick={recalc}><RefreshCw size={16} /> Recalculate</button>
         <button type="button" className="btn ghost" onClick={onCancel}>Discard changes</button>
         {version === 0 && <span className="muted small">Change a figure first.</span>}
+        {invalidCount > 0 && <span className="field-error">Fix {invalidCount} amount{invalidCount > 1 ? "s" : ""} before recalculating.</span>}
       </div>
     </div>}
 
@@ -364,7 +368,7 @@ function SomethingChanged({ plan, onCancel, onSaved, onDirty, onDrawer }: {
           setSaving(false);
         }} />}
     </div>
-  </section>;
+  </section></InvalidInputsProvider>;
 }
 
 function ChangeReview({ before, after, afterInput, changes, choice, setChoice, onSave, saving, onDrawer }: {

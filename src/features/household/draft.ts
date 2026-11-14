@@ -18,7 +18,11 @@ export interface Draft extends Omit<CaseInput, "state" | "filingStatus" | "peopl
   state: string | null;
   filingStatus: FilingStatus | null;
   people: DraftPerson[];
-  ui: { projectStarted: boolean };
+  ui: {
+    projectStarted: boolean;
+    /** Text the person typed that isn't a valid amount yet. Blocks calculation until fixed. */
+    invalid?: Record<string, { text: string; message: string }>;
+  };
 }
 
 export const MANUAL_SOURCE_ID = "manual-entry";
@@ -85,6 +89,8 @@ export type BuildResult = { ok: true; input: CaseInput } | { ok: false; problems
  * is left to the engine so its needs_data/unsupported answer stays authoritative.
  */
 export function buildCaseInput(draft: Draft, purpose: "risk" | "comparison"): BuildResult {
+  const invalid = invalidProblems(draft);
+  if (invalid.length) return { ok: false, problems: invalid };
   const problems: Problem[] = [];
   if (!draft.state) problems.push({ path: "state", reason: "Choose the state you live in." });
   if (!draft.filingStatus) problems.push({ path: "filingStatus", reason: "Choose how you file your tax return." });
@@ -106,6 +112,41 @@ export function buildCaseInput(draft: Draft, purpose: "risk" | "comparison"): Bu
     return { ok: false, problems: parsed.error.issues.map(issue => ({ path: issue.path.join("."), reason: issue.message })) };
   }
   return { ok: true, input: parsed.data };
+}
+
+/** Invalid typed amounts, as problems pointing at their field. */
+export function invalidProblems(draft: Pick<Draft, "ui">): Problem[] {
+  return Object.entries(draft.ui.invalid ?? {}).map(([key, v]) => ({ path: key.replace(/#.*$/, ""), reason: `${v.message} (you typed “${v.text}”)` }));
+}
+
+/** Drops invalid-entry markers whose field no longer exists or that match `prefix`. */
+export function pruneInvalid(draft: Draft, prefix?: string) {
+  const inv = draft.ui.invalid;
+  if (!inv) return;
+  for (const key of Object.keys(inv)) {
+    const base = key.replace(/#.*$/, "");
+    if ((prefix && (base === prefix || base.startsWith(`${prefix}.`))) || getAt(draft, base) === undefined) delete inv[key];
+  }
+}
+
+/**
+ * Validates a draft read back from browser storage. Placeholders stand in for
+ * the answers a draft may leave open, so the rest is checked against the
+ * shared schema; anything malformed is discarded rather than half-restored.
+ */
+export function restoreDraft(raw: unknown): Draft | null {
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Draft;
+  if (!d.ui || typeof d.ui.projectStarted !== "boolean" || !Array.isArray(d.people)) return null;
+  if (d.people.some(p => p.ageAt2026Start !== null && typeof p.ageAt2026Start !== "number")) return null;
+  const { ui: _ui, ...rest } = d;
+  void _ui;
+  const probe = { ...rest, state: d.state ?? "TX", filingStatus: d.filingStatus ?? "single",
+    people: d.people.map(p => ({ ...p, ageAt2026Start: p.ageAt2026Start ?? 30 })) };
+  if (!CaseInputSchema.safeParse(probe).success) return null;
+  const invalid = d.ui.invalid && typeof d.ui.invalid === "object" ? Object.fromEntries(Object.entries(d.ui.invalid)
+    .filter(([, v]) => v && typeof v.text === "string" && typeof v.message === "string")) : undefined;
+  return { ...d, ui: { projectStarted: d.ui.projectStarted, ...(invalid && Object.keys(invalid).length ? { invalid } : {}) } };
 }
 
 function isIsoDate(value: string) { return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)); }
@@ -146,7 +187,7 @@ export function syncHousehold(draft: Draft) {
 
 /** "years[0].incomes[1].w2Box1" → "years.0.incomes.1.w2Box1" */
 export function normalizePath(path: string): string {
-  return path.replace(/\[(\w+)\]/g, ".$1").replace(/^\./, "");
+  return path.replace(/\[(\w+|\*)\]/g, ".$1").replace(/^\./, "");
 }
 
 export function getAt(root: unknown, path: string): unknown {
@@ -240,6 +281,7 @@ export function describePath(path: string, input: Pick<Draft, "people" | "years"
       const row = input.years[yearIdx]?.incomes[Number(next)];
       parts.push(row ? personName(input, row.personId) : `Person ${Number(next) + 1}`); i++; continue;
     }
+    if (key === "coverage" && next === "*") { parts.push("Every month"); i++; continue; }
     if (key === "coverage" && next !== undefined && /^\d+$/.test(next)) {
       const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
       parts.push(months[Number(next)] ?? `Month ${Number(next) + 1}`); i++; continue;

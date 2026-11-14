@@ -70,3 +70,8 @@ export function shortFingerprint(fp: string): string {
 }
 
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Rewrites ISO dates inside engine text ("2026-12-20") as "Dec 20, 2026" — wording only, no new facts. */
+export function humanizeDates(text: string): string {
+  return text.replace(/\b(20\d{2})-(\d{2})-(\d{2})\b/g, iso => shortDate(iso));
+}

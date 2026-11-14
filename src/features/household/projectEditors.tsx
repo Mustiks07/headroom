@@ -33,7 +33,7 @@ export function ProjectEditor({ draft, update, problemAt }: { draft: Draft; upda
       <MoneyField plain path="opportunity.grossRevenueCents" label="What the client will pay" hint="The full price before your costs. This is not the same as profit."
         fact={plainFact(o.grossRevenueCents, started && o.grossRevenueCents > 0)} evidence={draft.evidence} problem={problemAt("opportunity.grossRevenueCents")}
         onChange={f => update(d => { d.opportunity.grossRevenueCents = f.valueCents ?? 0; d.ui.projectStarted = true; if (d.opportunity.title === CURRENT_FORECAST_TITLE && f.valueCents) d.opportunity.title = "New project"; })} />
-      <MoneyField plain path="opportunity.incrementalExpensesCents" label="Extra costs to do the project" hint="Subcontractors, materials, software bought for this job." noneLabel="No extra costs"
+      <MoneyField plain required path="opportunity.incrementalExpensesCents" label="Extra costs to do the project" hint="Subcontractors, materials, software bought for this job." noneLabel="No extra costs"
         fact={plainFact(o.incrementalExpensesCents, true)} evidence={draft.evidence} problem={problemAt("opportunity.incrementalExpensesCents")}
         onChange={f => update(d => { d.opportunity.incrementalExpensesCents = f.valueCents ?? 0; })} />
     </div>
@@ -68,11 +68,11 @@ export function LimitsEditor({ draft, update, problemAt }: { draft: Draft; updat
   const c = draft.constraints;
   return <div className="stack">
     <div className="grid-2">
-      <MoneyField plain path="constraints.maxAdditionalSepCents" label="Maximum I can put into retirement" noneLabel="Nothing"
+      <MoneyField plain required path="constraints.maxAdditionalSepCents" label="Maximum I can put into retirement" noneLabel="Nothing"
         hint="Extra SEP-IRA money you could actually set aside from this year's cash. Headroom won't suggest more."
         fact={plainFact(c.maxAdditionalSepCents, true)} evidence={draft.evidence} problem={problemAt("constraints.maxAdditionalSepCents")}
         onChange={f => update(d => { d.constraints.maxAdditionalSepCents = f.valueCents ?? 0; })} />
-      <MoneyField plain path="constraints.minimumDesiredCashGainCents" label="Minimum extra cash I want from this project" noneLabel="No minimum"
+      <MoneyField plain required path="constraints.minimumDesiredCashGainCents" label="Minimum extra cash I want from this project" noneLabel="No minimum"
         hint="Used for the price-negotiation target. Your time isn't priced in automatically."
         fact={plainFact(c.minimumDesiredCashGainCents, true)} evidence={draft.evidence} problem={problemAt("constraints.minimumDesiredCashGainCents")}
         onChange={f => update(d => { d.constraints.minimumDesiredCashGainCents = f.valueCents ?? 0; })} />
