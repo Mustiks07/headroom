@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { Draft } from "./draft";
 
-export interface InvalidEntry { text: string; message: string }
+export interface InvalidEntry { text: string; message: string; low?: string; high?: string }
 export interface InvalidApi {
   get(key: string): InvalidEntry | undefined;
   set(key: string, entry: InvalidEntry | null): void;
@@ -25,7 +25,7 @@ export function InvalidInputsProvider({ draft, update, children }: {
     set: (key, entry) => {
       const current = invalid?.[key];
       if (!entry && !current) return;
-      if (entry && current && current.text === entry.text && current.message === entry.message) return;
+      if (entry && current && current.text === entry.text && current.message === entry.message && current.low === entry.low && current.high === entry.high) return;
       update(d => {
         const next = { ...(d.ui.invalid ?? {}) };
         if (entry) next[key] = entry; else delete next[key];

@@ -21,7 +21,7 @@ export interface Draft extends Omit<CaseInput, "state" | "filingStatus" | "peopl
   ui: {
     projectStarted: boolean;
     /** Text the person typed that isn't a valid amount yet. Blocks calculation until fixed. */
-    invalid?: Record<string, { text: string; message: string }>;
+    invalid?: Record<string, { text: string; message: string; low?: string; high?: string }>;
   };
 }
 
@@ -145,7 +145,8 @@ export function restoreDraft(raw: unknown): Draft | null {
     people: d.people.map(p => ({ ...p, ageAt2026Start: p.ageAt2026Start ?? 30 })) };
   if (!CaseInputSchema.safeParse(probe).success) return null;
   const invalid = d.ui.invalid && typeof d.ui.invalid === "object" ? Object.fromEntries(Object.entries(d.ui.invalid)
-    .filter(([, v]) => v && typeof v.text === "string" && typeof v.message === "string")) : undefined;
+    .filter(([, v]) => v && typeof v.text === "string" && typeof v.message === "string"
+      && (v.low === undefined || typeof v.low === "string") && (v.high === undefined || typeof v.high === "string"))) : undefined;
   return { ...d, ui: { projectStarted: d.ui.projectStarted, ...(invalid && Object.keys(invalid).length ? { invalid } : {}) } };
 }
 
