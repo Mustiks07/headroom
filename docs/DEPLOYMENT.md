@@ -50,7 +50,7 @@ Configure required environment variables in the Vercel dashboard for the intende
 
 The app itself contains **no registration or login pages**. Cloud session infrastructure must not create a hidden dependency that blocks judges. Core calculation and guest persistence remain available if external AI/cloud configuration is absent.
 
-Minimal production env: none (guest/local mode). Recommended: `NEXT_PUBLIC_APP_URL`. Cloud save adds the two public Supabase values; AI adds `SUPABASE_SECRET_KEY`, `AI_PROVIDER`, `AI_API_KEY` (+ limits). Security headers are set in `next.config.ts`. Health check: `GET /api/capabilities` (booleans only).
+Minimal production env: none (guest/local mode). Recommended: `NEXT_PUBLIC_APP_URL`. Cloud save adds the two public Supabase values; AI adds `SUPABASE_SECRET_KEY`, `AI_PROVIDER`, `AI_API_KEY` (+ limits). Security headers are set in `next.config.ts`. Health check: `GET /api/capabilities` (booleans only). Optional insurance ZIP lookup: server-only `MARKETPLACE_API_KEY` (see `docs/AI_DEPLOYMENT.md`, "Insurance data lookups"); without it the bundled CMS county extract and county-by-name lookup still work.
 
 Check the exact deployed commit against `ACCEPTANCE.md`. Add the verified URL and actual deck path to README only when they exist. Do not label an integration enabled merely because environment variable names were added.
 

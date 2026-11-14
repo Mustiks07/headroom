@@ -4,6 +4,7 @@ import {
 import type { HouseholdWorkspace, WorkspaceEvent } from "@/domain/household-workspace";
 import { engineWorkspaceFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { commitWorkspaceChange, newWorkspaceEvent, type WorkspaceRepository, type WorkspaceSaveOutcome } from "./workspace-repository";
+import { ensureOriginalOffer } from "./workspace-commands";
 
 /**
  * Persistence operations for round 4 deal planning. Every change is one atomic workspace save
@@ -108,12 +109,16 @@ export function appendDecisionRecord(next: HouseholdWorkspace, before: Household
   const goal = dp?.goals.find(g => g.id === pkg.goalId);
   const space = dp?.termSpaces.find(t => t.projectId === pkg.projectId);
   if (!goal || !space) return;
+  // Keep the client's first offer: captured from the decision-time lines if it was never recorded.
+  ensureOriginalOffer(next, pkg.projectId, at, { kind: "existing_project", sourceId: null }, "captured", before.projects.find(p => p.id === pkg.projectId));
+  const originalOffer = next.projects.find(p => p.id === pkg.projectId)?.originalOffer ?? null;
   const snapshot = structuredClone(before) as Record<string, unknown>;
   delete snapshot.dealPlanning;
   records.push({ id, packageId: pkg.id, projectId: pkg.projectId, status, recordedAt: at, workspaceRevision: before.revision,
     searchFingerprint: pkg.searchFingerprint, engineVersion: pkg.engineVersion, rulesVersion: pkg.rulesVersion,
     workspaceSnapshot: snapshot, goal: structuredClone(goal), termSpace: structuredClone(space),
-    cashContext: dp?.cashContext ? structuredClone(dp.cashContext) : null, variant: structuredClone(pkg.variant) });
+    cashContext: dp?.cashContext ? structuredClone(dp.cashContext) : null, variant: structuredClone(pkg.variant),
+    ...(pkg.decisionContext ? { decisionContext: { ...structuredClone(pkg.decisionContext), originalOffer: pkg.decisionContext.originalOffer ?? originalOffer } } : {}) });
   next.dealPlanning.decisionRecords = records.slice(-30);
 }
 

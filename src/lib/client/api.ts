@@ -10,7 +10,8 @@
  *            currentSearchFingerprint(), buildActionPackage(), buildClientDraft(), clientDraftNotes(), clientDraftFile(),
  *            buildCalendar(), exportCalendarIcs(), exportDecisionPdf(), previewDocumentFacts()
  * Assist:    toExtractedFacts(), mergeIntoDraft(), applyConfirmedFacts(), buildAssistanceContext(), proposeChange(), answerAmbiguity(),
- *            applyChangeProposal(), commitProposal(), applyCommand(), explainResult(), resolveDate()
+ *            applyChangeProposal(), commitProposal(), applyCommand(), explainWorkspace() (server-recomputed), explainResult() (legacy), resolveDate(),
+ *            lookupLocation(), lookupBenchmark() (insurance data), ensureOriginalOffer()
  * Documents: extractDocument(file, { consentToProvider }), EXTRACTION_FIELDS
  * Export:    exportPlanPdf(plan), exportPlanJson(plan), exportCaseJson(input)
  * Service:   getCapabilities(), startCheckout(), verifyCheckout(), getLocalEntitlement(), trackEvent()
@@ -26,14 +27,14 @@ export { subscribeToLocalPlanChanges } from "./local-repository";
 export {
   extractDocument, exportPlanPdf, exportPlanJson, exportCaseJson, readCaseInputFromJson,
   getCapabilities, startCheckout, verifyCheckout, getLocalEntitlement, trackEvent, exportForecastPdf,
-  exportDecisionPdf, exportCalendarIcs, clientDraftFile, proposeChange, explainResult,
+  exportDecisionPdf, exportCalendarIcs, clientDraftFile, proposeChange, explainResult, explainWorkspace, lookupLocation, lookupBenchmark,
 } from "./features";
 export { toExtractedFacts, mergeIntoDraft, applyConfirmedFacts, emptyImportDraft } from "./import-draft";
 export type { ExtractionResponse, FactDecision, GroupApplyResult } from "./import-draft";
 export { buildAssistanceContext, proposeFromPatterns, answerAmbiguity, resolveDate, findAmountCents } from "./assistance-text";
-export { applyCommand, applyChangeProposal, commitProposal, CommandError } from "./workspace-commands";
+export { applyCommand, applyChangeProposal, commitProposal, CommandError, ensureOriginalOffer, originalOfferFromLines } from "./workspace-commands";
 export { saveDealGoal, saveCashContext, saveActionPackage, setPackageStatus, setReminderStatus, packageCurrency, currentSearchFingerprint, appendDecisionRecord, exportCurrentCalendar } from "./deal-state";
-export { buildActionPackage, buildClientDraft, clientDraftNotes, buildReminders, buildSpecialistNote, buildCalendar, reminderUid, termsAddUp,
+export { buildActionPackage, buildDecisionContext, buildClientDraft, clientDraftNotes, buildReminders, buildSpecialistNote, buildCalendar, reminderUid, termsAddUp,
   buildCurrentCalendar, currentPlanEvents, CALENDAR_IMPORT_NOTE } from "./deal-exports";
 export {
   createWorkspaceRepository, createLocalWorkspaceRepository, commitWorkspaceChange, newWorkspaceEvent, WorkspaceConflictError,

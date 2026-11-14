@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { CentsSchema, TaxYearSchema, type BlockedComparison } from "./contracts";
 import type { HouseholdWorkspace } from "./household-workspace";
+import { DecisionContextSchema } from "./decision-context";
 
 export const ASSISTANCE_VERSION = "1.0" as const;
 
@@ -232,6 +233,8 @@ export const DecisionRecordSchema = z.object({
   cashContext: z.record(z.string(), z.unknown()).nullable(),
   /** The chosen DealVariant exactly as calculated then. */
   variant: z.record(z.string(), z.unknown()),
+  /** Round 5 (additive): what the choice was compared with and why it was recommended (copied from the package). */
+  decisionContext: DecisionContextSchema.optional(),
 });
 
 /** Calendar events already handed to the user, so a later export can UPDATE or CANCEL them. */
@@ -250,8 +253,33 @@ export const ASSIST_ERROR_CODES = ["INVALID_REQUEST", "PAYLOAD_TOO_LARGE", "AI_U
 export const ProposeBodySchema = z.object({ request: AssistanceRequestSchema, consentToProvider: z.boolean() });
 export interface ProposeResponse { proposal: z.infer<typeof ChangeProposalSchema>; providerUsed: boolean; notes: string[] }
 
-/** POST /api/assist/explain body / response (packet from Claude 2's engine). */
-export interface ExplainResponse { explanation: z.infer<typeof ExplanationSchema>; providerUsed: boolean }
+/**
+ * POST /api/assist/explain. Preferred body: { workspace, subject, refId?, consentToProvider } — the
+ * server rebuilds the packet with the engine from that workspace revision (origin "server_recomputed").
+ * Legacy body: { packet, consentToProvider } — the packet is only schema-checked, so the response says
+ * "client_packet_unverified" and must not be presented as checked by the server.
+ */
+export const EXPLAIN_SUBJECTS = ["current_year", "deal_choice", "agreed_plan"] as const;
+export const ExplainWorkspaceBodySchema = z.object({
+  workspace: z.unknown(), subject: z.enum(EXPLAIN_SUBJECTS), refId: IdSchema.optional(), consentToProvider: z.boolean(),
+});
+export interface ExplanationVerification {
+  origin: "server_recomputed" | "client_packet_unverified";
+  /** Revision / workspace the packet was rebuilt from (null for a client packet). */
+  workspaceId: string | null;
+  workspaceRevision: number | null;
+  fingerprint: string;
+  engineVersion: string | null;
+  rulesVersion: string | null;
+  /** Plain-English statement of what was and was not checked. */
+  note: string;
+}
+export interface ExplainResponse {
+  explanation: z.infer<typeof ExplanationSchema>;
+  providerUsed: boolean;
+  /** Round 5 follow-up (additive). */
+  verification?: ExplanationVerification;
+}
 
 export type AssistanceContext = z.infer<typeof AssistanceContextSchema>;
 export type AssistanceRequest = z.infer<typeof AssistanceRequestSchema>;
