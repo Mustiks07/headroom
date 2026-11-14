@@ -1,0 +1,65 @@
+{
+  "status": "Scenario assumptions, not measured Headroom customers or invoices",
+  "checked_date": "2026-11-15",
+  "currency": "USD",
+  "observed_prices": {
+    "stripe_domestic_card_pct": 0.029,
+    "stripe_per_charge": 0.30,
+    "stripe_billing_pct": 0.007,
+    "mor_comparison_pct": 0.05,
+    "mor_comparison_per_charge": 0.50,
+    "opus_input_per_million": 4,
+    "opus_output_per_million": 20
+  },
+  "source_urls": {
+    "stripe_domestic": "https://stripe.com/pricing",
+    "stripe_billing": "https://stripe.com/billing/pricing",
+    "stripe_refunds": "https://docs.stripe.com/refunds",
+    "mor_comparison": "https://www.paddle.com/pricing",
+    "opus": "https://assets.claude.com/a04aca860a54b7323e33f449706e9b43680e1346.pdf"
+  },
+  "assumptions": {
+    "full_refund_rate": 0.05,
+    "support_hourly_usd": 30,
+    "token_reserve_multiplier": 2,
+    "document_input_tokens": 30000,
+    "document_output_tokens": 3000,
+    "update_input_tokens": 8000,
+    "update_output_tokens": 1500,
+    "monthly_onboarding_minutes_once": 10,
+    "fixed_hosting_per_year": 540,
+    "annual_renewal_scenarios": [0.25, 0.5, 0.7],
+    "monthly_churn_scenarios": [0.1, 0.2, 0.3],
+    "single_repeat_purchase_probabilities": [0.25, 0.5, 0.75],
+    "planning_contribution_cac_ratio": 3
+  },
+  "products": {
+    "case29": {"price": 29, "recurring": false, "service_months": 1, "documents": 2, "updates": 4, "support_minutes": 10, "variable_infra": 0.25},
+    "season49": {"price": 49, "recurring": false, "service_months": 3, "documents": 5, "updates": 10, "support_minutes": 15, "variable_infra": 0.6},
+    "annual99": {"price": 99, "recurring": true, "service_months": 12, "documents": 20, "updates": 40, "support_minutes": 20, "variable_infra": 1.5},
+    "annual149_test": {"price": 149, "recurring": true, "service_months": 12, "documents": 20, "updates": 40, "support_minutes": 20, "variable_infra": 1.5},
+    "monthly15_test": {"price": 15, "recurring": true, "service_months": 1, "documents": 2, "updates": 4, "support_minutes": 3, "variable_infra": 0.1}
+  },
+  "funnel": {
+    "visitors": 10000,
+    "eligible_share": 0.3,
+    "complete_given_eligible": 0.6,
+    "buy_given_complete": 0.2,
+    "cpc_usd": 1,
+    "acquisition_labor_total_usd": 500,
+    "free_ai_document_per_person": 1,
+    "paid_first_document_in_paid_cogs": true
+  },
+  "limitations": [
+    "Stripe rates are an eligible US merchant / domestic card comparison, not proof that Headroom can onboard or charge live.",
+    "MoR rates are an alternative comparison, not added to Stripe. Provider/product/country approval and refund terms are not verified.",
+    "No caching or model routing discount; reserve is a workload assumption, not observed retries. OCR, long documents and image tokens can exceed it.",
+    "Support is a blended software-support scenario; professional tax review is excluded and is not promised in any plan.",
+    "Refunded purchases retain full modeled delivery costs and original payment fees. Recurring Billing fee is conservatively charged on gross collections.",
+    "Variable infra is a separate estimated usage allowance; fixed hosting is excluded from unit contribution and deducted once at business level.",
+    "No sales tax included in price, corporate tax, disputes, FX, legal review, security audit, engineering or acquisition creative costs beyond stated labor.",
+    "Cohort LTV is finite, undiscounted contribution before CAC and fixed costs; renewal/churn are hypotheses, not RevenueCat benchmarks.",
+    "Monthly model has additional one-off onboarding; annual/case/season support already includes onboarding in their period.",
+    "Different product periods have different assumed usage. Only annual149 versus annual99 holds delivery assumptions constant; this model is not an observed price A/B experiment."
+  ]
+}

@@ -8,6 +8,8 @@ Headroom's core is ACA subsidy protection for self-employed US households with c
 
 The current demo shows **$99 per year per household**. Compare this hypothesis with **$29 per decision** and **$49 per season**, stating exactly what each purchase includes. These are proposed price tests, not observed willingness to pay or a live billing change. The recurring value is maintaining a current household plan when work, pay, family income or insurance changes. A one-time cliff warning is not enough to justify an annual purchase.
 
+The [latest monetization review](research/round6-monetization-review.md) recommends testing a defined $29 decision first, then a $49/90-day season and annual plans for demonstrated repeat needs. It includes a more conservative [editable economics model](research/round6-economics/summary.md), with $66.53 annual99 contribution before CAC/fixed costs and explicit acquisition/renewal sensitivities. These are experiments for the next iteration; live pricing and the current development assignments are unchanged.
+
 Initial payment: a material personal decision and the ability to keep that decision current. Reuse: new work, canceled payment, spouse bonus, corrected forecast, open enrollment. Renewal: next year's income and insurance differ. If users only have a seasonal one-off need and do not renew, test a per-season/decision purchase rather than disguising low use as monthly retention.
 
 Free insight should be useful and honest. Do not hide the fact that no special intervention is needed. In the contest all capabilities are accessible without login or actual payment, with a clearly marked demo/test commercial flow.
