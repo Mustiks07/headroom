@@ -124,13 +124,30 @@ async function startServer() {
     await page.getByRole("button", { name: "Save this payment" }).click(); await settled();
     const afterProfit = await profit();
     check(beforeProfit === "$125,000" && afterProfit === "$125,200", `actual $3,200 replaces expected $3,000 (profit ${beforeProfit} → ${afterProfit})`);
-    await page.getByRole("button", { name: /Record a contribution/ }).click();
+    await page.getByRole("button", { name: "Record a contribution you made" }).click();
     await page.locator("#c-amount").fill("1500"); await page.locator("#c-date").fill("2026-11-10");
     await page.getByRole("button", { name: "Save contribution" }).click(); await settled();
     const sepText = (await page.locator(".sep-row .sep-figures").innerText()).replace(/\s+/g, " ");
     check(/Yearly goal \$5,000 Already contributed \$3,500 Left to contribute \$1,500/.test(sepText), `SEP goal / paid / left: ${sepText}`);
     await page.reload(); await settled();
     check((await page.locator(".save-status").innerText()).includes("Revision 3") && await profit() === "$125,200", "household plan reopens at revision 3 with the recorded facts");
+
+    // 9. Round 4: goal-first terms for proposal B on top of agreed A (real searchDealTerms), then an unreachable goal.
+    {
+      const deal = page.locator("#deal-panel");
+      const search = async () => { await deal.getByRole("button", { name: /^(Find terms|Search again)$/ }).click();
+        await page.waitForFunction(() => { const r = document.querySelector("#deal-result"); return r && !r.querySelector(".loading-line") && !r.querySelector(".stale-banner") && r.querySelector(".variant, .blocked"); }, null, { timeout: 30000 }); };
+      await page.locator("#project-proj-b").getByRole("button", { name: "Find terms for my goal" }).click(); await deal.waitFor();
+      await page.locator("#goal-keep").fill("4000"); await page.locator("#goal-sep").fill("1000");
+      await deal.getByRole("button", { name: "Price and payment limits" }).click();
+      await page.locator("#goal-price-min").fill("12000"); await page.locator("#goal-price-max").fill("14000"); await page.locator("#goal-latest").fill("2027-01-31");
+      await page.selectOption("#goal-parts", "2"); await deal.locator("fieldset.tri").getByText("Yes", { exact: true }).click();
+      await search();
+      const variants = await page.locator("#deal-result .variant").count();
+      check(variants >= 1 && variants <= 3 && await page.locator("#deal-result .variant.recommended").count() === 1, `goal search returns ${variants} calculated option(s) with one pick`);
+      await page.locator("#goal-keep").fill("20000"); await page.locator("#goal-price-max").fill("13000"); await search();
+      check(await page.locator("#deal-result .no-terms").count() === 1 && await page.locator("#deal-result .variant").count() === 0, "unreachable goal shows 'no terms' (no success card)");
+    }
 
     for (const path of ["/", "/demo?case=family-cliff", "/check", "/household", "/plans", "/pricing"]) {
       await mobile.goto(base + path); await mobile.waitForTimeout(1200);

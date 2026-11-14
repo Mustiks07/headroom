@@ -47,7 +47,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
     if (!built.ok) { setMessage(built.message); return; }
     setBusy(true);
     const saved = await onSaveGoal(built);
-    if (!saved) { setBusy(false); return; }
+    if (!saved) { setBusy(false); setMessage("Your goal wasn't saved, so nothing was searched. Your entries are kept — see the message at the top of the page and try again."); return; }
     setSearch({ key: draftKey, pending: true });
     try {
       const goal = saved.dealPlanning!.goals.find(g => g.id === built.goal.id)!;
@@ -90,9 +90,9 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
       {stale && <p className="stale-banner" role="status">You changed the goal. These results are for the previous goal — search again before choosing.</p>}
       {search?.pending && <p className="loading-line" role="status"><span className="spinner" aria-hidden="true" /> Searching terms within your limits…</p>}
       {search?.error && <div className="blocked unavailable" role="alert"><div className="blocked-head"><AlertTriangle size={20} aria-hidden="true" /><div><h3>The search failed</h3><p>{search.error}</p><p className="hint">Your goal is kept.</p></div></div></div>}
-      {r && (r.status === "needs_data" || r.status === "unsupported" || r.status === "unavailable") && <BlockedDeal result={r} onGoToForecast={onGoToForecast} />}
-      {r?.status === "no_feasible_terms" && <NoTerms result={r} onApply={applyRelaxation} />}
-      {r?.status === "ready" && <Variants ws={ws} result={r} stale={stale} onChoose={v => onChoose(v, r)} onGoToForecast={onGoToForecast} />}
+      {r && !search?.pending && (r.status === "needs_data" || r.status === "unsupported" || r.status === "unavailable") && <BlockedDeal result={r} onGoToForecast={onGoToForecast} />}
+      {!search?.pending && r?.status === "no_feasible_terms" && <NoTerms result={r} onApply={applyRelaxation} />}
+      {!search?.pending && r?.status === "ready" && <Variants ws={ws} result={r} stale={stale} onChoose={v => onChoose(v, r)} onGoToForecast={onGoToForecast} />}
     </div>
   </section>;
 }
@@ -115,6 +115,7 @@ const CONSTRAINT_TEXT: Record<string, string> = {
   max_payments: "Number of payments", additional_sep_limit: "Your SEP-IRA limit", sep_legal_limit: "SEP-IRA legal limit", sep_cash: "Cash set aside for SEP-IRA",
   timing_confirmation: "Payment timing confirmation", new_terms_confirmation: "Client open to new terms", fixed_facts: "Payments already made",
 };
+const RELAX_LABEL = { price_max: "A higher price", latest_payment_date: "A later payment date", additional_sep: "More SEP-IRA", minimum_cash: "A smaller cash goal", date_target: "A different date goal" } as const;
 const RELAX_TEXT = { price_max: "Ask up to", latest_payment_date: "Allow payment until", additional_sep: "Allow extra SEP-IRA up to", minimum_cash: "Keep at least", date_target: "Change the date goal to" } as const;
 
 function NoTerms({ result, onApply }: { result: NoFeasibleTerms; onApply: (rx: NoFeasibleTerms["relaxations"][number]) => void }) {
@@ -124,11 +125,12 @@ function NoTerms({ result, onApply }: { result: NoFeasibleTerms; onApply: (rx: N
     <ul className="missing-list">{result.violated.map(v => <li key={v.id + v.detail}><div><strong>{CONSTRAINT_TEXT[v.id] ?? v.id}</strong><span>{humanizeDates(v.detail)}</span></div></li>)}</ul>
     {result.relaxations.length > 0 ? <div className="relax">
       <p className="small"><strong>Smallest change to one limit that would work</strong> (calculated, other limits unchanged):</p>
-      <ul className="relax-list">{result.relaxations.map((rx, i) => <li key={i}>
-        <span>{RELAX_TEXT[rx.constraint]} {rx.requiredCents !== null ? <strong className="num">{money(rx.requiredCents)}</strong> : null}{rx.requiredDate ? <strong> {shortDate(rx.requiredDate)}</strong> : null}
-          <span className="muted small"> — {humanizeDates(rx.explanation)}</span></span>
-        <button type="button" className="btn small ghost" onClick={() => onApply(rx)}>Use this in my goal</button>
-      </li>)}</ul></div>
+      <ul className="relax-list">{result.relaxations.map((rx, i) => { const usable = rx.requiredCents !== null || rx.requiredDate !== null;
+        return <li key={i}>
+          <span>{usable ? <>{RELAX_TEXT[rx.constraint]} {rx.requiredCents !== null ? <strong className="num">{money(rx.requiredCents)}</strong> : null}{rx.requiredDate ? <strong> {shortDate(rx.requiredDate)}</strong> : null}
+            <span className="muted small"> — </span></> : <strong>{RELAX_LABEL[rx.constraint]}: </strong>}<span className="muted small">{humanizeDates(rx.explanation)}</span></span>
+          {usable && <button type="button" className="btn small ghost" onClick={() => onApply(rx)}>Use this in my goal</button>}
+        </li>; })}</ul></div>
       : <p className="hint">No single change to one limit makes this goal work inside the searched range.</p>}
     {result.warnings.length > 0 && <details className="explain"><summary>Search notes ({result.warnings.length})</summary><ul className="bullets small">{result.warnings.map(w => <li key={w}>{humanizeDates(w)}</li>)}</ul></details>}
   </div>;
@@ -163,7 +165,7 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
     <header><p className="tile-k">{PURPOSE[v.purpose]}</p>{recommended && <span className="pill good"><Star size={13} aria-hidden="true" /> Our pick</span>}</header>
     <h3 id={`v-${v.id}`} className="variant-title">{humanizeDates(v.label)}</h3>
     <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
-    <p className="tile-sub">cash after both tax years · vs. {result.baseline.label.toLowerCase().replace(/^your /, "your ")}</p>
+    <p className="tile-sub">cash after both tax years · {result.baseline.kind === "accept_as_offered" ? "vs. accepting as offered" : "vs. declining these terms"}</p>
     {v.retirementAddedCents > 0 && <p className="tile-line">+ <strong className="num">{money(v.retirementAddedCents)}</strong> into retirement (not counted as cash)</p>}
     <dl className="terms">
       <div><dt>Ask for</dt><dd className="num">{money(v.terms.priceCents)}</dd></div>
@@ -173,7 +175,7 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
     {v.dateTargets.map(t => <p key={t.targetId} className={`target ${t.met ? "met" : t.met === false ? "missed" : ""}`}>
       {t.met ? <CheckCircle2 size={14} aria-hidden="true" /> : <XCircle size={14} aria-hidden="true" />} {humanizeDates(t.explanation)}{t.achievedCents !== null ? ` (${money(t.achievedCents)})` : ""}</p>)}
     {v.aca.some(a => a.creditLost) && <p className="target missed"><XCircle size={14} aria-hidden="true" /> Loses the {v.aca.filter(a => a.creditLost).map(a => a.year).join(" and ")} premium tax credit</p>}
-    {v.differenceFromBestCents !== 0 && <p className="hint">{money(Math.abs(v.differenceFromBestCents))} {v.differenceFromBestCents < 0 ? "less" : "more"} than the option with the most cash{v.purpose === "simplest" ? ", with fewer steps" : ""}.</p>}
+    {v.differenceFromBestCents !== 0 && <p className="hint">{money(Math.abs(v.differenceFromBestCents))} less cash than the option with the most cash{v.purpose === "simplest" || v.purpose === "as_offered" ? " — with fewer changes to ask for" : ""}.</p>}
     <div className="card-actions">
       <button type="button" className="btn ghost small" aria-expanded={expanded} onClick={onToggle}>{expanded ? "Hide details" : "Money by date & details"}</button>
       <button type="button" className="btn primary small" disabled={disabled || !goalMet} onClick={onChoose}>Choose these terms</button>

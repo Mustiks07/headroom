@@ -49,7 +49,6 @@ export function goalProblems(g: GoalDraft): GoalProblems {
     amt(g.byDate.amount, false, "amount");
     if (g.byDate.kind === "household_balance") {
       amt(g.cash.balance, false, "balance"); amt(g.cash.reserve, false, "reserve");
-      if (!g.cash.complete) p.complete = "Confirm the balance and listed money movements are complete for this period, or choose another kind of date goal.";
     }
   }
   if (g.windows.latestDate && !/^20(26|27)-\d{2}-\d{2}$/.test(g.windows.latestDate)) p.latest = "Choose a date in 2026 or 2027.";
@@ -103,7 +102,7 @@ export function GoalForm({ ws, project, goal, onChange, problems, touched, fixed
         </div>
         <label className="check"><input type="checkbox" checked={goal.cash.complete} onChange={e => set({ cash: { ...goal.cash, complete: e.target.checked } })} />
           This balance and the payments in my plan cover all large money in and out until the date.</label>
-        {show("complete") && <p className="field-error">{show("complete")}</p>}
+        {!goal.cash.complete && <p className="hint warn">Without this confirmation Headroom shows only this project&apos;s money and won&apos;t say whether the balance goal is met.</p>}
       </div>}
     </div>}
 

@@ -19,7 +19,7 @@ import { ForecastEditor } from "./ForecastEditor";
 import { MoneyField } from "@/components/MoneyField";
 import { compareProject, evaluatePlan, fixedPlanOf, projectHousehold, sepRows } from "./engine";
 import {
-  addProject, agreeToOption, blankForecast, saveDealGoal, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
+  addProject, agreeToOption, blankForecast, ensureManualEvidence, recordClientAgreement, setOtherIncome, setProjectConditions, cancelExpected, correctActual, recordActual, recordContribution, setForecast, setFutureBudget,
   setProjectStatus, setSepTarget,
 } from "./ops";
 import { commit, describeSaveError, whereText, workspaceRepo, CloudSaveFailedError, WorkspaceConflictError } from "./store";
@@ -29,7 +29,8 @@ import { ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import { AddProjectForm, ProjectCard, SepPanel } from "./parts";
 import { attentionItems, type AttentionItem } from "./attention";
 import { DealPanel } from "@/features/deal/DealPanel";
-import { ChooseTerms } from "@/features/deal/ChooseTerms";
+import { ChooseTerms, PackageCard } from "@/features/deal/ChooseTerms";
+import { saveActionPackage, saveCashContext, saveDealGoal, setPackageStatus, setReminderStatus } from "@/lib/client/api";
 import type { DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 
 type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
@@ -122,11 +123,20 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
   const sep = sepRows(ws, calc?.evaluation);
   const evaluation = calc?.evaluation?.status === "ready" ? calc.evaluation : null;
   const attention = attentionItems(ws, calc?.evaluation);
+  const packages = (ws.dealPlanning?.packages ?? []).filter(p => p.status !== "superseded").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  /** Runs one of Claude 3's deal-state saves on the latest revision; failures keep the user's input and say so. */
+  async function runDeal(fn: (base: HouseholdWorkspace) => Promise<HouseholdWorkspace>, okText?: string): Promise<HouseholdWorkspace | null> {
+    if (!ws) return null;
+    if (pending) { setNotice({ tone: "warn", text: "Save or discard the change that didn't go through first." }); return null; }
+    try { const saved = await fn(ws); setWs(saved); if (okText) setNotice({ tone: "ok", text: okText }); return saved; }
+    catch (e) { if (e instanceof WorkspaceConflictError && e.current) setWs(e.current); setNotice({ tone: "warn", text: describeSaveError(e) }); return null; }
+  }
   function onAttention(a: AttentionItem) {
     const go = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
     if (a.action?.kind === "compare" && a.action.projectId) { setDealId(a.action.projectId); go("deal-panel"); }
     else if (a.action?.kind === "record_payment" && a.action.projectId) go(`project-${a.action.projectId}`);
     else if (a.action?.kind === "sep") go("sep-title");
+    else if (a.action?.kind === "packages") go("packages");
     else if (a.action?.kind === "review_income") { setForecastEdit({ personId: owners[0].id, year: 2026 }); go("forecast-change"); }
   }
 
@@ -251,13 +261,27 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
 
     {dealId && ws.projects.some(p => p.id === dealId) && <DealPanel key={dealId} ws={ws} project={ws.projects.find(p => p.id === dealId)!}
       onClose={() => { setDealId(null); setChosen(null); }} onGoToForecast={() => { setForecastEdit({ personId: owners[0].id, year: 2026 }); setTimeout(() => document.getElementById("forecast-change")?.scrollIntoView({ behavior: "smooth" }), 30); }}
-      onSaveGoal={async built => {
-        if (pending) { setNotice({ tone: "warn", text: "Save or discard the change that didn't go through first." }); return null; }
-        try { const saved = await commit(ws, saveDealGoal(ws, built.goal, built.space, built.cash)); setWs(saved); return saved; }
-        catch (e) { setNotice({ tone: "warn", text: describeSaveError(e) }); if (e instanceof WorkspaceConflictError && e.current) setWs(e.current); return null; }
-      }}
+      onSaveGoal={async built => runDeal(async base0 => {
+        // Manually entered cash figures cite "manual-entry"; make sure that source exists in the same save.
+        const base = structuredClone(base0); ensureManualEvidence(base);
+        let w = (await saveDealGoal(workspaceRepo(), base, built.goal, built.space)).saved;
+        if (built.cash && JSON.stringify(built.cash) !== JSON.stringify(w.dealPlanning?.cashContext ?? null)) w = (await saveCashContext(workspaceRepo(), w, built.cash)).saved;
+        return w;
+      })}
       onChoose={(variant, result) => { setChosen({ variant, result }); setTimeout(() => document.getElementById("choose-terms")?.scrollIntoView({ behavior: "smooth" }), 30); }} />}
-    {chosen && dealId && <ChooseTerms ws={ws} projectId={dealId} variant={chosen.variant} result={chosen.result} onCancel={() => setChosen(null)} />}
+    {chosen && dealId && <ChooseTerms ws={ws} variant={chosen.variant} result={chosen.result} onCancel={() => setChosen(null)}
+      onSave={async pkg => { const saved = await runDeal(base => saveActionPackage(workspaceRepo(), base, pkg).then(o => o.saved), "Terms saved to your plan. Nothing was sent to your client.");
+        if (saved) { setChosen(null); setDealId(null); setTimeout(() => document.getElementById("packages")?.scrollIntoView({ behavior: "smooth" }), 30); }
+        return !!saved; }} />}
+
+    {packages.length > 0 && <section id="packages" className="plan-section" aria-labelledby="packages-title">
+      <h2 id="packages-title" className="section-title small">Chosen terms</h2>
+      <p className="muted small">Download the summary and calendar while the terms are current. Headroom never sends anything; only you record what the client said.</p>
+      {packages.map(pkg => <PackageCard key={pkg.id} ws={ws} pkg={pkg} onNotice={(tone, text) => setNotice({ tone, text })}
+        onShared={() => void runDeal(base => setPackageStatus(workspaceRepo(), base, pkg.id, "terms_shared_by_user").then(o => o.saved), "Recorded that you shared the terms.")}
+        onReminder={(uid, done) => void runDeal(base => setReminderStatus(workspaceRepo(), base, pkg.id, uid, done ? "done" : "open").then(o => o.saved), done ? "Marked as done." : "Marked as not done.")}
+        onAgreed={() => { void apply(w => recordClientAgreement(w, pkg.id).workspace, "Recorded the client's agreement. The project's open payments now follow these terms."); }} />)}
+    </section>}
 
     {compareId && <ComparePanel ws={ws} projectId={compareId} state={compare}
       onFixProject={() => { setFixProject(compareId); setTimeout(() => document.getElementById(`conditions-${compareId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} stale={!compare || compare.pending || compare.key !== key} onClose={() => setCompareId(null)} onDrawer={setDrawer}

@@ -664,3 +664,16 @@ p.data-notes svg { margin-right: 4px; }
   .t-label { grid-column: 1 / -1; grid-row: 2; }
   .terms > div { grid-template-columns: 1fr; gap: 0; }
 }
+.package { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; }
+.package.status-client_agreed { border-left: 4px solid var(--green); }
+.steps-line { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.steps-line li { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--paper-2); color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+.steps-line li.on { background: var(--green-soft); color: var(--green-ink); font-weight: 650; }
+.client-draft { display: grid; gap: 8px; }
+.client-draft textarea { font-family: var(--sans); font-size: 14px; }
+/* Grid items must not widen the page on narrow screens (long labels wrap instead). */
+.plan-page { grid-template-columns: minmax(0, 1fr); }
+.plan-page > *, .package, .project-card, .variant { min-width: 0; overflow-wrap: break-word; }
+.project-head { flex-wrap: wrap; }
+.project-head > div { flex: 1 1 220px; min-width: 0; }
+.project-head .pill { white-space: normal; }

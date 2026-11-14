@@ -7,7 +7,7 @@ export interface AttentionItem {
   title: string;
   detail: string;
   /** What the button does on the plan page. */
-  action?: { kind: "record_payment" | "compare" | "sep" | "review_income"; projectId?: string; label: string };
+  action?: { kind: "record_payment" | "compare" | "sep" | "review_income" | "packages"; projectId?: string; label: string };
 }
 
 /**
@@ -31,6 +31,12 @@ export function attentionItems(ws: HouseholdWorkspace, evaluation: WorkspaceEval
   if (evaluation?.status === "ready") {
     if (evaluation.agreed.creditLostYears.length) items.push({ id: "credit-lost", tone: "warn", title: `Your plan as agreed loses the ${evaluation.agreed.creditLostYears.join(" and ")} premium tax credit`,
       detail: "Review payments that haven't happened yet, or check whether your income forecast is still right.", action: { kind: "review_income", label: "Review income" } });
+    const risk = evaluation.projection.currentRisk;
+    if (risk && risk.state === "over_cliff" && !evaluation.agreed.creditLostYears.includes(risk.year)) items.push({ id: "over-limit", tone: "warn",
+      title: `Your ${risk.year} forecast is above the subsidy limit`, detail: `Income for the subsidy ${money(risk.forecastMagiCents)} is over the ${money(risk.thresholdMagiCents)} limit, so the ${risk.year} premium tax credit ends. Check the forecast, or look for terms on payments that haven't happened yet.`,
+      action: { kind: "review_income", label: "Review income" } });
+    else if (risk && risk.state === "at_risk") items.push({ id: "near-limit", tone: "warn", title: `Your ${risk.year} forecast is close to the subsidy limit`,
+      detail: risk.additionalProfitHeadroomCents !== null ? `About ${money(risk.additionalProfitHeadroomCents)} more profit would end the credit. Check new offers before agreeing.` : "Check new offers before agreeing." });
     if (!evaluation.agreed.stillFeasible) items.push({ id: "infeasible", tone: "warn", title: "Part of your plan as agreed doesn't fit any more",
       detail: evaluation.agreed.reasons.map(humanizeDates).join(" ") });
   }
@@ -46,6 +52,17 @@ export function attentionItems(ws: HouseholdWorkspace, evaluation: WorkspaceEval
       action: { kind: "sep", label: "Record a contribution" } });
   }
 
+  // Open, dated actions from chosen terms (not yet marked done by the user).
+  for (const pkg of (ws.dealPlanning?.packages ?? []).filter(p => p.status !== "superseded")) {
+    const title = ws.projects.find(p => p.id === pkg.projectId)?.title ?? "a project";
+    if (pkg.status === "draft") items.push({ id: `share-${pkg.id}`, tone: "decide", title: `Send the chosen terms for “${title}” to the client`,
+      detail: "Headroom doesn't send anything. When you've sent them, mark it in Chosen terms.", action: { kind: "packages", label: "Open chosen terms" } });
+    // Payments to receive are already listed from the project's own lines (and disappear once recorded).
+    const kindOf = (r: { actionId: string }) => pkg.variant.actions.find(a => a.id === r.actionId)?.kind;
+    for (const r of pkg.reminders.filter(r => r.status === "open" && r.date && r.date <= addDays(today, 14) && kindOf(r) !== "receive_payment").slice(0, 2))
+      items.push({ id: `rem-${r.uid}`, tone: "due", title: humanizeDates(r.title), detail: `By ${shortDate(r.date)} · from the terms for “${title}”.`, action: { kind: "packages", label: "Open chosen terms" } });
+  }
+
   // Offers waiting for a decision.
   for (const p of ws.projects.filter(p => p.status === "proposed")) items.push({ id: `decide-${p.id}`, tone: "decide", title: `Decide on “${p.title}”`,
     detail: "See which terms fit your goal before you answer the client.", action: { kind: "compare", projectId: p.id, label: "Find terms" } });
@@ -59,3 +76,5 @@ export function attentionItems(ws: HouseholdWorkspace, evaluation: WorkspaceEval
   for (const e of done) items.push({ id: `done-${e.id}`, tone: "done", title: "Done", detail: humanizeDates(e.description) });
   return items;
 }
+
+function addDays(iso: string, n: number) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
