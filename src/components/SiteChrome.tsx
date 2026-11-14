@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MobileNav } from "./MobileNav";
+import { JourneyNav } from "./JourneyNav";
 
 /** Native mark (docs/design/c-open/headroom-mark.svg), currentColor; decorative next to the wordmark. */
 export function HeadroomMark({ size = 28 }: { size?: number }) {
@@ -17,13 +18,13 @@ const LINKS: Array<{ href: string; key: Current; text: string }> = [
 ];
 
 /** Cobalt header on every page (design C). `stage` = sits on the landing page's cobalt stage. */
-export function SiteHeader({ current, stage = false }: { current?: Current; stage?: boolean }) {
-  return <header className={`site-header ${stage ? "on-stage" : ""}`}>
+export function SiteHeader({ current, stage = false, journey = false }: { current?: Current; stage?: boolean; journey?: boolean }) {
+  return <header className={`site-header ${stage ? "on-stage" : ""} ${journey ? "has-journey" : ""}`}>
     <div className="shell nav-row">
       <Link href="/" className="wordmark" aria-label="Headroom home"><HeadroomMark /><span>headroom</span></Link>
-      <nav aria-label="Main navigation" className="nav-links">
+      {journey ? <JourneyNav /> : <nav aria-label="Main navigation" className="nav-links">
         {LINKS.map(l => <Link key={l.key} href={l.href} aria-current={current === l.key ? "page" : undefined} className="nav-link">{l.text}</Link>)}
-      </nav>
+      </nav>}
       <MobileNav links={LINKS} current={current} />
     </div>
   </header>;

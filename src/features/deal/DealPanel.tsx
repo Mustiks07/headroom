@@ -154,6 +154,10 @@ function searchedText(r: ReadyDealSearch | NoFeasibleTerms) {
 function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: HouseholdWorkspace; result: ReadyDealSearch; stale: boolean; onChoose: (v: DealVariant) => void; onGoToForecast: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<"settled" | "by_date">("settled");
+  // Mobile (design C): one selected option shown in full, the others as selection rows.
+  const [sel, setSel] = useState(result.recommendedVariantId);
+  useEffect(() => { setSel(result.recommendedVariantId); }, [result]);
+  const sorted = [...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId));
   return <div className="deal-result">
     <div className="horizon" role="radiogroup" aria-label="Which money to show">
       {([["settled", "After tax settlements"], ["by_date", "By your date"]] as const).map(([k, label]) =>
@@ -162,18 +166,33 @@ function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: Househo
     <p className="baseline-note"><strong>Compared with: {result.baseline.label}.</strong> {humanizeDates(result.baseline.description)} Cash is what your family keeps after both tax years settle (through {shortDate(result.horizon.settlementThrough)}) — not a bank balance.</p>
     {result.cashCompleteness === "household_incomplete" && <p className="notice warn small">Your balance goal can&apos;t be confirmed because the cash picture isn&apos;t marked complete. Only this project&apos;s money is shown; Headroom doesn&apos;t say whether your household will cover every bill.</p>}
     <div className={`variant-grid ${stale ? "is-stale" : ""}`}>
-      {[...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId)).map(v => <VariantCard key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
+      {sorted.map(v => <VariantCard selected={v.id === sel} key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
         onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} view={view} />)}
     </div>
+    {sorted.length > 1 && <fieldset className="choice-rows">
+      <legend className="section-title small">Compare your choices</legend>
+      {sorted.map(v => {
+        const rob = (v as { robustness?: { holds: boolean } }).robustness;
+        const date = v.dateTargets.find(t => t.achievedCents !== null);
+        const amount = view === "by_date" ? (date?.achievedCents ?? null) : v.twoYearCashDeltaCents;
+        return <label key={v.id} className={`choice-row ${v.id === sel ? "on" : ""}`}>
+          <input type="radio" name="variant-choice" checked={v.id === sel} onChange={() => setSel(v.id)} />
+          <span className="choice-main"><strong>{PURPOSE[v.purpose]}{v.id === result.recommendedVariantId ? " · Our pick" : ""}</strong>
+            <span>{v.retirementAddedCents > 0 ? `+${money(v.retirementAddedCents)} retirement` : "No added retirement"}{rob && !rob.holds ? " · Sensitive to income" : ""}</span></span>
+          <span className={`choice-amount num ${amount !== null && view === "settled" ? signClass(amount) : ""}`}>{amount === null ? "—" : view === "settled" ? signedMoney(amount) : money(amount)}</span>
+        </label>;
+      })}
+      <p className="hint">{view === "settled" ? "Amounts are cash after both tax settlements, compared with declining. Retirement is separate." : "Amounts are project money received by your date — gross, not profit after tax."}</p>
+    </fieldset>}
     <p className="hint">Searched {searchedText(result)}. {result.search.exhaustiveWithinSpace ? "Every combination within your limits was checked." : humanizeDates(result.search.note)}
       {result.simplerVariantThresholdCents > 0 && ` A simpler option is preferred when the more complex one adds less than ${money(result.simplerVariantThresholdCents)}.`}</p>
     {result.warnings.length > 0 && <details className="explain"><summary>Conditions and notes ({result.warnings.length})</summary><ul className="bullets small">{result.warnings.map(w => <li key={w}>{humanizeDates(w)}</li>)}</ul></details>}
   </div>;
 }
 
-function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disabled, result, onGoToForecast, view }: {
+function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disabled, result, onGoToForecast, view, selected }: {
   ws: HouseholdWorkspace; v: DealVariant; recommended: boolean; expanded: boolean; onToggle: () => void; onChoose: () => void; disabled: boolean;
-  result: ReadyDealSearch; onGoToForecast: () => void; view: "settled" | "by_date";
+  result: ReadyDealSearch; onGoToForecast: () => void; view: "settled" | "by_date"; selected: boolean;
 }) {
   const goalMet = v.constraints.every(c => c.satisfied) && v.dateTargets.every(t => t.met !== false);
   // Round 5 engine fields (Claude 2): cash vs declining AND vs the offer as it stands; robustness of the pick.
@@ -184,7 +203,7 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
   const yearEnd = mbd.find(r => r.date === "2026-12-31") ?? null;
   const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null } }).comparisons;
   const rob = (v as { robustness?: { holds: boolean; basis: string; roomCents: number | null } }).robustness;
-  return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"}`} aria-labelledby={`v-${v.id}`}>
+  return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"} ${selected ? "is-selected" : "is-unselected"}`} aria-labelledby={`v-${v.id}`}>
     <header><p className="tile-k">{PURPOSE[v.purpose]}</p>{recommended && <span className="pill good"><Star size={13} aria-hidden="true" /> Our pick</span>}</header>
     <h3 id={`v-${v.id}`} className="variant-title">{humanizeDates(v.label)}</h3>
     {view === "settled" ? <>

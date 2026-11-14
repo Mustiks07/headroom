@@ -33,7 +33,18 @@ Branch `claude1`. Normal merges only (no reset, no force-push); `main` untouched
 - **Questions, comparison, action, update:** readiness, deal panel, options, package, records and “What changed?” use the C surfaces. The recommended option is a cobalt card with white type and a chartreuse “Our pick”; others white. **Horizon selector “After tax settlements / By your date”** on desktop and mobile (by-date shows the engine's date-target amount and its explanation; without a date goal it says so). “Client agreement needed” tag beside changed terms, “Proposed payments, not money received”. Labels bound to the engine baseline and horizon (“compared with declining this project · 2026–2027 tax years, final settlement in 2028”).
 - **Mobile:** 20px gutters, stacked work screens, full-width actions in cards; no horizontal page scroll on `/`, `/start`, `/check`, `/household/[id]` (incl. deal panel and What changed), `/demo` at 360px.
 
-Not done from the C handoff: a dedicated three-step header nav (“Your offer / Your facts / Your terms”) — the existing in-page steps were restyled instead; the mobile comparison is stacked cards, not compact selection rows; 200% zoom and a screen-reader pass were not run.
+- **Journey navigation (“Your offer / Your facts / Your terms”)** in the cobalt header on `/check` and `/household/[id]` (`src/components/JourneyNav.tsx`, `useJourney`). The page reports the current step and handles clicks:
+  - **check page:** facts = household step, offer = project step, terms = runs or scrolls to the comparison;
+  - **plan page:** facts = overview, offer = projects, terms = the open deal panel, else opens Find terms for the open offer, else packages; "Your terms" is disabled with a reason when there is no offer.
+  - Site links move into the menu button there. On mobile the steps form a second header row.
+- **Mobile selection rows** (design C 04): at ≤800px only the selected option's full card is shown. Below it, “Compare your choices” radio rows show name, “Our pick”, retirement, “Sensitive to income” (engine robustness) and the amount for the current horizon. Picking a row swaps the card; the pick is selected by default. Desktop keeps the three-card grid.
+- **Accessibility pass on the final build:**
+  - axe-core 4.10 (WCAG 2.0/2.1 A + AA) on home, start, check, demo, plan and the deal result: **0 violations**;
+  - keyboard tab order follows reading order (skip link → logo → nav → offer field → Check my offer → tray links), each stop with a 3px solid focus ring;
+  - **200% zoom** (720px viewport at 2×): no horizontal scroll on `/`, `/start`, `/check`, `/demo`, `/household`;
+  - reduced motion turns the hero animation off;
+  - the plan's status message is now a persistent `role="status"` live region, so “Change saved…” after Apply is announced.
+  - Not done: a manual screen-reader session (VoiceOver/NVDA); the checks above are automated.
 
 ## What was built
 
@@ -122,7 +133,8 @@ After the 11 answers the search returned *Accept as offered* as the pick (+$8,10
 - `npx tsc --noEmit` clean.
 - `npx vitest run`: 29 files / 151 tests pass after merging `main` + `claude2`. Before Claude 2's `32f59d3`, `deal-ui-boundaries` failed; Claude 2 changed that test for the new recommendation policy.
 - `npm run build` passes.
-- **After merging `7667644` (final):** `tsc` clean, build passes, `npx vitest run` 29 files / 157 tests, `npm run check:ui` passes; own-data journey re-run end to end including the current-actions ICS.
+- **After journey nav + mobile rows + a11y (final):** build passes, `npx vitest run` 157 tests, `npm run check:ui` passes; sample journey with PDF + ICS (6 events) re-run; journey nav and mobile rows checked in the browser (one card visible, 3 rows, switching works, 360px no overflow).
+- **After merging `7667644`:** `tsc` clean, build passes, `npx vitest run` 29 files / 157 tests, `npm run check:ui` passes; own-data journey re-run end to end including the current-actions ICS.
 - **After merging `bc99600` + `00beeaf`:** `tsc` clean, build passes, `npx vitest run` 29 files / 155 tests, `npm run check:ui` passes; sample journey with PDF + ICS (6 events) and the own TN journey with the county/benchmark lookup re-run.
 - **Final C build (after the redesign):** `tsc` clean; `npm run build` passes; `npx vitest run` 29 files / 151 tests; `npm run check:ui` passes (29 checks). Sample journey re-run on the C build: goal → options → choose → shared → agreed → update → Apply → reload → no-op repeat → decision-record PDF (text read with `pdftotext`, page 1 rendered: `c-pdf-1.png`) + current ICS (6 VEVENTs). Own journey (14 + 11 answers) re-run: agreement, update, reload, PDF. Provider-down / ambiguous / PDF-with-AI-off re-run. Offer-first paste → group confirm → fields filled → reload checked.
 - `npm run check:ui` (before the redesign): 29 checks pass. New: update sentence → preview → Apply = one revision; repeat saves nothing; reload keeps the revision; 360 px on six routes.
@@ -158,6 +170,7 @@ After the 11 answers the search returned *Accept as offered* as the pick (+$8,10
 
 - `docs/demo/round5-judge-script.md`
 - `docs/demo/round5-positioning.md`
+- `docs/demo/round5-screenshots/c-journey-nav-d.png`, `c-journey-nav-m.png`, `c-journey-check-d.png`, `c-choice-rows-m.png`, `c-choice-rows-m-2.png` — journey navigation and mobile selection rows.
 - `docs/demo/round5-screenshots/c-benchmark-help-d.png` — Help me find this (county saved, honest lookup answer).
 - `docs/demo/round5-screenshots/` — **final design-C build**: `c-home-d`, `c-home-m-top`, `c-review-d`, `c-review-applied-d`, `c-check-d/-m`, `c-plan-top-d/-m`, `c-goal-d`, `c-variants-d`, `c-variants-bydate-d`, `c-variants-m`, `c-choose-d`, `c-package-d`, `c-whatchanged-d/-m`, `c-records-d`, `c-demo-d`, `c-docs-queue`, `c-provider-down`, `c-pdf-1` (decision record page 1). The earlier green-design captures were removed.
 - `tests/ui/smoke.cjs` step 10

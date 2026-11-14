@@ -24,6 +24,7 @@ import { CalculationDrawer, type DrawerContent } from "@/features/results/Calcul
 import { StorageFallback } from "@/features/plan/StorageFallback";
 import { PASTED_KEY } from "@/features/start/StartChooser";
 import { trackEvent } from "@/lib/client/api";
+import { useJourney } from "@/components/JourneyNav";
 
 /** Pasted offer/statement text is used once for this import, then removed from the browser. */
 function takePasted(): string | null {
@@ -259,6 +260,12 @@ export function Workspace({ seed, mode, initialStep = "household", entry, import
   const riskStale = isStale(risk, version) || risk.pending;
   const compStale = isStale(comparison, version) || comparison.pending;
   const riskReady = risk.outcome?.kind === "done" && risk.outcome.result.status === "ready" ? risk.outcome.result : null;
+  const compareReady = comparison.outcome?.kind === "done" && comparison.outcome.result.status === "ready";
+  useJourney({ current: step === "household" ? "facts" : compareReady ? "terms" : "offer" }, s => {
+    if (s === "facts") { setStep("household"); window.scrollTo({ top: 0 }); }
+    else if (s === "offer") { setStep("compare"); window.scrollTo({ top: 0 }); }
+    else { setStep("compare"); if (!compareReady) void runComparison(); scrollToId("compare-area"); }
+  });
   const tracked = useRef(false);
   useEffect(() => {
     if (!riskReady || tracked.current) return;

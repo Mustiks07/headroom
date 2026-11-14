@@ -37,6 +37,7 @@ import { Readiness } from "@/features/assist/Readiness";
 import { Explain } from "@/features/assist/Explain";
 import { Records } from "@/features/deal/Records";
 import { trackEvent } from "@/lib/client/api";
+import { useJourney } from "@/components/JourneyNav";
 import type { DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 
 type Calc = { key: string; pending: boolean; projection?: HouseholdProjectionResult; evaluation?: WorkspaceEvaluationResult; error?: string };
@@ -114,6 +115,17 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
     return save(ws, next, okText);
   }, [ws, pending, save]);
 
+  const projectCount = ws?.projects.length ?? 0;
+  useJourney({ current: dealId || chosen ? "terms" : "facts", disabled: projectCount ? {} : { terms: "Add a client offer first" } }, step => {
+    if (!ws) return;
+    const go = (id: string) => setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+    if (step === "facts") { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (step === "offer") { go("projects"); return; }
+    if (dealId) { go("deal-panel"); return; }
+    const open = ws.projects.find(p => p.status === "proposed");
+    if (open) { setDealId(open.id); go("deal-panel"); return; }
+    go((ws.dealPlanning?.packages ?? []).some(p => p.status !== "superseded") ? "packages" : "projects");
+  });
   if (ws === undefined) return <div className="shell page-pad"><p className="loading-line" role="status"><span className="spinner" aria-hidden="true" /> Opening your household plan…</p></div>;
   if (ws === null) return <div className="shell page-pad"><h1 className="page-title">We couldn&apos;t find this household plan</h1>
     <p className="intro">{loadError ?? "It may have been deleted, or it was saved in a different browser. Plans aren't synced between devices."}</p>
@@ -173,7 +185,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
       </div>
     </div>
     {ws.household.isSynthetic && <p className="sample-banner compact small"><FlaskConical size={16} aria-hidden="true" /> <span>Synthetic sample household. Plan prices are county candidates or illustrative.</span></p>}
-    {notice && <p className={`notice ${notice.tone === "warn" ? "warn" : "ok"}`} role={notice.tone === "warn" ? "alert" : "status"}>{notice.text}</p>}
+    <div className="live-region" role="status" aria-live="polite" aria-atomic="true">{notice && <p className={`notice ${notice.tone === "warn" ? "warn" : "ok"}`}>{notice.text}</p>}</div>
     {pending && <div className="notice warn" role="group" aria-label="Unsaved change">
       <strong>One change isn&apos;t saved yet.</strong> The figures below are the last saved revision ({ws.revision}).
       <div className="row gap wrap">
