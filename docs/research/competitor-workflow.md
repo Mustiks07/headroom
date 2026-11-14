@@ -31,16 +31,17 @@ The free calculator workflows exercised below did not expose steps 2, 5 and 6 to
 
 ### Round 4: which terms for an offer meet the family's goal? (deal search `headroom-deal-1.0.0` on engine `headroom-engine-1.2.0`, rules r3)
 
-Reproduced by `tests/engine/deal.test.ts` ("reproduces the documented example"), on its own synthetic workspace (`tests/engine/deal-fixture.ts`): same family and premiums as above, base profit $112,000 (2026) / $118,000 (2027) excluding projects; agreed project A with **$3,000 already received** (2026-10-02) and $3,000 expected 2026-12-01; offer B $12,000 on 2026-12-20; agreed 2026 SEP goal $1,000 with $2,500 set aside (so $1,500 is free for new contributions).
+Reproduced by `tests/engine/deal.test.ts` ("reproduces the documented example") and `tests/engine/round5-scenarios.test.ts`, on its own synthetic workspace (`tests/engine/deal-fixture.ts`): same family and premiums as above, base profit $112,000 (2026) / $118,000 (2027) excluding projects; agreed project A with **$3,000 already received** (2026-10-02) and $3,000 expected 2026-12-01; offer B $12,000 on 2026-12-20; agreed 2026 SEP goal $1,000 with $2,500 set aside (so $1,500 is free for new contributions).
 
 Goal: at least **+$4,000** of spendable cash after both returns settle, compared with declining B's unpaid terms; at least $10,000 from B by 2027-01-10; at most $1,000 extra SEP. The client is open to asking $12,000–$15,000 (step $250), paid 2026-12-15…31 and/or 2027-01-04…10, at most two payments.
 
 | Question | Headroom output |
 | --- | --- |
-| Simplest terms that meet the goal | $12,000 in one payment on 2027-01-04 plus an extra $33 SEP for 2027 → **+$8,268** (the 2027 credit sits $1 from the limit — shown as the first sensitivity) |
-| Most cash (recommended: the simpler option is $2,122 worse, above the $120 threshold) | $15,000 as $9,002 on 2026-12-15 + $5,998 on 2027-01-04 → **+$10,390**; settlements −$2,760 (2027-04-15) and −$1,850 (2028-04-18) shown as dated flows |
-| Most to retirement | $15,000 as $10,250 + $4,750 with $1,000 extra 2026 SEP → +$9,571 cash, $1,000 retirement |
-| Different date goal: $5,000 of project cash (after its tax reserve) by 2026-12-31 | The simplest option changes to $8,800 in December + $3,200 in January (+$8,311) |
+| Recommended: smallest change that meets the goal and holds (round 5 policy) | $12,000 (the offered price) as $5,400 on 2026-12-15 + $6,600 on 2027-01-04 → **+$8,310**, with $3,804 of extra profit to spare before a credit is lost; +$11,926 compared with the offer as it stands (−$3,616) |
+| More cash, if the client agrees | $15,000 as $9,002 on 2026-12-15 + $5,998 on 2027-01-04 → +$10,390; only $202 of room in 2026, and it needs the client to accept a higher price |
+| Most room before losing a credit | $14,500 as $5,750 + $8,750 → +$10,037, $3,214 of room |
+| Round 4 output, replaced | Round 4 called "$12,000 in January + $33 extra SEP" (+$8,268) the simplest; it kept the 2027 credit with $0 of room, so round 5 no longer recommends it |
+| Different date goal: $5,000 of project cash (after its tax reserve) by 2026-12-31 | The recommended option changes to $8,000 in December + $4,000 in January (+$8,309) |
 | Unreachable: +$12,000 with price ≤ $13,000 | No terms: the most possible is +$9,006; asking about $17,500 (checked every $250) would be needed — shown as a figure to discuss, not an offer |
 | Client has not confirmed new terms | Only the offer is evaluated: −$3,616; an extra SEP of $2,598 would be needed, more than the $1,000 allowed |
 | Household balance on 2027-01-10 | Given only with a bank snapshot and confirmed list of flows through that date; otherwise "not calculated" while project figures stay |
