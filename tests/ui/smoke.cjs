@@ -39,7 +39,7 @@ async function startServer() {
 
 (async () => {
   const { base, stop } = await startServer();
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const errors = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -65,7 +65,7 @@ async function startServer() {
     await price.fill("13,0x0");
     await page.waitForSelector("text=Fix these amounts to update the result", { timeout: 5000 });
     await page.waitForTimeout(800);
-    check(await page.locator(".tile-rec button:has-text('Use this plan'):not([disabled])").count() === 0, "invalid price blocks 'Use this plan'");
+    check(await page.locator(".overview-actions .btn.primary:not([disabled])").count() === 0, "invalid price blocks saving the recommended plan");
     await price.fill("13000");
     await page.waitForFunction(() => !document.querySelector(".overview.is-stale") && document.querySelector(".tile-rec"), null, { timeout: 15000 });
 
@@ -78,7 +78,7 @@ async function startServer() {
     check(await infeasible.locator("button:has-text('Use this plan')").count() === 0, "no 'Use this plan' on an unavailable option");
 
     // 5. Save → reopen → something changed → save revision 2.
-    await page.locator(".tile-rec button:has-text('Use this plan')").click();
+    await page.locator(".overview-actions .btn.primary").click();
     await page.waitForURL(/\/plan\//, { timeout: 15000 });
     await page.waitForSelector(".plan-head");
     await page.reload(); await page.waitForSelector(".plan-head");
