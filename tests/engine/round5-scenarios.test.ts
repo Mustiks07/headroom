@@ -2,6 +2,7 @@
 // Each: input → output → practical action → limitation. Figures are pinned so the handoff/deck numbers stay reproducible.
 import { describe, expect, it } from "vitest";
 import { ChangeProposalSchema, type ChangeCommand } from "@/domain/assistance";
+import { DealVariantSchema } from "@/domain/deal-planning";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import {
   assessInputReadiness, engineWorkspaceFingerprint, evaluateOfferAsOffered, previewChange, searchDealTerms, validateAndApply, type EngineDealVariant,
@@ -24,8 +25,17 @@ describe("round 5 scenarios", () => {
     expect([rec.terms.priceCents, rec.terms.payments.map(p => [p.date, p.amountCents]), rec.twoYearCashDeltaCents, rec.robustness.roomCents])
       .toEqual([usd(12000), [["2026-12-15", usd(5400)], ["2027-01-04", usd(6600)]], usd(8310), usd(3804)]);
     expect(rec.comparisons.versusOfferedCents).toBe(usd(11926));
+    // Same price, new dates: the client must agree to the dates only. Money by date stays separate from the two-year result.
+    expect(rec.clientAgreement).toMatchObject({ required: true, changes: ["dates"] });
+    expect(rec.moneyByDate.find(m => m.date === "2026-12-31")).toMatchObject({ receivedCents: usd(5400), availableCents: usd(3745) });
+    expect(rec.moneyByDate.at(-1)!.availableCents).toBe(rec.comparisons.versusDeclineCents);         // after both returns = two-year result
+    expect(rec.retirementAddedCents).toBe(0);
     const more = r.variants.find(v => v.purpose === "most_cash")!;
     expect([more.label.slice(0, 31), more.twoYearCashDeltaCents]).toEqual(["More cash, if the client agrees", usd(10390)]);
+    expect((more as EngineDealVariant).clientAgreement.changes).toEqual(["price", "dates"]);
+    // Contract 29c6ab4: a stored variant keeps both comparisons and the robustness of the choice.
+    const stored = DealVariantSchema.parse(rec);
+    expect([stored.comparisons, stored.robustness]).toEqual([rec.comparisons, rec.robustness]);
   });
 
   it("2. ordinary offer: accept as offered — no manoeuvre, no 2027 facts needed", async () => {
