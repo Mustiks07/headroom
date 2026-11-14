@@ -44,6 +44,12 @@ check("B cannot update A's workspace", ((await b.c.from("workspaces").update({ p
 check("B cannot attach a snapshot to A's workspace", !!(await b.c.from("workspace_snapshots").insert({ workspace_id: wsId, owner_id: b.id, kind: "legacy_v1", revision: 0, payload: {} })).error);
 check("A can store own legacy snapshot", !(await a.c.from("workspace_snapshots").insert({ workspace_id: wsId, owner_id: a.id, kind: "legacy_v1", revision: 0, payload: {} })).error);
 await a.c.from("workspaces").delete().eq("id", wsId);
+// Round 5 (migration 005): AI spend and analytics counters are server-only.
+check("Guests cannot read AI spend", ((await b.c.from("ai_spend").select("day")).data ?? []).length === 0);
+check("Guests cannot read AI reservations", ((await b.c.from("ai_reservations").select("id")).data ?? []).length === 0);
+check("Guests cannot read analytics counters", ((await b.c.from("analytics_daily").select("day")).data ?? []).length === 0);
+check("Guests cannot reserve AI spend", !!(await b.c.rpc("headroom_reserve_ai_spend", { p_guest: "x", p_ip: "x", p_feature: "proposal", p_model: "m", p_reserve: 1, p_global_limit: 9, p_guest_limit: 9, p_ip_limit: 9 })).error);
+check("Guests cannot write analytics counters", !!(await b.c.rpc("headroom_count_event", { p_event: "start", p_data_kind: "own", p_input_path: "manual" })).error);
 check("B cannot write entitlements", !!(await b.c.from("entitlements").insert({ owner_id: b.id, mode: "live", expires_at: new Date().toISOString() })).error);
 check("A still sees own plan", ((await a.c.from("plans").select("id").eq("id", planId)).data ?? []).length === 1);
 await a.c.from("plans").delete().eq("id", planId);

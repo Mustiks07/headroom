@@ -4,8 +4,11 @@ import { PDFDocument } from "pdf-lib";
 import type { ExtractionResult } from "@/domain/contracts";
 import { serverConfig } from "../env";
 import { HttpError } from "../http";
-import { extractWithAnthropic, type ProviderMedia } from "./anthropic";
-import { extractFromText } from "./text";
+import type { DocumentKind } from "@/domain/assistance";
+import { toExtractedFacts, type ExtractionResponse } from "@/lib/client/import-draft";
+import { aiFeatureEnabled, type AiReservation } from "../ai-budget";
+import { extractWithAnthropic, type ProviderCallInfo, type ProviderMedia } from "./anthropic";
+import { detectAsOfDate, documentKindCode, extractFromText } from "./text";
 
 export const MAX_DOCUMENT_BYTES = 3 * 1024 * 1024;
 export const MAX_PDF_PAGES = 5;
@@ -35,14 +38,14 @@ function detect(bytes: Uint8Array, mime: string, name: string): Detected | null 
 export interface ExtractRequest {
   bytes: Uint8Array; mime: string; name: string; consentToProvider: boolean;
   /** Session + durable quota check, run only right before a paid provider call. */
-  authorizeProvider?: () => Promise<void>;
+  authorizeProvider?: (estimate: { pdfPages?: number; images?: number }) => Promise<AiReservation>;
 }
 
 /**
  * Validate and read one uploaded document. CSV/TXT are parsed locally. PDF/images go to the
  * configured AI provider only after explicit consent. Nothing is stored; nothing is auto-applied.
  */
-export async function extractDocumentServer(req: ExtractRequest): Promise<{ status: number; result: ExtractionResult }> {
+export async function extractDocumentServer(req: ExtractRequest): Promise<{ status: number; result: ExtractionResponse }> {
   if (req.bytes.byteLength === 0) throw new HttpError(400, "EMPTY_FILE", "The file is empty.");
   if (req.bytes.byteLength > MAX_DOCUMENT_BYTES) throw new HttpError(413, "FILE_TOO_LARGE", "The file is larger than 3 MB. Upload a smaller file or enter the figures manually.");
   const detected = detect(req.bytes, req.mime, req.name);
@@ -52,7 +55,12 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
     return { status: 415, result: { status: "unavailable", fields: [],
       warnings: ["This file type is not supported. Upload a PDF, PNG, JPEG, CSV or TXT file, or enter the figures manually."] } };
   }
-  if (detected.kind === "text") return { status: 200, result: extractFromText(detected.text, documentId, detected.label) };
+  if (detected.kind === "text") {
+    const result = extractFromText(detected.text, documentId, detected.label);
+    const kind = documentKindCode(detected.text);
+    return { status: 200, result: { ...result, document: { documentId, kind: kind as DocumentKind },
+      facts: toExtractedFacts(result, documentId, kind, "deterministic_text", detectAsOfDate(detected.text)) } };
+  }
 
   let media: ProviderMedia;
   if (detected.kind === "pdf") {
@@ -73,18 +81,22 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
     media = { kind: "image", data: Buffer.from(req.bytes), mediaType: detected.mediaType };
   }
 
-  const config = serverConfig();
-  const ai = config.ai;
-  if (!ai || !config.supabase?.secretKey) return { status: 200, result: { status: "unavailable", fields: [], warnings: [UNAVAILABLE_MESSAGE] } };
+  if (!aiFeatureEnabled("extraction")) return { status: 200, result: { status: "unavailable", fields: [], warnings: [UNAVAILABLE_MESSAGE] } };
   if (!req.consentToProvider) {
     throw new HttpError(400, "CONSENT_REQUIRED", "Confirm that this document may be sent to the document-analysis provider before it is read.");
   }
   if (!req.authorizeProvider) throw new HttpError(503, "AI_UNAVAILABLE", UNAVAILABLE_MESSAGE);
-  await req.authorizeProvider();
+  const reservation = await req.authorizeProvider(media.kind === "pdf" ? { pdfPages: media.pageCount } : { images: 1 });
+  const info: ProviderCallInfo = { usage: null, outcome: "error" };
   try {
     const label = detected.kind === "pdf" ? "Uploaded PDF" : "Uploaded image";
-    return { status: 200, result: await extractWithAnthropic(media, documentId, label, ai) };
+    const result = await extractWithAnthropic(media, documentId, label,
+      { apiKey: reservation.apiKey, model: reservation.model, maxOutputTokens: reservation.maxOutputTokens, timeoutMs: reservation.timeoutMs }, info);
+    await reservation.settle(info.usage, info.outcome);
+    const kind = result.document?.kind ?? "unknown";
+    return { status: 200, result: { ...result, document: { documentId, kind }, facts: toExtractedFacts(result, documentId, kind, "ai_model") } };
   } catch (error) {
+    await reservation.settle(info.usage, error instanceof Error ? error.name : "error");
     console.error("[headroom] document provider failed", error instanceof Error ? error.name : "unknown");
     return { status: 503, result: { status: "unavailable", fields: [],
       warnings: ["Document analysis did not respond in time. Try again or enter the figures manually."] } };

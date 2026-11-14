@@ -1,5 +1,6 @@
 import "server-only";
 import { isRealValue, publicSupabaseConfig } from "@/lib/client/public-config";
+import { aiFeatureEnabled } from "./ai-budget";
 
 /** Server-only configuration. Values are read per call so tests and Vercel env changes apply. */
 export interface ServerConfig {
@@ -41,6 +42,10 @@ export type CheckoutMode = "demo" | "stripe_test";
 export interface Capabilities {
   cloudSave: boolean;
   aiExtraction: boolean;
+  /** Natural-language change proposals by the provider (deterministic patterns work without it). */
+  aiTextProposals: boolean;
+  /** Provider-simplified wording of verified explanations (deterministic text works without it). */
+  aiExplanations: boolean;
   checkoutMode: CheckoutMode;
   /** CSV/TXT figures can be read deterministically without any provider. */
   localTextImport: boolean;
@@ -49,8 +54,10 @@ export interface Capabilities {
 export function capabilities(config = serverConfig()): Capabilities {
   return {
     cloudSave: config.supabase !== null,
-    // The paid provider is offered only with the durable quota store (see ai-guard.ts).
-    aiExtraction: config.ai !== null && config.supabase?.secretKey != null,
+    // Each paid feature is offered only with the durable budget store, a priced model and its flag (ai-budget.ts).
+    aiExtraction: aiFeatureEnabled("extraction"),
+    aiTextProposals: aiFeatureEnabled("proposal"),
+    aiExplanations: aiFeatureEnabled("explanation"),
     checkoutMode: config.stripe ? "stripe_test" : "demo",
     localTextImport: true,
   };
