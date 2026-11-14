@@ -1,0 +1,72 @@
+{
+  "status": "hypotheses, not customer measurements",
+  "checked_date": "2026-11-15",
+  "source": "ROUND5_ECONOMICS_CHECK.json / anthropic_profiles / claude-opus-5-5",
+  "contribution": {
+    "decision_29": 20.233,
+    "season_49": 34.729,
+    "annual_99": 69.466,
+    "monthly_15": 9.949
+  },
+  "single_period_cac_target_3_to_1": {
+    "decision_29": 6.7443333333333335,
+    "season_49": 11.576333333333332,
+    "annual_99": 23.155333333333335,
+    "monthly_15": 3.316333333333333
+  },
+  "annual_support_minutes": {
+    "10": 74.466,
+    "20": 69.466,
+    "60": 49.466,
+    "120": 19.466
+  },
+  "acquisition_cpc_1": {
+    "0.02": {
+      "media_cac": 50.0,
+      "nonpayer_ai_cac": 17.64,
+      "total_before_labor": 67.64
+    },
+    "0.05": {
+      "media_cac": 20.0,
+      "nonpayer_ai_cac": 6.84,
+      "total_before_labor": 26.84
+    },
+    "0.10": {
+      "media_cac": 10.0,
+      "nonpayer_ai_cac": 3.24,
+      "total_before_labor": 13.24
+    },
+    "0.20": {
+      "media_cac": 5.0,
+      "nonpayer_ai_cac": 1.44,
+      "total_before_labor": 6.44
+    }
+  },
+  "min_visitor_to_paid_at_cpc1_and_free_doc_no_labor": {
+    "decision_29": 0.191432459062544,
+    "season_49": 0.11393783685665615,
+    "annual_99": 0.05783460437161568
+  },
+  "funnel_example": {
+    "eligible": 0.3,
+    "complete_given_eligible": 0.6,
+    "paid_given_complete": 0.2,
+    "visitor_to_paid": 0.036,
+    "media_cac_at_cpc1": 27.77777777777778
+  },
+  "one_additional_purchase_probability_40pct": {
+    "decision_29": 28.3262,
+    "season_49": 48.6206
+  },
+  "annual_three_period_ltv_60pct_renewal": 136.15336,
+  "hundred_million_revenue_units": {
+    "decision29_transactions": 3448275.8620689656,
+    "season49_purchases": 2040816.3265306123,
+    "annual99_households": 1010101.0101010101
+  },
+  "zero_sales_one_sided_95pct_upper": {
+    "30": 0.09503385285530419,
+    "60": 0.04870291331009746,
+    "100": 0.029513049607039932
+  }
+}

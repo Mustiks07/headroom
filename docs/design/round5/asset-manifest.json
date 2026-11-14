@@ -1,0 +1,74 @@
+{
+  "created": "2026-11-15",
+  "generator": "built-in image_gen",
+  "kind": "Raster design concepts, not implemented UI",
+  "selected_count": 5,
+  "exploration_count": 1,
+  "superseded_count": 0,
+  "assets": [
+    {
+      "file": "01-logo-explorations.png",
+      "status": "exploration",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "bytes": 1257331,
+      "sha256": "203fe422731a294ec0a5e8fc20ff866b4df6c7993bed05f9a7e5ef1c96517fcd"
+    },
+    {
+      "file": "02-headroom-lockup-transparent.png",
+      "status": "selected design reference",
+      "width": 2172,
+      "height": 724,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "bytes": 297272,
+      "sha256": "b53dce2ae8cc6a2bd204a8d36b40f7d392ba06222ec4eb6a2761b29dc90a199f"
+    },
+    {
+      "file": "03-start-desktop-concept.png",
+      "status": "selected design reference",
+      "width": 1487,
+      "height": 1058,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "bytes": 1543306,
+      "sha256": "6774da94998048606d9f53f3c50d0de903260a7b82659e6c2035cb33ef32e284"
+    },
+    {
+      "file": "04-fact-review-desktop-concept.png",
+      "status": "selected design reference",
+      "width": 1487,
+      "height": 1058,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "bytes": 1678167,
+      "sha256": "bfd3ed80280061cc3a69befdf86d856aba1c9b02dd1269aca51d79c6743de23b"
+    },
+    {
+      "file": "05-comparison-desktop-concept.png",
+      "status": "selected design reference",
+      "width": 1487,
+      "height": 1058,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "bytes": 1486095,
+      "sha256": "e827584e9295ebb66f184707893057ef991801f6716816c9b5ab73c1edd44e4e"
+    },
+    {
+      "file": "06-comparison-mobile-concept.png",
+      "status": "selected design reference",
+      "width": 887,
+      "height": 1774,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "bytes": 1520349,
+      "sha256": "4cb6000a66fadd2cda51592baa52b4f0e28c697879d7222a9f2ad2df6b5ae92c"
+    }
+  ],
+  "repository_note": "Selected unchanged exports only. Superseded v1 and original tool exports retained in the local design archive; not part of the repository handoff."
+}

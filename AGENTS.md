@@ -14,6 +14,8 @@ Current round: read `docs/handoffs/integration-round4.md`, `docs/tasks/ROUND5_SH
 
 The user wants a strong, complete, checked result. Public app, README, deck and demo must match the current build. Preserve user-provided final materials; do not replace them with weaker generated versions without agreement. Inspect the actual artifacts judges will open before final publication.
 
+Round 5 research/design addendum: `docs/tasks/ROUND5_RESEARCH_ADDENDUM.md`. Continue existing branches; do not restart completed work. The selected design proposal lives under `docs/design/round5`; its raster screens are references, not implemented UI. Source-backed business/competitor reviews live under `docs/research` and distinguish observed results from hypotheses.
+
 ## Shared decisions
 
 - Product name: **Headroom**. All app UI, validation, generated reports and presentation content are **English**. Internal specifications may be Russian.
