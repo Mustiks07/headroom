@@ -2,7 +2,7 @@
 
 import type { MoneyFact } from "@/domain/contracts";
 import { MoneyField } from "@/components/MoneyField";
-import { MANUAL_SOURCE_ID, personName, type Draft } from "@/features/household/draft";
+import { MANUAL_SOURCE_ID, forecastFor, personName, setForecastInDraft, type Draft } from "@/features/household/draft";
 import { DateField } from "@/features/household/projectEditors";
 import type { ProblemAt, Update } from "@/features/household/editors";
 
@@ -17,15 +17,18 @@ export function QuickInputs({ draft, update, problemAt }: { draft: Draft; update
   const c = draft.constraints;
   const ownerRow = draft.years[0].incomes.findIndex(r => r.personId === o.ownerPersonId);
   const profitPath = `years.0.incomes.${ownerRow}.scheduleCProfit`;
+  const forecast = forecastFor(draft, o.ownerPersonId, 2026);
   return <div className="quick">
     <p className="eyebrow">Try changing</p>
     <MoneyField plain required path="opportunity.grossRevenueCents" label="Project price" fact={plain(o.grossRevenueCents)} evidence={draft.evidence}
       problem={problemAt("opportunity.grossRevenueCents")} onChange={f => update(d => { d.opportunity.grossRevenueCents = f.valueCents ?? 0; })} />
     <DateField path="opportunity.plannedReceiptDate" label="Payment arrives" value={o.plannedReceiptDate} problem={problemAt("opportunity.plannedReceiptDate")}
       onChange={v => update(d => { d.opportunity.plannedReceiptDate = v; })} />
-    {ownerRow >= 0 && <MoneyField path={profitPath} label={`${personName(draft, o.ownerPersonId) === "You" ? "Your" : "Owner's"} 2026 business profit without the project`}
-      fact={draft.years[0].incomes[ownerRow].scheduleCProfit} evidence={draft.evidence} problem={problemAt(profitPath)}
-      onChange={f => update(d => { d.years[0].incomes[ownerRow].scheduleCProfit = f; })} />}
+    {ownerRow >= 0 && (forecast.method === "annual_total"
+      ? <MoneyField path={profitPath} label={`${personName(draft, o.ownerPersonId) === "You" ? "Your" : "Owner's"} 2026 business profit without the project`}
+        fact={forecast.annualNetProfit} evidence={draft.evidence} problem={problemAt(profitPath)}
+        onChange={f => update(d => setForecastInDraft(d, { ...forecast, annualNetProfit: f }))} />
+      : <p className="small">2026 profit is built from your figures so far plus the rest of the year. Edit it in the full form.</p>)}
     <MoneyField plain required path="constraints.maxAdditionalSepCents" label="Most I can put into retirement" fact={plain(c.maxAdditionalSepCents)} evidence={draft.evidence}
       problem={problemAt("constraints.maxAdditionalSepCents")} onChange={f => update(d => { d.constraints.maxAdditionalSepCents = f.valueCents ?? 0; })} />
     <label className="switch small"><input type="checkbox" checked={c.canSplitPayment} onChange={e => update(d => { d.constraints.canSplitPayment = e.target.checked; })} />

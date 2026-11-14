@@ -37,10 +37,11 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
   const [localError, setLocalError] = useState<string | null>(null);
   const rangeKey = `${path}#range`;
   const rangeError = invalid?.get(rangeKey);
-  const [lowText, setLowText] = useState(invalid?.get(`${rangeKey}-low`)?.text ?? centsToInput(fact.range?.lowCents ?? null));
-  const [highText, setHighText] = useState(invalid?.get(`${rangeKey}-high`)?.text ?? centsToInput(fact.range?.highCents ?? null));
+  // One invalid entry holds both typed ends, so a restored draft shows exactly what was typed.
+  const [lowText, setLowText] = useState(rangeError?.low ?? centsToInput(fact.range?.lowCents ?? null));
+  const [highText, setHighText] = useState(rangeError?.high ?? centsToInput(fact.range?.highCents ?? null));
   const [showRange, setShowRange] = useState(!!fact.range || !!rangeError);
-  const supportsRange = /\.(scheduleCProfit|taxableInterest|taxExemptInterest)$/.test(path);
+  const supportsRange = /\.(scheduleCProfit|taxableInterest|taxExemptInterest|annualNetProfit|ytdNetProfit|remainingReceipts|remainingExpenses)$/.test(path);
   const error = stored?.message ?? localError;
 
   // Follow outside changes (copy buttons, document import, "None") unless the box holds unfixed text.
@@ -55,8 +56,8 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
   const sourceText = !source ? `Source: ${fact.sourceId}` : source.kind === "synthetic" ? "Sample data"
     : source.kind === "document" ? `From ${source.label}` : source.kind === "manual" ? "Entered by you" : source.label;
 
-  function flag(key: string, raw: string, message: string) {
-    if (invalid) invalid.set(key, { text: raw, message }); else setLocalError(message);
+  function flag(key: string, raw: string, message: string, parts?: { low: string; high: string }) {
+    if (invalid) invalid.set(key, { text: raw, message, ...parts }); else setLocalError(message);
   }
   function clear(key: string) { if (invalid) invalid.set(key, null); setLocalError(null); }
 
@@ -77,11 +78,11 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
   function commitRange(nextLow: string, nextHigh: string) {
     setLowText(nextLow); setHighText(nextHigh);
     const lo = parseDollarsToCents(nextLow); const hi = parseDollarsToCents(nextHigh);
-    if (lo === "invalid" || hi === "invalid") { flag(rangeKey, `${nextLow} – ${nextHigh}`, "Enter the range as two dollar amounts"); return; }
+    if (lo === "invalid" || hi === "invalid") { flag(rangeKey, `${nextLow} – ${nextHigh}`, "Enter the range as two dollar amounts", { low: nextLow, high: nextHigh }); return; }
     if (lo === null && hi === null) { clear(rangeKey); if (fact.range) { const { range: _r, ...rest } = fact; void _r; onChange(rest); } return; }
-    if (lo === null || hi === null) { flag(rangeKey, `${nextLow} – ${nextHigh}`, "Enter both the low and the high end of the range"); return; }
-    if (lo > hi) { flag(rangeKey, `${nextLow} – ${nextHigh}`, "The low end of the range must not be above the high end"); return; }
-    if (fact.valueCents !== null && (fact.valueCents < lo || fact.valueCents > hi)) { flag(rangeKey, `${nextLow} – ${nextHigh}`, "Your estimate must sit inside the range"); return; }
+    if (lo === null || hi === null) { flag(rangeKey, `${nextLow} – ${nextHigh}`, "Enter both the low and the high end of the range", { low: nextLow, high: nextHigh }); return; }
+    if (lo > hi) { flag(rangeKey, `${nextLow} – ${nextHigh}`, "The low end of the range must not be above the high end", { low: nextLow, high: nextHigh }); return; }
+    if (fact.valueCents !== null && (fact.valueCents < lo || fact.valueCents > hi)) { flag(rangeKey, `${nextLow} – ${nextHigh}`, "Your estimate must sit inside the range", { low: nextLow, high: nextHigh }); return; }
     clear(rangeKey);
     onChange({ ...fact, sourceId: MANUAL_SOURCE_ID, range: { lowCents: lo, highCents: hi } });
   }

@@ -39,7 +39,8 @@ async function startServer() {
 
 (async () => {
   const { base, stop } = await startServer();
-  const browser = await chromium.launch();
+  // CHROMIUM_PATH lets a machine with a preinstalled browser run the pinned Playwright without downloading one.
+  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const errors = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -65,7 +66,7 @@ async function startServer() {
     await price.fill("13,0x0");
     await page.waitForSelector("text=Fix these amounts to update the result", { timeout: 5000 });
     await page.waitForTimeout(800);
-    check(await page.locator(".tile-rec button:has-text('Use this plan'):not([disabled])").count() === 0, "invalid price blocks 'Use this plan'");
+    check(await page.locator(".overview-actions .btn.primary:not([disabled])").count() === 0, "invalid price blocks saving the recommended plan");
     await price.fill("13000");
     await page.waitForFunction(() => !document.querySelector(".overview.is-stale") && document.querySelector(".tile-rec"), null, { timeout: 15000 });
 
@@ -78,14 +79,14 @@ async function startServer() {
     check(await infeasible.locator("button:has-text('Use this plan')").count() === 0, "no 'Use this plan' on an unavailable option");
 
     // 5. Save → reopen → something changed → save revision 2.
-    await page.locator(".tile-rec button:has-text('Use this plan')").click();
+    await page.locator(".overview-actions .btn.primary").click();
     await page.waitForURL(/\/plan\//, { timeout: 15000 });
     await page.waitForSelector(".plan-head");
     await page.reload(); await page.waitForSelector(".plan-head");
     check((await page.locator(".save-status").innerText()).includes("Revision 1"), "saved plan reopens after refresh (revision 1)");
     await page.getByRole("button", { name: "Something changed" }).click();
     await page.getByText("My income forecast changed").click();
-    await page.locator("#f-years-0-incomes-0-scheduleCProfit").fill("121000");
+    await page.locator("#f-ui-forecasts-primary-2026-annualNetProfit").fill("121000");
     await page.getByRole("button", { name: "Recalculate" }).click();
     await page.waitForSelector(".change-review", { timeout: 15000 });
     check((await page.locator(".diff-list").innerText()).includes("$121,000"), "income change shows the before → after difference");
@@ -102,15 +103,36 @@ async function startServer() {
     // 7. Own data: an invalid amount survives a refresh and still blocks.
     await page.goto(`${base}/check`);
     await page.locator("#sec-B button.section-toggle").click();
-    await page.locator("#f-years-0-incomes-0-scheduleCProfit").fill("12k");
+    await page.locator("#f-ui-forecasts-primary-2026-annualNetProfit").fill("12k");
     await page.waitForTimeout(700);
     await page.reload();
     await page.waitForSelector("text=needs fixing", { timeout: 5000 }).catch(() => {});
-    check(await page.locator("#f-years-0-incomes-0-scheduleCProfit").inputValue() === "12k", "restored draft keeps the invalid text instead of an old number");
+    check(await page.locator("#f-ui-forecasts-primary-2026-annualNetProfit").inputValue() === "12k", "restored draft keeps the invalid text instead of an old number");
 
     // 8. No whole-page horizontal scroll at 360 px.
     const mobile = await browser.newPage({ viewport: { width: 360, height: 780 } });
-    for (const path of ["/", "/demo?case=family-cliff", "/check", "/plans", "/pricing"]) {
+    // 8. Household plan (v2 workspace): actual payment replaces expected; SEP goal / paid / left; survives reload.
+    await page.goto(`${base}/household`);
+    await page.getByRole("button", { name: /Open the sample household plan/ }).click();
+    await page.waitForURL(/\/household\/[^/?]+/, { timeout: 15000 });
+    const settled = () => page.waitForFunction(() => document.querySelector(".overview .tile") && !document.querySelector(".overview.is-stale"), null, { timeout: 20000 });
+    await settled();
+    const profit = async () => (await page.locator(".overview .tile").nth(1).locator(".tile-big").first().innerText()).trim();
+    const beforeProfit = await profit();
+    await page.getByRole("button", { name: "Record received" }).first().click();
+    await page.locator('input[id^="amt-"]').fill("3200"); await page.locator('input[id^="date-"]').fill("2026-12-16");
+    await page.getByRole("button", { name: "Save this payment" }).click(); await settled();
+    const afterProfit = await profit();
+    check(beforeProfit === "$125,000" && afterProfit === "$125,200", `actual $3,200 replaces expected $3,000 (profit ${beforeProfit} → ${afterProfit})`);
+    await page.getByRole("button", { name: /Record a contribution/ }).click();
+    await page.locator("#c-amount").fill("1500"); await page.locator("#c-date").fill("2026-11-10");
+    await page.getByRole("button", { name: "Save contribution" }).click(); await settled();
+    const sepText = (await page.locator(".sep-row .sep-figures").innerText()).replace(/\s+/g, " ");
+    check(/Yearly goal \$5,000 Already contributed \$3,500 Left to contribute \$1,500/.test(sepText), `SEP goal / paid / left: ${sepText}`);
+    await page.reload(); await settled();
+    check((await page.locator(".save-status").innerText()).includes("Revision 3") && await profit() === "$125,200", "household plan reopens at revision 3 with the recorded facts");
+
+    for (const path of ["/", "/demo?case=family-cliff", "/check", "/household", "/plans", "/pricing"]) {
       await mobile.goto(base + path); await mobile.waitForTimeout(1200);
       const w = await mobile.evaluate(() => document.documentElement.scrollWidth);
       check(w <= 360, `${path} fits 360 px (${w}px)`);

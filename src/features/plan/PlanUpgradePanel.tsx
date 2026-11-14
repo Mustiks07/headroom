@@ -67,9 +67,11 @@ export function PlanUpgradePanel({ plan, onStatus, onUpgraded }: {
         ? !preview.sameOption.feasible && <p className="small"><strong>Your option “{preview.previousChoice.label}” is no longer available:</strong> {preview.sameOption.reasons.join(" ") || "it is outside your limits now."}</p>
         : <p className="small"><strong>Your option “{preview.previousChoice.label}” isn&apos;t offered by the updated calculation.</strong></p>}
       <AgreedPlanImpact evaluation={preview.agreedEvaluation} />
-      <p className="small"><strong>Newly calculated option:</strong> review its amounts and dates before replacing your saved plan.</p>
+      <h3 className="small-head">A newly calculated option</h3>
+      <p className="small">The right-hand column is <strong>not</strong> your saved arrangement recalculated (that is shown above). It is the option the updated rules now suggest{preview.sameOption ? <> — “{preview.sameOption.label}”</> : null}, which may use different amounts or dates. Review it before replacing your saved plan.</p>
       <div className="table-wrap"><table className="years-table compact">
-        <thead><tr><th scope="col">For “{preview.previousChoice.label}”</th><th scope="col">Saved</th><th scope="col">Updated</th></tr></thead>
+        <caption className="visually-hidden">Saved option compared with the newly calculated option</caption>
+        <thead><tr><th scope="col">Figure</th><th scope="col">Your saved plan<br /><span className="muted small">{preview.previousChoice.label}</span></th><th scope="col">New option<br /><span className="muted small">{preview.sameOption?.label ?? "not offered"}</span></th></tr></thead>
         <tbody>{preview.figures.map(f => <tr key={f.label}><th scope="row">{f.label}</th>
           <td className="num">{f.beforeCents === null ? "—" : money(f.beforeCents)}</td>
           <td className="num">{f.afterCents === null ? "—" : money(f.afterCents)}</td></tr>)}</tbody>

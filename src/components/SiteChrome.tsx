@@ -9,7 +9,7 @@ export function SiteHeader({ current }: { current?: "demo" | "check" | "plans" |
       <nav aria-label="Main navigation" className="nav-links">
         {link("/check", "check", "Check my subsidy")}
         {link("/demo", "demo", "Sample households")}
-        {link("/plans", "plans", "My plans")}
+        {link("/household", "plans", "My plans")}
         {link("/pricing", "pricing", "Pricing")}
       </nav>
     </div>

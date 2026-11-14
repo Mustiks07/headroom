@@ -22,6 +22,8 @@ import { RiskResult } from "@/features/results/RiskPanel";
 import { ComparisonView, DecisionOverview } from "@/features/results/ComparisonView";
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { StorageFallback } from "@/features/plan/StorageFallback";
+import { workspaceFromCase } from "@/features/household-plan/ops";
+import { workspaceRepo } from "@/features/household-plan/store";
 import {
   DRAFT_KEY, describeStorageError, downloadJson, draftPlan, fileStamp, inputFile, saveNewPlan, takeStashedInput,
 } from "@/features/plan/storage";
@@ -212,6 +214,17 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
     }
   }
 
+  /** Turns the checked figures into a household plan draft (forecast + optional proposal), then opens it. */
+  async function makeHouseholdPlan() {
+    const built = buildCaseInput(draftRef.current, "risk");
+    if (!built.ok) { setSaveError("Fix the listed figures first, then make the plan."); return; }
+    try {
+      const ws = workspaceFromCase(built.input, draftRef.current.ui.forecasts ?? [], draftRef.current.ui.projectStarted);
+      const saved = await workspaceRepo().save(ws, null);
+      router.push(`/household/${encodeURIComponent(saved.id)}?saved=1`);
+    } catch (e) { setSaveError(`The household plan couldn't be saved: ${e instanceof Error ? e.message : String(e)}. Your figures here are kept.`); }
+  }
+
   function downloadData() {
     const built = buildCaseInput(draftRef.current, "risk");
     downloadJson(inputFile(built.ok ? built.input : draftRef.current), `headroom-household-${fileStamp()}.json`);
@@ -269,6 +282,11 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
       {mode === "own" && <div id="risk-area" className="result-area" aria-live="polite">
         <RiskArea run={risk} stale={riskStale} draft={draft} onGoTo={goTo} onShowCalc={setDrawer} onDownload={downloadData}
           onCompare={() => { setStep("compare"); window.scrollTo({ top: 0 }); }} onRetry={runRisk} />
+        {riskReady && !riskStale && <div className="plan-cta">
+          <div><strong>Keep this as your household plan</strong><p className="muted small">Track agreed projects, payments as they arrive and SEP-IRA contributions; check new offers on top of them.</p></div>
+          <button type="button" className="btn secondary" onClick={() => void makeHouseholdPlan()}>Make this my household plan <ArrowRight size={16} /></button>
+        </div>}
+        {saveError && step === "household" && <p className="notice warn" role="alert">{saveError}</p>}
       </div>}
     </> : <>
       <SimpleSection n="A" title="The project" lead="What the client offers. The price is not the same as profit.">
@@ -296,9 +314,9 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   return <InvalidInputsProvider draft={draft} update={update}>
     <div className="workspace shell">
       {mode === "demo" ? <>
-        <div className="sample-banner" role="note">
-          <FlaskConical size={18} aria-hidden="true" />
-          <div><strong>Sample household — synthetic data.</strong> {sampleLine(draft)} Change any figure: results come from the same calculation as your own data.</div>
+        <div className="sample-banner compact" role="note">
+          <FlaskConical size={16} aria-hidden="true" />
+          <div><strong>Sample household — synthetic data.</strong> <span className="hide-sm">{sampleLine(draft)}</span></div>
           <Link className="btn ghost small" href="/check">Use my own data</Link>
         </div>
         <div className="result-first">

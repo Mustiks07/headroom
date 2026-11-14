@@ -147,3 +147,22 @@ export async function trackEvent(event: AnalyticsEvent): Promise<void> {
 }
 
 export { HeadroomError };
+
+/**
+ * "Annual income forecast explanation" PDF for a household workspace (v2), generated on the
+ * server from the validated workspace and a fresh engine result. Pass the fingerprint of the
+ * figures on screen to refuse a stale export (PlanIntegrityError STALE_RESULT).
+ */
+export async function exportForecastPdf(workspace: import("@/domain/household-workspace").HouseholdWorkspace, year: 2026 | 2027 = 2026,
+  expectedFingerprint?: string): Promise<Blob> {
+  const response = await apiFetch("/api/export/forecast", {
+    method: "POST", timeoutMs: 30_000, headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace, year, ...(expectedFingerprint ? { expectedFingerprint } : {}) }),
+  });
+  if (!response.ok) {
+    const error = await errorFromResponse(response);
+    if (response.status === 409 || response.status === 400) throw new PlanIntegrityError(error.code, error.message);
+    throw error;
+  }
+  return response.blob();
+}

@@ -135,51 +135,70 @@ export function DecisionOverview({ comparison, input, risk, stale, onShowCalc, o
   const allNotes = [...new Set([...comparison.warnings, ...(rec?.assumptions ?? [])])];
   const r = risk?.risk;
 
+  const recDelta = rec ? deltaVs(rec, base).cash : null;
+  const recVsAccept = rec && accept && rec.id !== accept.id ? deltaVs(rec, accept).cash : null;
+  const verdict = verdictText(acceptDelta, rec, recDelta);
+
   return <div className={`overview ${stale ? "is-stale" : ""}`}>
+    <p className="verdict">{verdict}</p>
     <div className="overview-grid">
       <div className="tile">
-        <p className="tile-k">Your subsidy now · {r?.year ?? base.years[0].year}</p>
+        <p className="tile-k">Subsidy now · {r?.year ?? base.years[0].year}</p>
         {r ? <>
-          <p className={`pill ${RISK_TONE[r.state]}`}>{RISK_TEXT[r.state]}</p>
-          <p className="tile-line">Income counted for the subsidy <strong className="num">{money(r.forecastMagiCents)}</strong> of a <strong className="num">{money(r.thresholdMagiCents)}</strong> limit</p>
-          <p className="tile-line">Premium tax credit <strong className="num">{money(r.subsidyCents)}</strong>/year</p>
-        </> : <p className="tile-line">Premium tax credit without the project <strong className="num">{money(base.years[0].ptcCents)}</strong> in {base.years[0].year}</p>}
+          <p className="tile-big num">{money(r.subsidyCents)}<span className="tile-unit">/year</span></p>
+          <p className="tile-sub"><span className={`pill ${RISK_TONE[r.state]}`}>{RISK_TEXT[r.state]}</span></p>
+          <p className="tile-line">Income for the subsidy <strong className="num">{money(r.forecastMagiCents)}</strong> of <strong className="num">{money(r.thresholdMagiCents)}</strong> limit</p>
+        </> : <><p className="tile-big num">{money(base.years[0].ptcCents)}<span className="tile-unit">/year</span></p>
+          <p className="tile-sub">premium tax credit without the project</p></>}
       </div>
       {accept && acceptDelta !== null && <div className="tile">
-        <p className="tile-k">If you accept as offered</p>
+        <p className="tile-k">Accept as offered</p>
         <p className={`tile-big num ${signClass(acceptDelta)}`}>{signedMoney(acceptDelta)}</p>
-        <p className="tile-sub">cash after both tax years, compared with not taking it</p>
-        {lostCredit.map(l => <p key={l.year} className="tile-line">{l.year} premium tax credit <span className="num">{money(l.before)}</span> → <strong className="num">{money(l.after)}</strong></p>)}
-        {repay.map(y => <p key={y.year} className="tile-line warn-text">Repay <strong className="num">{money(y.aptcSettlementCents)}</strong> of advance credit when you file in {y.year + 1}</p>)}
+        <p className="tile-sub">vs. not taking the project</p>
+        {lostCredit.slice(0, 1).map(l => <p key={l.year} className="tile-line">{l.year} credit <span className="num">{money(l.before)}</span> → <strong className="num">{money(l.after)}</strong></p>)}
+        {repay.slice(0, 1).map(y => <p key={y.year} className="tile-line warn-text">Repay <strong className="num">{money(y.aptcSettlementCents)}</strong> when you file in {y.year + 1}</p>)}
       </div>}
       <div className={`tile ${rec ? "tile-rec" : ""}`}>
-        <p className="tile-k">Best option found within your limits</p>
-        {!rec ? <p className="tile-line">None of the options fits your limits. Each card below explains why.</p>
-          : rec.kind === "accept_now" ? <>
-            <p className="tile-title">Accept as offered</p>
-            <p className="tile-line">No special arrangement is needed — this project increases the cash your family keeps.</p>
-          </> : rec.kind === "decline" ? <>
-            <p className="tile-title">Not taking the project</p>
-            <p className="tile-line">With these figures every way of taking it leaves less cash. A higher price may change that.</p>
-          </> : <>
-            <p className="tile-title">{humanizeDates(rec.label)}</p>
-            <p className={`tile-big num ${signClass(deltaVs(rec, base).cash)}`}>{signedMoney(deltaVs(rec, base).cash)}</p>
-            <p className="tile-sub">compared with not taking it{accept ? <> · <strong className="num">{signedMoney(deltaVs(rec, accept).cash)}</strong> better than accepting as offered</> : null}</p>
-            {rec.grossAdditionalRetirementCents > 0 && <p className="tile-line">Plus <strong className="num">{money(rec.grossAdditionalRetirementCents)}</strong> into retirement savings (not spendable cash)</p>}
-          </>}
-        {nextSteps.length > 0 && <div className="next-steps"><p className="tile-k">Next steps</p>
-          <ul>{nextSteps.map(a => <li key={a.id}>{humanizeDates(a.title)}{a.dueDate && <span className="muted"> · by {shortDate(a.dueDate)}</span>}</li>)}</ul></div>}
-        <div className="row gap wrap">
-          {rec && onUse && <button type="button" className="btn primary small" disabled={stale || !!busy} onClick={() => onUse(rec.id)}>{busy === rec.id ? "Saving…" : "Use this plan"}</button>}
-          {rec && <button type="button" className="btn ghost small" disabled={stale} onClick={() => onShowCalc(scenarioTrace(rec, comparison, input))}><FileSearch size={15} /> Show the calculation</button>}
-        </div>
-        {searchNote && <p className="hint" title={humanizeDates(searchNote)}>“Best” comes from a bounded search, not an exact optimum{gap ? <> — the engine reports it is within about <strong>{gap}</strong> of the exact best</> : ""}. Details are in the calculation notes.</p>}
+        <p className="tile-k">Best within your limits</p>
+        {!rec ? <p className="tile-line">No option fits your limits. The cards below explain why.</p> : <>
+          <p className={`tile-big num ${signClass(recDelta)}`}>{rec.kind === "decline" ? "$0" : signedMoney(recDelta)}</p>
+          <p className="tile-sub">{shortOptionName(rec)}{rec.kind !== "decline" ? " · vs. not taking it" : ""}</p>
+          {recVsAccept !== null && rec.kind !== "decline" && <p className="tile-line"><strong className={`num ${signClass(recVsAccept)}`}>{signedMoney(recVsAccept)}</strong> vs. accepting as offered</p>}
+          {rec.grossAdditionalRetirementCents > 0 && <p className="tile-line">+ <strong className="num">{money(rec.grossAdditionalRetirementCents)}</strong> retirement savings, kept separate</p>}
+        </>}
       </div>
     </div>
-    {dataNotes.length > 0 && <ul className="data-notes" aria-label="Limits of these figures">{dataNotes.map(n => <li key={n}><Info size={14} aria-hidden="true" /> {humanizeDates(n)}</li>)}</ul>}
-    {allNotes.length > 0 && <details className="explain"><summary>All conditions and calculation notes ({allNotes.length})</summary>
-      <ul className="bullets small">{allNotes.map(n => <li key={n}>{humanizeDates(n)}</li>)}</ul></details>}
+    {rec && <div className="overview-actions">
+      {onUse && <button type="button" className="btn primary" disabled={stale || !!busy} onClick={() => onUse(rec.id)}>{busy === rec.id ? "Saving…" : `Use “${shortOptionName(rec)}”`}</button>}
+      <button type="button" className="btn ghost small" disabled={stale} onClick={() => onShowCalc(scenarioTrace(rec, comparison, input))}><FileSearch size={15} /> Show the calculation</button>
+      <a className="link-btn" href="#compare-area">See all options</a>
+    </div>}
+    <p className="baseline-help muted small">Amounts are cash your family keeps after the 2026 and 2027 tax returns settle — not a bank balance. “vs. not taking the project” is the project&apos;s whole effect; “vs. accepting as offered” is what the arrangement adds. Retirement savings are never counted as cash.</p>
+    {dataNotes.length > 0 && <p className="data-notes" role="note"><Info size={14} aria-hidden="true" /> {dataNotes.map(n => humanizeDates(n)).join(" ")}</p>}
+    {rec && <details className="explain">
+      <summary>What you would do{nextSteps.length ? ` (${rec.actions.length} step${rec.actions.length === 1 ? "" : "s"})` : ""} and its conditions</summary>
+      <p className="small"><strong>{humanizeDates(rec.label)}</strong></p>
+      {nextSteps.length > 0 && <ul className="bullets small">{[...rec.actions].sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999")).map(a =>
+        <li key={a.id}>{humanizeDates(a.title)}{a.dueDate && <span className="muted"> · by {shortDate(a.dueDate)}</span>}</li>)}</ul>}
+      {searchNote && <p className="hint">“Best” comes from a bounded search, not an exact optimum{gap ? <> — within about <strong>{gap}</strong> of the exact best</> : ""}.</p>}
+      <ul className="bullets small">{allNotes.map(n => <li key={n}>{humanizeDates(n)}</li>)}</ul>
+    </details>}
   </div>;
+}
+
+/** Short, plain name for an option kind; the engine's full label is shown in details. */
+export function shortOptionName(s: ScenarioResult): string {
+  return ({ decline: "Decline the project", accept_now: "Accept as offered", sep_minimum: "Accept + SEP-IRA",
+    sep_buffer: "Accept + larger SEP-IRA", split_payment: "Split the payment", renegotiate: "Ask for a higher price" } as const)[s.kind] ?? s.label;
+}
+
+function verdictText(acceptDelta: number | null, rec: ScenarioResult | null, recDelta: number | null): string {
+  if (!rec) return "None of the options fits your limits yet.";
+  const acc = acceptDelta === null ? "" : acceptDelta < 0 ? `Taking this project as offered leaves your family ${signedMoney(acceptDelta).replace("−", "")} worse off. `
+    : `Taking this project as offered adds ${signedMoney(acceptDelta)}. `;
+  if (rec.kind === "accept_now") return `${acc}No special arrangement is needed.`;
+  if (rec.kind === "decline") return `${acc}With these figures, not taking it keeps the most cash.`;
+  return `${acc}${shortOptionName(rec)} instead: ${signedMoney(recDelta)}.`;
 }
 
 const RISK_TEXT = { below_cliff: "Below the limit", at_risk: "Close to the limit", over_cliff: "Above the limit", no_credit: "No credit expected" } as const;
