@@ -1,0 +1,295 @@
+Выполни задание в https://github.com/Mustiks07/headroom в ветке claude1.
+
+Это продолжение текущей работы, не перезапуск. Сначала git fetch origin и обычный merge origin/main в твоём clone; не force-push и не удаляй сделанное. Посмотри свой handoff и diff: уже выполненные пункты кратко подтверди, доработай оставшиеся. Пользователь выбрал C — насыщенный синий, объёмный H, яркий акцент. Действующий дизайн в docs/design/c-open/, старый docs/design/round5 отклонён. Общая функциональная задача сохраняется.
+
+Твой результат: внедрённый C во всём реальном пользовательском пути, а не одна главная. Изображения — визуальный эталон; ввод, расчёты, состояния, сохранение и экспорт должны работать. Применить новый дизайн к уже сделанному round5, проверить итоговый desktop/mobile и реальные PDF/ICS.
+
+Работай самостоятельно в своей зоне. Контракты согласовывайте маленькими additive commits через Claude 3; готовые конкретные SHA можно брать обычным merge. Не останавливай всю работу, пока другая роль доделывает свою: закончи независимые части и точно опиши блокирующий контракт. Реальные внешние операции и live claims не подменяй моками. Все UI на английском, жюри проходит без регистрации и оплаты. Код и секреты не смешивать.
+
+Ниже полный действующий brief, твоя роль и исследовательское дополнение. После выполнения — commit + push своей ветки и актуальный docs/handoffs/claude1-round5.md: HEAD SHA, реализованные функции, реально пройденные проверки, неготовые зависимости. Проверять один раз по существу и повторять только после изменения/ошибки; не наращивать тесты ради количества.
+
+
+
+# Раунд 5 — от документов к решению и повторному использованию
+
+Общий обязательный brief для Claude 1, 2 и 3. Работать от интегрированного `origin/main` после `docs/handoffs/integration-round4.md`. Пользователь просит законченный сильный продукт, а не минимальный прототип и не бесконечный набор тестов. Приоритет — полезный результат и первое впечатление жюри; скорость написания кода не ограничивает замысел.
+
+Новые исследования и визуальная система сведены в `docs/tasks/ROUND5_RESEARCH_ADDENDUM.md`. Прочитать как дополнение к своей уже начатой работе. Общий контракт `97b608c3a3bcf873b41ae59ae1270a8740b35eb7` опубликован Claude 3; последующие расширения согласовывать маленькими additive commits.
+
+## Продуктовый поворот внутри исходной задачи
+
+Headroom — помощник независимого специалиста с Marketplace-страховкой: **какие условия заказа позволят оставить нужные деньги семье, как их согласовать и что делать, когда доход меняется**. ACA — важная часть стоимости решения. Продукт не сводится к шкале порога, но и не превращается в общий бюджетный трекер.
+
+Рабочее обещание на английском: **“Know what a client offer leaves your family — and find terms that work.”** Следующая строка объясняет способ: “Bring your documents and the offer. Review the facts, compare the terms, and keep the plan up to date.” Это проект copy, который Claude 1 должен проверить на фактических возможностях сборки.
+
+Главные слабости текущего релиза: сложный первый ввод, слишком много терминов/данных до пользы, документный импорт спрятан, применение фактов к household не закончено в UI, после согласия клиента старый decision PDF становится недоступен, оснований для цены и удержания ещё недостаточно. Новый этап закрывает именно эти слабости.
+
+Не обещать «никто не потеряет субсидию», гарантированную экономию, прибыль от каждого заказа, замену CPA, гарантированную победу или рынок $100m ARR без расчёта. Дешёвые/бесплатные калькуляторы — реальные альтернативы; показывать преимущество выполненным сценарием.
+
+## Восемь законченных возможностей
+
+1. **Быстрый старт:** документы/вставленный текст/ручной ввод как равноправные входы. Демо доступно сразу. Один раз созданный household переиспользуется.
+2. **Проверяемое извлечение:** источник, человек, период, год и значение; конфликты и пропуски видны. Групповое подтверждение непротиворечивых фактов; спорные факты отдельно.
+3. **Короткое дозаполнение:** только вопросы, влияющие на текущую задачу. Текущий ACA check не требует 2027 или выдуманного заказа. Двухлетняя оптимизация честно запрашивает следующий год.
+4. **Разбор предложения клиента:** сумма, сроки/условия, расходы, аванс и неоплаченный остаток → проект → цель → до трёх реально рассчитанных вариантов.
+5. **Обновление обычной фразой:** предложение конкретных изменений → preview → подтверждение → новая ревизия → объяснение последствий. Никаких скрытых изменений из чата.
+6. **Исполнение и возвращение:** выбранные/отправленные/согласованные условия, платежи, SEP, действующие действия, история, пригодный после согласия экспорт; актуальная оценка отделена от исторического решения.
+7. **Доказательство результата:** понятное объяснение расчёта с источниками и ограничениями, публичный полный demo, проверяемая продуктовая аналитика и материалы для презентации.
+8. **Помощь с данными страховки:** понятный выбор местности/года, поиск нужного значения в документе или проверяемом источнике. Не заставлять человека знать FIPS и самостоятельно разбираться в десятках одинаковых полей; найденный county estimate не выдавать за подтверждённый персональный benchmark.
+
+## Пять конкурсных критериев
+
+| Критерий | Вес | Чем доказываем в этом этапе |
+|---|---:|---|
+| Работающий продукт | 40% | Реальный guest путь документ/текст → подтверждение → расчёт → согласованные условия → обновление → экспорт; публичный build и repo. |
+| Ценность и удержание | 20% | Законченный полезный результат первого решения; повторные события в том же плане. Реальное использование надо измерить, не объявить. |
+| Проблема и пользователь | 15% | Один ясный сегмент и событие, реальные источники боли, протокол интервью/наблюдения. |
+| Бизнес | 15% | Сценарная unit economics, каналы и проверка цены, честные ограничения SAM/CAC/retention. |
+| Оригинальность | 10% | Сравнение одного и того же контрактного сценария с альтернативами; AI сам по себе не отличие. |
+
+Условия: B2C (платит человек), US25–45, Money, browser only, English. Сдача: рабочая ссылка без регистрации, public GitHub, English PDF deck <=10 slides. Не выдумывать баллы жюри. $99/year, $49/season и $29/decision — кандидаты для проверки; текущий demo checkout не доказывает оплату. Первую оплату обосновывает законченное решение, повторную — реально изменившийся заказ/доход/страховка/новый сезон, а не принудительная подписка.
+
+## Сквозная демонстрация
+
+Синтетическая семья начинает с current-year P&L/pay stub/Marketplace statement и предложения клиента. Подтверждает найденные данные и отвечает только на пропуски. Получает честный результат. Задаёт цель денег и срок, выбирает условия, скачивает пакет, отмечает согласие клиента. Затем вводит «The remaining payment moved to January 8, 2027» или загружает подтверждение: Headroom показывает ровно изменяемые строки, сохраняет после подтверждения, пересчитывает и выделяет следующее действие. После reload всё сохранено. Повтор той же операции ничего не удваивает.
+
+Второй короткий сценарий: обычный выгодный заказ → “Accept as offered”; нет искусственного манёвра/страха. Третий: неизвестная зарплата супруга или прошлогодний документ → адресный вопрос, а не выдуманный точный ответ.
+
+## Работа по контрактам без ожидания всей чужой ветки
+
+Claude 3 — владелец additive shared types, Zod schemas, API и persistence. Первым отдельным коммитом публикует `docs/handoffs/round5-contract.md`, типы и маленькие fixtures. Claude 1/2 забирают конкретный SHA обычным merge и сразу реализуют свои части. Поздние изменения контракта — отдельный маленький коммит с migration/compatibility note.
+
+Нужны согласованные модели, названия можно уточнить в первом контракте:
+
+- `AssistanceRequest`: намерение (`start`, `offer`, `update`, `explain`), пользовательский текст/подтверждённые facts, контекст без лишних данных, версия workspace.
+- `ExtractedFact`: stable ID, typed value in cents/date/text, person reference (может быть unknown), document/year/period/as-of/source excerpt/page, extraction vs user-confirmation status.
+- `InputReadiness`: ready/needs_data/unsupported; актуальная задача; вопросы с причиной, допустимым ответом и ссылкой на источник; ни одного молчаливого нуля.
+- `ChangeProposal`: ID, base revision/fingerprint, ограниченный список типизированных команд, before/after, ambiguities, evidence, proposed/confirmed/applied status. Это предложение, не факт.
+- `ChangePreview`: изменения, прежняя/новая оценка при достаточных данных, что блокирует расчёт, какие решения устареют. Расчёт только через текущий engine.
+- `Explanation`: проверенные result references, безопасное текстовое объяснение, unanswered questions. Ни одной суммы, которую нельзя найти в результате/фактах.
+
+Операции должны иметь однозначные границы: provider извлекает/предлагает; deterministic code валидирует; preview ничего не меняет; подтверждённая команда сохраняется атомарно с event. Нельзя дать LLM произвольный JSON Patch/SQL/URL fetch/вызов функций/отправку письма.
+
+Денежные значения на границах — integer USD cents. Сохранять v1 plans, v2 workspaces, round4 goal/package data, actual payments, SEP snapshot semantics. Новые поля optional/additive или явная версионированная миграция с round trip.
+
+## Ограничения, которые улучшают качество
+
+- Нет signup/login/email/card gate. Supabase anonymous auth остаётся невидимым. Local/manual путь работает при сбое ключей/облака.
+- English UI, ошибки и экспорт. Внутренние brief/handoff могут быть русскими.
+- Уже полученные деньги нельзя перенести; цена проекта включает аванс; новый SEP расходует реальные доступные деньги. Не возвращать ошибки, исправленные интегратором.
+- Прошлый tax return не подтверждает доход текущего года; 1095-A прошлого года не даёт будущий benchmark. Не требовать формы за ещё не закончившийся год.
+- В банковской выписке депозит не равен прибыли: переводы, возвраты, займы и личные деньги требуют классификации. В этом этапе не строить автоматический бухгалтерский ledger.
+- Не обещать общий банковский остаток по одному остатку и одному заказу. Если полный cash context не собран, показывать только деньги проекта. Дать способ внести существенные движения, если поддерживается balance goal.
+- Никаких новых налоговых штатов/форм лишь ради списка функций. Unsupported case остаётся честным; необходимые facts можно сохранить и экспортировать.
+- Не добавлять приложение, bank sync, автоматическую подачу на Marketplace, реальную отправку клиенту или live billing. Их отсутствие не мешает завершить целевой сценарий.
+
+## Публичные сервисы и ИИ
+
+Vercel `headroom-amber.vercel.app` уже работает, Supabase migrations 001–004 применены, guest cloud проверен. Не создавать новый проект и не переустанавливать схему. `AI_PROVIDER=none` до реальной проверки провайдера. Пользователь даст ключ отдельно; искать его в чужих файлах/чатах нельзя.
+
+Использовать существующий Anthropic adapter, если пользователь не выберет другой сервис. Проверить актуальные model ID, SDK и structured output API в официальной документации, а не доверять прошлому названию. Конкретная модель задаётся env. Документы: https://platform.claude.com/docs/en/build-with-claude/structured-outputs . Наличие structured JSON не доказывает правильность распознанных значений.
+
+Каждый запрос имеет лимит размера/страниц/времени/выхода/стоимости, durable global budget и понятное состояние отказа. No provider retries that multiply spend unnoticed. Реальный тест — только синтетические документы после настройки ключа. Без ключа закончить integration code и manual path; не симулировать успешный AI ответ.
+
+## Доказательства бизнеса и конкурса
+
+Исследование спроса, альтернатив, цен, unit economics и материалов Cup1 готово: `docs/research/round5-business-research.md`, рядом реестр evidence и воспроизводимый расчёт. Его выводы — evidence, не приказ расширить scope. Нельзя публиковать выводы, которых в источниках нет. Текущий Anthropic default и дешёвая альтернативная архитектура посчитаны отдельно: нельзя использовать Gemini-себестоимость как фактическую маржу нашего adapter. Бесплатный document intake включать в стоимость привлечения, а не терять за пределами paid usage.
+
+Дополнительные отчёты о репозиториях участников и платном результате перечислены в addendum. **Дизайн round5 отклонён пользователем: старые PNG, логотип, цвета и шрифты не являются заданием на внедрение.** **Новое решение: пользователь выбрал C — насыщенный синий, объёмный H, яркий лаймовый акцент. Действующий пакет: `docs/design/c-open/README.md`, `spec.md`, `tokens.json`, `claude1-handoff.md`.** Claude 1 внедряет его во весь путь; Claude 2 и 3 сохраняют свои зоны ответственности. Продолжать существующую функциональную работу. PNG-концепты не заменяют работающий UI. У конкурентов разделять сильную идею и незавершённую реализацию; у Headroom тоже отделять работающие функции от планируемых.
+
+Нужно измерять путь first_visit → start → review → result → saved decision → return/update/export, отдельно sample/own data и provider/manual. Только неперсональные события: без документов, текста, сумм, доходов, email. Demo sessions не считать клиентами; синтетические данные не превращать в traction. Реальные цены пока гипотеза. Никаких запусков рекламы/списания денег/контактов с людьми.
+
+## Приёмка без бесконечных тестов
+
+На каждом handoff: typecheck, небольшой затронутый набор regression/integration checks, один build; UI — desktop+360px, exports — открыть настоящие файлы. Проверить полный сценарий выше, один конфликт/повтор, один отказ провайдера, старый workspace restore. Отдельные unit tests на каждую подпись не нужны.
+
+Каждый Claude: commit + push в свою ветку, `docs/handoffs/claudeN-round5.md` с SHA зависимостей, файлами, контрактом, env/migration, проверенными сценариями, реальными ограничениями и оставшимися внешними шагами. Не заканчивать на заглушках. Codex объединяет и публикует `main`; разработчики его не переписывают.
+
+
+# Claude 1 — законченный пользовательский путь с минимальным ручным вводом
+
+Ты отвечаешь за интерфейс, понятность и первое впечатление Headroom. Не ограничивайся прикручиванием чата к прежней длинной форме. Сделай продукт, которым человек без знания ACA/MAGI может воспользоваться и к которому имеет смысл вернуться.
+
+**Актуальное визуальное решение: пользователь выбрал C.** Прочитай `docs/design/c-open/README.md`, `spec.md`, `tokens.json` и `claude1-handoff.md`; последнее — обязательное дополнение к этому заданию. Старый зелёно-бежевый round5 не внедрять. Продолжай уже написанную функциональную работу и переноси её в C по компонентам, без перезапуска проекта.
+
+## Старт и границы
+
+В своём clone на `claude1`: `git fetch origin`, обычный `git merge origin/main`, `npm ci`. Прочитай `AGENTS.md`, `docs/handoffs/integration-round4.md`, `ROUND5_SHARED.md`, это задание, текущий `TZ.md`. Первый shared-contract commit ждём от Claude 3; бери его по SHA. Не жди весь backend: сначала проработай путь, компоненты и независимые ручные состояния.
+
+Твои пути: `src/app/**` кроме API, `src/components/**`, `src/features/**`, `public/**`, UI smoke, design/demo copy. Не меняй финансовые формулы, shared schemas, серверные env или Supabase. Если нужна операция — согласуй контракт с Claude 3/2, не создавай похожую локальную модель.
+
+## 1. Перестроить первый вход вокруг задачи
+
+Первый экран коротко отвечает: для кого, какой результат, как попробовать. Основные входы: **“Check a client offer”**, **“Check my year's income”**, **“Try a sample”**. Названия уточни по живому пути. No account wall. Сохранённый household открывается сразу; не спрашивать заново уже подтверждённые сведения.
+
+Дай выбор “Upload documents / Paste text / Enter figures”. Разреши начать с предложения клиента, даже если household ещё не готов: сохранить черновик предложения, затем получить только нужные факты семьи. Не обещать точный результат до достаточных данных. Демо показывает тот же живой движок, а не записанные числа.
+
+Пусть первый полезный экран появляется до большой анкеты: что уже известно из предложения/документов, что надо уточнить, зачем. Счётчик остающихся вопросов допустим только по фактическому readiness; не писать выдуманное “2 minutes” без измерения.
+
+## 2. Документы как основной способ заполнения
+
+Переиспользуй `features/household/DocumentImport.tsx`, `extractDocument`, `previewDocumentFacts`/`applyDocumentFact` и новый контракт. Не делай второй upload pipeline. Поддержи поочерёдно несколько документов без потери предыдущего черновика: понятные статусы waiting/reading/review/needs clarification/failed.
+
+Карточка факта: понятное название, сумма/дата, человек, год и период, откуда прочитано, подтверждено ли пользователем. Источник можно раскрыть; для страницы документа показать ссылку/preview при наличии разрешённого локального файла. Не показывать внутренние JSON paths как основной текст.
+
+Разреши подтвердить группу согласованных фактов одной кнопкой после обозримого summary. Конфликтующие значения, unknown person/year/period, gross vs net, received vs invoiced — отдельный выбор. Никакого десятка одинаковых кликов по бесспорным значениям и никакого молчаливого “confirm all” спорных полей.
+
+При сбое/лимите/нечитаемом файле сохранить уже введённое и предложить корректировку/ручной ввод. Если AI off, честно сказать, какие форматы доступны; не показывать фальшивый прогресс OCR. Не требовать W-2/1095-A за ещё не завершившийся год. Consent относится к конкретной передаче провайдеру, а не к скрытому общему согласию.
+
+## 3. Короткое дозаполнение
+
+Используй `InputReadiness` Claude 2. Показывай 1–3 логически связанных вопроса, не всю техническую модель. У каждого: почему нужен, пример и “I don't know yet”. Для текущего года не спрашивать 2027. Для timing across years объяснить, почему второй прогноз теперь нужен.
+
+Неизвестный доход супруга ≠ ноль. Если пользователь подтверждает отсутствие дохода, это отдельное осознанное действие. При наличии monthly policy values дать явное “Same every month” вместо 12 одинаковых ручных строк, но сохранить возможность разных месяцев и не расширять full-year eligibility scope.
+
+Редактирование полного household остаётся доступным. Новая короткая форма не должна обрезать сведения старых сохранённых планов. Черновик переживает reload; отмена импорта не затирает введённое.
+
+Убрать требование знания FIPS: обычный выбор штата/округа, ZIP только с разрешением неоднозначности, служебный код скрыт. Для insurance facts добавить “Help me find this”: показать нужную строку/колонку документа и полученное значение, различить enrollment premium, benchmark и APTC. Подключить verified lookup Claude 2/3 там, где есть данные. Если точного значения нет — явно county candidate/unknown и адресный следующий шаг; не средняя цена, замаскированная под точную. Этот участок особенно важен: AI не устранит manual friction, если после чтения документов человек всё равно не знает, где взять benchmark.
+
+## 4. Предложение клиента → решение
+
+Вставка письма/текста оффера или документа должна создавать обозримый draft проекта: total price, already received, unpaid schedule, expenses, negotiability, receipt conditions. Счёт сам по себе не является подтверждением оплаты. Предложение клиента не подтверждает, что он согласен на наши новые условия.
+
+Сохранить сильные элементы round4: цель чистой прибавки денег, срок, SEP cap, максимум три различающихся варианта, условие изменения выбора. Сначала человеческий вывод, затем число, затем следующий шаг; таблицы/точность поиска/полная налоговая трасса раскрываются по запросу.
+
+Price bounds — ПОЛНАЯ цена включая аванс. Не возвращать ошибку “unpaid price”. Варианты должны ясно различать деньги к сроку, итог после двух деклараций и пенсионный капитал. Не отображать весь остаток семьи по неполному cash context. Для household balance дай компактные существенные входящие/исходящие движения (существующий typed contract), либо держи этот режим неполным.
+
+## 5. Обновление фразой и объяснения
+
+На household — заметный “What changed?” с примерами: “The final payment will arrive on January 8, 2027”, “I received $3,200 today for the bakery project”, “I contributed $1,500 to my 2026 SEP”. Отправляет текст в Claude 3 API, не выполняет самостоятельно.
+
+Preview показывает проект/строки, старое → новое, что считается подтверждённым, последствия по engine Claude 2. Если два подходящих проекта/неясный год/дата — короткий вопрос выбора. Кнопки Apply / Edit / Cancel. После Apply — одна ревизия, пересчитанная текущая позиция и конкретное изменившееся действие. Повтор не удваивает платёж.
+
+“Why this option?” отвечает проверенными фактами: относительно чего сравнили, почему вариант подходит, что усложняет его и что меняет ответ. Не показывать свободно сгенерированные налоговые советы или число “confidence 97%”. Подробные источники доступны отдельно.
+
+Не смешивать “what this project leaves you” с “improvement over the original offer”. Подключить обе базы и reason recommendation от Claude 2. Если лучший cash требует более высокой цены/новых сроков, явно показать зависимость от согласия клиента и исходный вариант рядом. Хрупкий план с $1 запасом не получает зелёную метку безопасности. Минимальное достаточное изменение при заданном запасе и максимальные условные деньги — разные варианты, а не две одинаково настойчивые рекомендации.
+
+## 6. Завершить исполнение, а не оставить пользователя с карточкой
+
+После согласия клиента можно открыть/скачать исторический пакет и отдельно свежую оценку. Подключи новый export contract Claude 3; не обходи запрет stale exports присваиванием нового fingerprint старым цифрам. Исторические суммы имеют дату/ревизию/явную подпись.
+
+Attention list: неоплаченные строки, реальное изменение риска, вклад SEP, несогласованные предложения, ближайшее выполнимое действие. Убрать дубликаты и уже выполненные напоминания. “Mark done” ≠ записать финансовый факт без суммы/даты. Не обещать email/push, пока их нет. Календарь скачивается в браузере.
+
+Разные сценарии должны быть согласованы: согласие, оплата, изменение прибыли, возврат через неделю, экспорт/restore. Переходы не теряют источник, аванс, историю или выбранные условия.
+
+## 7. Конкурсное впечатление и измерение
+
+Проверь главную, обычный и cliff-сценарий, mobile360, пустые/ошибочные состояния, loading/disabled, focus/keyboard, labels/contrast. Спокойная ясная английская речь. Убрать дублирующие CTA и внутренние названия полей; не маскировать ограничения длинным disclaimer.
+
+Собери `docs/demo/round5-judge-script.md`: реальный 90–120-секундный маршрут с проверяемыми результатами, альтернативный путь при отсутствии provider, где показать отличие от бесплатного калькулятора. Это сценарий, не выдуманное видео. Приложи скриншоты именно финального build. Готовые материалы пользователя не заменять.
+
+Добавь согласованные с Claude 3 неперсональные funnel events в ключевых переходах. Отделять synthetic demo/own input, new/returning workspace. Не передавать text/amount/document/household profile. Обнови дизайн/copy docs, но README с live feature claims правит Codex после проверки публикации.
+
+## Приёмка и handoff
+
+Перед handoff добавь короткий продуктовый пакет `docs/demo/round5-positioning.md`: основной сегмент, повод открыть сегодня, за какой завершённый результат человек мог бы платить, повод вернуться; две альтернативные формулировки лендинга и три рекламные концепции как НЕЗАПУЩЕННЫЕ drafts. Используй выводы исследователя, если уже доступны. Для каждой концепции укажи pain → promise → proof in product → CTA. Нельзя рисовать реальные CTR/CAC или отзывы. Не меняй публичный тариф экспериментом наугад и не делай три конкурирующих homepages. Подготовь outline English deck <=10 slides с местами под проверенные evidence и реальные screenshots; это outline, не замена пользовательского финального deck.
+
+Один полный путь документы/вставка → review → missing facts → реальный result → цель → package → client agreement → update phrase → confirmation → reload → export. Отдельно ordinary-positive, ambiguous update и provider unavailable. Проверить desktop и360, реальный PDF/ICS, без overflow/мертвых кнопок. Typecheck, затронутый smoke, build один раз после завершения; повтор только после сбоя/правки.
+
+Commit/push `claude1`. Handoff: `docs/handoffs/claude1-round5.md`, SHA зависимостей, фактические маршруты, количество вопросов/вводимых полей до результата на сценарии, что проверено с реальным provider и что без него, ограничения, артефакты. Не заканчивать на красивых моках или “жду весь backend”: назови конкретный export, а независимые части заверши.
+
+
+# Round 5: выводы новых исследований и дизайн
+
+**Коррекция от пользователя, 15 ноября:** визуальное направление round5 отклонено. Прежние слова «выбранный/согласованный» в дизайн-файлах описывают историю, а не действующее задание. Не внедрять этот логотип, палитру, шрифтовую пару и композиции как утверждённые. Нынешние цвета не являются пользовательским требованием. **Пользователь затем выбрал C: насыщенный синий, объёмный знак, яркий акцент. Новый пакет `docs/design/c-open/` — действующее задание для Claude 1.** Функциональные задачи и смысловые требования к финансовым данным сохраняются.
+
+Дополнение к `ROUND5_SHARED.md` и ролевым заданиям, 15 ноября 2026. Если round5 уже начат, продолжать свою ветку и интегрировать требования по частям; не удалять написанную работу и не начинать заново. Общий контракт Claude 3 `97b608c3a3bcf873b41ae59ae1270a8740b35eb7` уже опубликован. Claude 1 его принял; остальные берут этот конкретный коммит обычным merge, а новые поля согласуют отдельным additive commit.
+
+## Решение о продукте
+
+Приоритет: человек приносит реальное предложение клиента; подтверждает недостающие факты; получает условия, при которых семье остаются нужные деньги; понимает зависимость от согласия клиента и неопределённого дохода; сохраняет договорённость и обновляет её после фактических событий. ACA остаётся существенной частью расчёта. Повода для полного ухода в другую нишу пока недостаточно. Это проверяемая ставка, а не доказанный product-market fit.
+
+Первую покупку должен объяснять законченный разбор конкретного предложения. Повторную — новый заказ, изменение дохода/платежа/страховки, исполнение или новый сезон. $29 за решение, $49 за сезон, $99 за год — три гипотезы упаковки. Не включать списание денег и не утверждать, что спрос установлен. Демо жюри остаётся полностью доступным без регистрации и оплаты.
+
+Исследования:
+
+- `docs/research/round5-business-research.md`: рынок, Cup1, экономика и источники.
+- `docs/research/COMPETITOR_REPOS_ROUND5.md` и CSV: публично обнаруженные участники, готовность отдельно от силы идеи.
+- `docs/research/HEADROOM_PAID_VALUE_STRATEGY.md` и матрица: исходная модель и шесть альтернатив, условия смены направления.
+- `docs/design/c-open/README.md`, `spec.md`, `tokens.json`, `claude1-handoff.md`: выбранное пользователем направление C, экраны, SVG и отдельная 3D-сцена. Концепты не доказывают, что функции уже работают. `docs/design/round5/` — отклонённый архив.
+
+## Claude 1: понятный результат и законченный интерфейс
+
+1. Продолжать рабочий путь и исправлять функциональную ясность. Визуальная система round5 отклонена; её знак, палитру, шрифты и макеты не переносить в production. Внедрять выбранный C по `docs/design/c-open/claude1-handoff.md`: синий hero, светлые рабочие экраны, единая типографика, состояния, мобильная версия и экспорт. Сохранить ручной ввод, текущий ACA check, гостевое сохранение и обработку отказов.
+2. Один выбранный результат и условия над сравнением вариантов. Различать деньги после расчётов по налоговым годам, поступления по датам, пенсионный капитал и неизвестный общий остаток семьи. Показать требуемое согласие клиента возле изменённой цены/сроков.
+3. Показывать engine-provided difference относительно исходного предложения отдельно от дохода относительно отказа. Пока новое поле не готово — не сочинять число и не переименовывать имеющееся в savings.
+4. Review не выбирает за человека неподтверждённые факты: отсутствие платежа, нулевой доход супруга, правильный год или совпадение документа. “Confirm” активно только при валидном явном выборе; “I don't know” ведёт к понятному ограничению.
+5. Дизайнерские PNG — референсы. Реальные экраны строить компонентами; знак перерисовать в чистый SVG, сгенерированный текст не использовать как UI. Даты и суммы брать из данных. Не встраивать скриншот вместо функции.
+6. На главной — конкретная работа и немедленный пример. Не заявлять уникальность AI extraction, deterministic engine, источников или календаря: конкуренты уже используют эти элементы. Отличие доказывать одним полным сценарием.
+7. Черновик клиенту не раскрывает автоматически доход семьи, диагнозы, страховку или личные налоговые обстоятельства. Он предлагает конкретные коммерческие условия; личное объяснение допустимо только после явного выбора человека. “If the client says no” должен сохранять исходное предложение и показывать доступный следующий шаг.
+
+## Claude 2: полезное решение и честная база сравнения
+
+1. Default не определяется только максимальным cash при максимальной разрешённой цене. Из реально найденных вариантов, достигающих цели и выдерживающих указанный пользователем диапазон, предпочитать минимальное необходимое изменение условий по явной политике. Если такого нет, показывать ограничения. Никакой придуманной вероятности согласия клиента.
+2. Вариант с минимальным SEP и запасом $1 требует заметной оценки чувствительности. Более устойчивый вариант допустим только если рассчитан внутри доступного cash и остальных ограничений. Не делать “safe” из зелёного цвета или математически допустимой точки.
+3. Две разные величины: результат проекта относительно названной базы и улучшение относительно исходного предложения/реального альтернативного плана. Атрибуция изменения цены, сроков, налогов и retirement должна сходиться с пересчётом; взаимодействующие эффекты не складывать из несовместимых баз.
+4. Для уже принятого заказа baseline — текущие согласованные условия. Отказ от неоплаченной части может иметь возврат аванса, расходы или обязательства. Unknown cancellation cost не считать нулём; если такая альтернатива не подтверждена, не выдавать её за свободный реальный выбор. Это граница данных и сравнения, не автоматическое юридическое заключение.
+5. Полученный аванс и выполненная работа ограничивают доступные действия. Сначала проверить текущую договорённость, затем предложить изменения. При отсутствии полезного изменения допустим результат “Accept as offered” или “Keep the agreed terms”.
+6. Экономика самого Headroom отделена от финансов пользователя. Для существующего adapter брать соответствующий профиль, включать бесплатный intake, поддержку, возвраты и acquisition. Сценарные CAC/LTV не называть измеренными.
+
+## Claude 3: единый контекст, подтверждение и исполнение
+
+1. Additive contract должен переносить исходное предложение, согласованные условия, источник, статус подтверждения, результаты сравнений и причины рекомендации. Не перезаписывать исходный offer найденным максимумом цены — иначе исчезает честный counterfactual.
+2. Общие ручной и AI-пути применяют одинаковые команды и проверки. Извлечённое предположение не становится подтверждённым фактом по пути к сохранению. Повтор подтверждения не дублирует платёж или взнос.
+3. Объяснение и экспорт получают расчётный пакет с версией/базой/горизонтом. Один факт, что все числа AI-текста встречаются в пакете, не доказывает правильный смысл фразы. Финансовые утверждения лучше собирать из проверенных шаблонов/references; для непроверенного explanation использовать честный fallback.
+4. Пакет, присланный клиентом на explanation/export endpoint, нельзя объявлять независимо проверенным сервером только после schema validation. Использовать существующий пересчёт/проверку результата и связывать объяснение с фактической ревизией. При недоступной проверке правильно назвать происхождение/ограничение.
+5. Historical decision, текущий plan и real receipt остаются разными сущностями. После изменения должен работать экспорт с корректным статусом, а календарь должен отражать перенос/отмену ранее выданного события.
+6. Квоты и стоимость считают всех пользователей: успешное распознавание до покупки тоже расход. Телеметрия без документов, текстов, сумм и персональных данных; sample activity отдельно от own-data usage.
+
+## Что показываем жюри
+
+Полный рабочий сценарий, один обычный выгодный заказ, одна существенная неопределённость, согласование и последующее изменение. Дополнительно — фактический конкурентный разбор, модель цены/затрат с допущениями и план проверки спроса. Наличие рекламного анализа у победителя Cup1 подтверждено; собственные рекламные расходы и CAC того победителя не подтверждены. Наши creative-концепты не называть запущенными кампаниями.
+
+Идеи соперников оценивать серьёзно даже при незавершённом UI. Свои планируемые функции не сравнивать с их текущим релизом как уже готовое преимущество. Количество тестов, скриншотов или страниц не является ценностью пользователя.
+
+Приёмка остаётся ограниченной: проверки затронутой логики, один build и реальные открываемые артефакты. Внешний provider проверяется на синтетических данных после получения ключа. Финальный UI/deck должен показывать фактический результат интеграции, а не этот дизайн-концепт или неподтверждённые коммерческие показатели.
+
+
+# Claude 1 — implement selected C
+**Selected:** cobalt/chrome/chartreuse C, explicitly chosen by the user. **Not selected:** the previous green/beige/serif direction. Read [spec.md](spec.md) and [tokens.json](tokens.json). No production files are changed by this handoff. Preserve the original C image and user final materials.
+
+## Scope and order
+Use the existing Next/React/CSS stack and current shared contracts. Follow the repository's installed Next guidance. No new UI framework, parallel importer, signup flow or financial calculation in components.
+
+1. **Shell and typography:** `src/app/layout.tsx`, `src/app/globals.css`, `src/components/SiteChrome.tsx`. Add locally served licensed Geist Sans and the native mark. Replace old serif, cream and forest tokens coherently, including focus, errors, empty states and exports. Cobalt app header, predominantly light work surface. Preserve existing routes.
+2. **Homepage:** `src/app/page.tsx`. Reproduce C's short centered headline, own chrome scene and overlapping white input tray. Keep heading, copy, form and CTA as live accessible DOM; the scene is a separate optimized asset with empty alt if purely decorative. Avoid adding tax-result numbers or fake proof to the marketing composition. Offer/documents/manual/example/current-year paths work from this entry.
+3. **Review:** reuse `src/features/household/DocumentImport.tsx`, existing Workspace and round-5 extraction/readiness contracts. Build the light work area with source context, clear pending facts and one question when necessary. White surfaces can be arranged in two columns on desktop; avoid nested card grids.
+4. **Comparison:** `src/features/deal/DealPanel.tsx`, `src/features/results/ComparisonView.tsx`, existing result components. One short finding and one selected outcome, up to three meaningful options, payment dates/conditions, evidence on demand. A selected result may be cobalt with white type; surrounding details stay white. Use lime for the strongest action only.
+5. **Action and return:** `src/features/deal/ChooseTerms.tsx`, `src/features/household-plan/HouseholdPlanView.tsx` and related parts. Carry the same shell into draft/agreement/payment/update flows; do not stop at an attractive homepage and result screenshot.
+6. **Responsive/states:** apply the same component rules to empty, pending, unsupported, ambiguous, stale, error and saved states. Concept images are included in this directory; implement functional states even if no image depicts each one.
+
+## Behavior that must survive the redesign
+**Offer-first start.** A pasted offer may be saved before household readiness. Ask only facts needed for that task. Current-year ACA check does not require a fictitious project or next-year forecast. Never discard already confirmed fields during a new import. Capability-gate PDF/image reading and natural-language actions; manual and available CSV/TXT paths remain usable when AI is off.
+
+**Review.** Document/person/year/period/source and typed value remain inspectable. Extracted is not confirmed; invoice is not receipt. No default “Not yet”, zero spouse income or accepted agreement. Bulk confirmation applies only to coherent reviewed facts, with conflicts separate. Use a single meaningful group confirmation, not ten forced checkboxes. If completion is blocked, show the missing action beside the button. “I don't know” is valid and blocks only dependent results. Draft save does not confirm facts.
+
+**Financial meaning.** The synthetic +$9,695 is project cash versus declining those terms after 2026 and 2027 tax settlements, with final settlement in 2028. It is neither today's bank cash nor savings created by Headroom. Bind labels to the actual baseline and horizon. If showing improvement over the original offer, use the authoritative engine field under matching facts/horizon; do not infer or invent that number. Keep retirement principal separate.
+
+**Default policy comes from the engine and user constraints.** Do not transfer the image's selected “More cash overall” into code as a default recommendation. Price negotiability, money-by-date, available cash, retirement cap, uncertainty and recommendation reason determine presentation. The $33 SEP example is a fragile threshold case, not a safe plan. Keep review/sensitivity conditions visible on that option.
+
+**Dates and agreement.** $14,000 and split receipts remain conditional on client agreement. Historical Nov 14, 2026 dates are a fixture snapshot, never hardcoded feasible future dates. Expected, agreed, received and completed are different states. Price bounds mean the complete price including any deposit. A paid deposit survives later term changes.
+
+**Liquidity.** “By your date” and “After tax settlements” are distinct views on desktop and mobile. If household cash movements/reserves are missing, ask for them or show only known project receipts with their correct label. Never turn receipts into a household cash balance through copy.
+
+**Execution.** Choosing → client draft/PDF/calendar → user records sharing/agreement → actual payments/contributions. Nothing is sent automatically. “Mark done” does not create a payment. Keep historical decision exports dated/versioned and separate from current assessment.
+
+**Update.** “What changed?” uses the shared proposal API. Before/after preview, clarification if ambiguous, Apply/Edit/Cancel, then one persisted event/revision and recomputation. Preserve agreed obligations until explicitly revised. Repeated application cannot double-count a receipt.
+
+## Mobile and interaction
+At 360px use 20px gutters and a simple header. Work screens stack; keep 16px inputs/body and ≥14px essential explanation. Comparison becomes readable selection rows/sections, not a reduced desktop table. Source preview is an adjacent disclosure. Actions may stick only with safe-area padding and enough bottom content padding; focused controls must remain visible. Hero entry appears before the large decorative object on mobile.
+
+Use consistent 44px minimum targets, 48px controls and visible two-surface focus treatment from the spec. Check radio keyboard behavior, error associations, drawer Escape/focus restoration and screen-reader announcements after Apply. Announce status, not every changing input. No hover-only essential controls. Pending computation cannot present the old recommendation as current.
+
+Animation is brief feedback: 120/180/220ms, no countups. Scene is static by default or enters once; respect reduced motion. No artificial typing or pretend extraction stages. A successful save label only follows actual persistence; explain browser-only versus cloud save truthfully.
+
+## Asset integration and performance
+The five integration files listed in the spec are included in this directory. Preserve `01-home-selected.png` as the unchanged chosen reference. Do not use it as a background screenshot of the live website. Use the supplied transparent `05-hero-scene.png`; keep its aspect ratio, reserve dimensions to prevent layout shift, provide responsive sizes and an optimized web format without degrading the selected visual. No request to an image-generation service at runtime.
+
+Use [headroom-mark.svg](headroom-mark.svg) inline for currentColor. When adjacent to wordmark text, hide the redundant symbol from assistive technology. The [logo proof](logo-proof.png) confirms small-size geometry in normal/inverse; it does not replace actual header/favicon inspection. Keep font license/copyright notices with served files.
+
+## One bounded acceptance pass
+After implementation, open the actual final build and complete one full synthetic route: start → source review → needed facts → calculation → feasible choice → draft/PDF/ICS → recorded agreement → receipt or contribution → change preview → apply → reload → historical/current export. Also check an ordinary positive offer, unknown spouse fact, ambiguous update and provider-off fallback. Inspect desktop and 360px; 200% zoom, keyboard and reduced motion; no horizontal overflow, hidden focus or misleading enabled controls.
+
+Open the exported PDF pages and calendar content, not just the download success toast. Print/PDF stays readable on white with actual amounts, dates, baseline, assumptions and version. The chrome hero and heavy cobalt fill are not required in a financial report.
+
+Run repository-required typecheck, affected smoke and build after completing the work; repeat only after relevant change/failure. Do not add style-only unit tests. Capture real final-build screenshots for the jury and replace no user-authored final material. Report implemented versus planned states and any concrete blocked contract, rather than using a mock as completion evidence.
