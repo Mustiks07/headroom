@@ -41,5 +41,6 @@ export const POST = handle(async (request: Request) => {
       }
     }
   }
+  if (consentToProvider && !aiFeatureEnabled("proposal")) notes.push("The assistant isn't enabled here; Headroom's built-in reading of your message is shown.");
   return json({ proposal: proposeFromPatterns(req, id), providerUsed: false, notes } satisfies ProposeResponse);
 });
