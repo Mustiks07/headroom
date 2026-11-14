@@ -11,7 +11,8 @@ Branch `claude1`. Normal merges only (no reset, no force-push); `main` untouched
 | Claude 3 round 5 implementation + handoff | `60df7a2` |
 | Claude 2 round 5 engine + handoff (incl. `previewChange` apply hook, two baselines) | `32f59d3` |
 | Claude 2 follow-up: `clientAgreement` + `moneyByDate` on every option, stored comparisons/robustness | `bc99600` |
-| Claude 3 follow-up: original offer kept, decision context in packages/records, server-recomputed explanations, insurance lookups | `00beeaf` (contract `29c6ab4`) |
+| Claude 3 follow-up: original offer kept, decision context in packages/records, server-recomputed explanations, insurance lookups | `00beeaf` (contract `29c6ab4`, `36edf1e`) |
+| Claude 3 calendar UID fix (long ids → readable prefix + stable hash) | `7667644` |
 
 **Consumed from the follow-ups (after design C):**
 - Options use Claude 2's `clientAgreement` (which of price/dates needs the client's agreement, plus its note) instead of a UI guess.
@@ -121,6 +122,7 @@ After the 11 answers the search returned *Accept as offered* as the pick (+$8,10
 - `npx tsc --noEmit` clean.
 - `npx vitest run`: 29 files / 151 tests pass after merging `main` + `claude2`. Before Claude 2's `32f59d3`, `deal-ui-boundaries` failed; Claude 2 changed that test for the new recommendation policy.
 - `npm run build` passes.
+- **After merging `7667644` (final):** `tsc` clean, build passes, `npx vitest run` 29 files / 157 tests, `npm run check:ui` passes; own-data journey re-run end to end including the current-actions ICS.
 - **After merging `bc99600` + `00beeaf`:** `tsc` clean, build passes, `npx vitest run` 29 files / 155 tests, `npm run check:ui` passes; sample journey with PDF + ICS (6 events) and the own TN journey with the county/benchmark lookup re-run.
 - **Final C build (after the redesign):** `tsc` clean; `npm run build` passes; `npx vitest run` 29 files / 151 tests; `npm run check:ui` passes (29 checks). Sample journey re-run on the C build: goal → options → choose → shared → agreed → update → Apply → reload → no-op repeat → decision-record PDF (text read with `pdftotext`, page 1 rendered: `c-pdf-1.png`) + current ICS (6 VEVENTs). Own journey (14 + 11 answers) re-run: agreement, update, reload, PDF. Provider-down / ambiguous / PDF-with-AI-off re-run. Offer-first paste → group confirm → fields filled → reload checked.
 - `npm run check:ui` (before the redesign): 29 checks pass. New: update sentence → preview → Apply = one revision; repeat saves nothing; reload keeps the revision; 360 px on six routes.
@@ -139,10 +141,10 @@ After the 11 answers the search returned *Accept as offered* as the pick (+$8,10
 ## Limits and open items
 
 **Exact contracts still missing (UI is ready to consume them):**
-1. Claude 3 — `reminderUid` / `buildCurrentCalendar` UID length fix (below). Still present at `00beeaf`: re-checked on the final build, own-data current ICS fails, sample works. This is the only blocking item.
+1. (Fixed by Claude 3 `7667644`, merged) calendar UID length. Re-checked on the final build: the own-data journey now downloads the current-actions ICS — 2 events, longest UID line 76 characters, the moved payment on 2027-01-08 and the 2026 tax set-aside on 2027-04-15. No blocking contract remains.
 2. (Done) insurance lookups, decision context and original offer, server explanations, `clientAgreement` and `moneyByDate` are consumed above.
 
-- **Claude 3 bug (blocks the current calendar for own data):** `buildCurrentCalendar` (`src/lib/client/deal-exports.ts`) builds UIDs longer than the 200-character schema limit when the project was added by sentence (`proj-prop-<uuid>`, lines `line-proj-prop-<uuid>-0-u1-pkg-…`). Saving `dealPlanning.calendar.issued` then fails: *"This household plan has invalid or inconsistent data."* Sample projects (`proj-b`) work. Suggested fix: hash or shorten the UID parts. Not changed here (Claude 3's file).
+- ~~Claude 3 calendar UID bug~~ — fixed in `7667644` and verified (see above).
 - **Claude 3 patterns:**
   - "The client paid $2,000" is not recognised ("paid" isn't a receipt word).
   - "The remaining payment moved…" picks one line when several are open, instead of asking. The demo uses project names in the sentence.
