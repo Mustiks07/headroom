@@ -5,16 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, FileUp, Trash2 } from "lucide-react";
 import type { CaseInput, SavedPlan } from "@/domain/contracts";
-import { calculateComparison } from "@/lib/engine";
+import { analyzePlanFile, PartialClearError, planFromAnalysis, type RestoreAnalysis } from "@/lib/client/api";
 import { dateTime, signClass, signedMoney } from "@/features/format";
 import { deltaVs } from "@/features/results/ComparisonView";
 import {
-  clearBrowserDrafts, describeStorageError, detectStorageMode, planRepository, readHeadroomFile, saveNewPlan, stashInputForCalculator,
+  clearBrowserDrafts, describeStorageError, detectStorageMode, planRepository, stashInputForCalculator,
   type StorageMode,
 } from "./storage";
 
 type Load = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; plans: SavedPlan[] };
-type ImportState = { kind: "idle" } | { kind: "working" } | { kind: "error"; message: string; input?: CaseInput };
+type ImportState = { kind: "idle" } | { kind: "working" } | { kind: "error"; message: string; input?: CaseInput }
+  | { kind: "choose"; analysis: Extract<RestoreAnalysis, { status: "ready" }>; choice: string | null };
 
 export function PlansList({ deleted }: { deleted: boolean }) {
   const router = useRouter();
@@ -22,12 +23,14 @@ export function PlansList({ deleted }: { deleted: boolean }) {
   const [mode, setMode] = useState<StorageMode>("unknown");
   const [notice, setNotice] = useState<string | null>(deleted ? "Deleted." : null);
   const [imp, setImp] = useState<ImportState>({ kind: "idle" });
+  const [cloudProblem, setCloudProblem] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
     try {
       const plans = await planRepository().list();
       setLoad({ kind: "ready", plans: [...plans].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) });
+      setCloudProblem(planRepository().cloudProblem());
     } catch (e) { setLoad({ kind: "error", message: e instanceof Error ? e.message : String(e) }); }
   }, []);
   useEffect(() => { void reload(); void detectStorageMode().then(setMode); }, [reload]);
@@ -42,29 +45,36 @@ export function PlansList({ deleted }: { deleted: boolean }) {
     if (!window.confirm("Delete all Headroom plans, history and entered figures saved for this browser?")) return;
     clearBrowserDrafts();
     try { await planRepository().clear(); setNotice("Your Headroom data was cleared."); await reload(); }
-    catch (e) { setNotice(`Figures entered in this browser were cleared, but saved plans couldn't be: ${e instanceof Error ? e.message : String(e)}`); }
+    catch (e) {
+      setNotice(e instanceof PartialClearError ? e.message : `Figures entered in this browser were cleared, but saved plans couldn't be: ${e instanceof Error ? e.message : String(e)}`);
+      await reload();
+    }
   }
 
-  /** Restores from JSON: validates the input, recalculates, never trusts stored numbers. */
+  /** Restores from JSON: validates, recalculates with the current engine, never trusts stored numbers (Claude 3 seam). */
   async function onImport(file: File | undefined) {
     if (!file) return;
     setImp({ kind: "working" });
     try {
-      const parsed = readHeadroomFile(await file.text());
-      if (!parsed.ok) { setImp({ kind: "error", message: parsed.message }); return; }
-      const result = await calculateComparison(parsed.input);
-      if (result.status !== "ready") {
-        setImp({ kind: "error", input: parsed.input, message: result.status === "unavailable" ? `The calculation isn't available right now: ${result.message}`
-          : `The data was read, but it can't be calculated as is: ${result.message}` });
-        return;
-      }
-      const chosen = result.scenarios.find(s => s.id === parsed.chosenScenarioId && s.feasible)?.id ?? result.recommendedScenarioId;
-      if (!chosen) { setImp({ kind: "error", input: parsed.input, message: "The data was recalculated, but no option fits its limits. Open it in the calculator to adjust." }); return; }
-      const saved = await saveNewPlan(parsed.input, result, chosen);
-      router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`);
+      const analysis = await analyzePlanFile(await file.text());
+      if (analysis.status === "invalid") { setImp({ kind: "error", message: analysis.message }); return; }
+      if (analysis.status === "blocked") { setImp({ kind: "error", input: analysis.input, message: analysis.message }); return; }
+      if (analysis.feasibleOptions.length === 0) { setImp({ kind: "error", input: analysis.input, message: "The data was recalculated, but no option fits its limits. Open it in the calculator to adjust." }); return; }
+      if (analysis.suggestedScenarioId && analysis.notes.length === 0) { await restore(analysis, analysis.suggestedScenarioId); return; }
+      setImp({ kind: "choose", analysis, choice: analysis.suggestedScenarioId });
     } catch (e) {
       setImp({ kind: "error", message: describeStorageError(e) });
     } finally { if (fileRef.current) fileRef.current.value = ""; }
+  }
+
+  async function restore(analysis: Extract<RestoreAnalysis, { status: "ready" }>, choice: string) {
+    setImp({ kind: "working" });
+    try {
+      const saved = await planRepository().save(planFromAnalysis(analysis, choice), null);
+      router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`);
+    } catch (e) {
+      setImp({ kind: "error", input: analysis.input, message: describeStorageError(e) });
+    }
   }
 
   return <div className="shell page-pad">
@@ -72,6 +82,7 @@ export function PlansList({ deleted }: { deleted: boolean }) {
     <h1 className="page-title">Your saved plans</h1>
     <p className="muted">{mode === "cloud" ? "Plans are kept in a private guest session for this browser." : mode === "local" ? "Plans are kept in this browser." : "Plans are saved for this browser."} They aren&apos;t synced to other devices — download a plan&apos;s JSON file to move it.</p>
     {notice && <p className="notice" role="status">{notice}</p>}
+    {cloudProblem && <p className="notice warn" role="status">{cloudProblem}</p>}
 
     {load.kind === "loading" && <p className="loading-line" role="status"><span className="spinner" aria-hidden="true" /> Loading…</p>}
     {load.kind === "error" && <div className="notice warn" role="alert"><strong>Saved plans couldn&apos;t be loaded.</strong> {load.message}
@@ -88,7 +99,8 @@ export function PlansList({ deleted }: { deleted: boolean }) {
         const d = chosen && base && chosen.id !== base.id ? deltaVs(chosen, base).cash : null;
         return <li key={p.id}>
           <Link href={`/plan/${encodeURIComponent(p.id)}`} className="plan-link">
-            <span className="plan-title">{p.input.opportunity.title}{p.input.isSynthetic && <span className="pill neutral small-pill">Sample</span>}</span>
+            <span className="plan-title">{p.input.opportunity.title}{p.input.isSynthetic && <span className="pill neutral small-pill">Sample</span>}
+              {mode === "cloud" && planRepository().locationOf(p.id) === "local" && <span className="pill neutral small-pill">This browser only</span>}</span>
             <span className="muted small">{chosen?.label ?? "Option missing"} · revision {p.revision} · updated {dateTime(p.updatedAt)}</span>
             {d !== null && <span className={`num ${signClass(d)}`}>{signedMoney(d)} <span className="muted small">cash after settlements</span></span>}
             <ArrowRight size={16} aria-hidden="true" className="go-icon" />
@@ -105,6 +117,20 @@ export function PlansList({ deleted }: { deleted: boolean }) {
       <label className="btn secondary small file-btn"><FileUp size={16} /> Choose a JSON file
         <input ref={fileRef} type="file" accept="application/json,.json" onChange={e => onImport(e.target.files?.[0])} disabled={imp.kind === "working"} /></label>
       {imp.kind === "working" && <p className="loading-line" role="status"><span className="spinner" aria-hidden="true" /> Reading and recalculating…</p>}
+      {imp.kind === "choose" && <div className="notice" role="group" aria-labelledby="restore-choose">
+        <p id="restore-choose"><strong>Check the restored plan before saving it</strong></p>
+        {imp.analysis.notes.length > 0 && <ul className="bullets small">{imp.analysis.notes.map(n => <li key={n}>{n}</li>)}</ul>}
+        <fieldset className="option-list"><legend className="small"><strong>Option for the restored plan</strong></legend>
+          {imp.analysis.feasibleOptions.map(o => <label key={o.id} className={`option-row ${imp.choice === o.id ? "on" : ""}`}>
+            <input type="radio" name="restore-choice" checked={imp.choice === o.id} onChange={() => setImp({ ...imp, choice: o.id })} />
+            <span className="option-label">{o.label}</span>
+            <span className="muted small">{[o.id === imp.analysis.suggestedScenarioId ? "from the file" : "", o.recommended ? "recommended" : ""].filter(Boolean).join(" · ")}</span></label>)}
+        </fieldset>
+        <div className="row gap wrap">
+          <button type="button" className="btn small primary" disabled={!imp.choice} onClick={() => imp.choice && restore(imp.analysis, imp.choice)}>Save restored plan</button>
+          <button type="button" className="btn small ghost" onClick={() => setImp({ kind: "idle" })}>Cancel</button>
+        </div>
+      </div>}
       {imp.kind === "error" && <div className="notice warn" role="alert">{imp.message}
         {imp.input && <div className="row gap"><button type="button" className="btn small secondary" onClick={() => { stashInputForCalculator(imp.input!); router.push("/check"); }}>Open the data in the calculator</button></div>}
       </div>}

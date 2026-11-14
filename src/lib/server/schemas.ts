@@ -20,7 +20,7 @@ export const PlanEventBodySchema = z.object({
   id: z.string().max(100).optional().default(""),
   planId: z.string().max(100),
   occurredAt: z.string().datetime({ offset: true }).optional(),
-  kind: z.enum(["income_changed", "coverage_changed", "opportunity_changed", "action_confirmed"]),
+  kind: z.enum(["income_changed", "coverage_changed", "opportunity_changed", "action_confirmed", "rules_updated"]),
   description: z.string().min(1).max(500),
   previousFingerprint: z.string().max(200),
   nextFingerprint: z.string().max(200).nullable(),

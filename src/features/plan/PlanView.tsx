@@ -16,6 +16,8 @@ import { BlockedResult, ErrorNotice, ProblemsList } from "@/features/results/Blo
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { ComparisonView, baselineLabel, deltaVs, scenarioTrace } from "@/features/results/ComparisonView";
 import { diffInputs } from "./diff";
+import { PlanUpgradePanel } from "./PlanUpgradePanel";
+import { StorageFallback } from "./StorageFallback";
 import {
   clearBrowserDrafts, describeStorageError, detectStorageMode, downloadBlob, downloadJson, eventId, fileStamp, planFile, planRepository,
   storageText, type StorageMode,
@@ -75,6 +77,9 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
   const [confirming, setConfirming] = useState<string | null>(null);
   const [pendingEdits, setPendingEdits] = useState(false);
   const repo = planRepository();
+  const router = useRouter();
+  const [rulesOutdated, setRulesOutdated] = useState(false);
+  const [saveFailure, setSaveFailure] = useState<{ error: unknown; plan: SavedPlan } | null>(null);
 
   async function persist(next: SavedPlan, event: Omit<PlanEvent, "id" | "planId" | "occurredAt"> | null, okText: string) {
     try {
@@ -83,11 +88,12 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
         try { await repo.appendEvent({ ...event, id: eventId(), planId: saved.id, occurredAt: new Date().toISOString() }); }
         catch (e) { setNotice({ tone: "warn", text: `Plan saved, but its history entry couldn't be recorded: ${e instanceof Error ? e.message : String(e)}` }); await onReload(); return true; }
       }
-      setNotice({ tone: "ok", text: okText });
+      setNotice({ tone: "ok", text: okText }); setSaveFailure(null);
       await onReload();
       return true;
     } catch (e) {
       setNotice({ tone: "warn", text: describeStorageError(e) });
+      setSaveFailure({ error: e, plan: next });
       return false;
     }
   }
@@ -137,7 +143,7 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
         <p className="eyebrow">Your plan{plan.input.isSynthetic ? " · sample household" : ""}</p>
         <h1 className="page-title">{title}</h1>
         <p className="muted">{chosen ? <>Chosen option: <strong>{chosen.label}</strong></> : "The chosen option is missing from this saved result."}</p>
-        <p className="save-status small"><span className="dot" aria-hidden="true" />{storageText(mode)} Revision {plan.revision} · updated {dateTime(plan.updatedAt)}</p>
+        <p className="save-status small"><span className="dot" aria-hidden="true" />{storageText(repo.locationOf(plan.id) ?? mode)} Revision {plan.revision} · updated {dateTime(plan.updatedAt)}</p>
       </div>
       <div className="plan-head-actions">
         <button type="button" className="btn primary" onClick={() => { setEditing(true); setTimeout(() => document.getElementById("changed")?.scrollIntoView({ behavior: "smooth" }), 30); }}><RefreshCw size={17} /> Something changed</button>
@@ -145,6 +151,9 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
     </div>
     {plan.input.isSynthetic && <p className="sample-banner small"><FlaskConical size={16} aria-hidden="true" /> Built from a synthetic sample household. Plan prices are county candidates or illustrative.</p>}
     {notice && <p className={`notice ${notice.tone === "warn" ? "warn" : "ok"}`} role={notice.tone === "warn" ? "alert" : "status"}>{notice.text}</p>}
+    {saveFailure && notice?.tone === "warn" && <StorageFallback error={saveFailure.error} plan={saveFailure.plan}
+      onSaved={saved => router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`)} />}
+    <PlanUpgradePanel plan={plan} onStatus={setRulesOutdated} onUpgraded={async () => { setNotice({ tone: "ok", text: "Plan recalculated with the current rules. The previous version is kept in its history." }); await onReload(); }} />
 
     <section className={`plan-figures ${outdated ? "is-stale" : ""}`} aria-labelledby="figures-title">
       {outdated && <p className="stale-banner">These figures are from your saved plan (revision {plan.revision}). They don&apos;t include the changes you&apos;re making yet.</p>}
@@ -209,9 +218,10 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
         <h2 id="export-title" className="section-title small">Export</h2>
         <p className="muted small">For your accountant: inputs, sources, assumptions, both tax years, cash and retirement shown separately, and the calculation version.</p>
         <div className="stack-sm">
-          <button type="button" className="btn secondary" disabled={outdated || busy === "pdf"} onClick={exportPdf}><Download size={16} /> {busy === "pdf" ? "Preparing PDF…" : "Download PDF"}</button>
+          <button type="button" className="btn secondary" disabled={outdated || rulesOutdated || busy === "pdf"} onClick={exportPdf}><Download size={16} /> {busy === "pdf" ? "Preparing PDF…" : "Download PDF"}</button>
           <button type="button" className="btn ghost" disabled={outdated} onClick={() => downloadJson(planFile(plan), `headroom-plan-${fileStamp()}.json`)}><FileJson size={16} /> Download JSON (restorable)</button>
           {outdated && <p className="hint">Save or discard your changes first, so the export matches the current result.</p>}
+          {rulesOutdated && !outdated && <p className="hint">Review the updated calculation above before downloading a PDF. The JSON file keeps the saved version.</p>}
         </div>
         <dl className="meta-list small">
           <div><dt>Rules</dt><dd>{c.rulesVersion}</dd></div>
@@ -254,7 +264,7 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
 }
 
 const EVENT_LABEL: Record<PlanEvent["kind"], string> = {
-  income_changed: "Income changed", coverage_changed: "Coverage changed", opportunity_changed: "Project changed", action_confirmed: "Action confirmed",
+  income_changed: "Income changed", coverage_changed: "Coverage changed", opportunity_changed: "Project changed", action_confirmed: "Action confirmed", rules_updated: "Recalculated with updated rules",
 };
 
 /* ---------------- Something changed ---------------- */

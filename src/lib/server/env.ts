@@ -49,7 +49,8 @@ export interface Capabilities {
 export function capabilities(config = serverConfig()): Capabilities {
   return {
     cloudSave: config.supabase !== null,
-    aiExtraction: config.ai !== null,
+    // The paid provider is offered only with the durable quota store (see ai-guard.ts).
+    aiExtraction: config.ai !== null && config.supabase?.secretKey != null,
     checkoutMode: config.stripe ? "stripe_test" : "demo",
     localTextImport: true,
   };

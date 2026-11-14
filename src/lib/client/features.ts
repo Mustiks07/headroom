@@ -3,17 +3,21 @@ import type { AnalyticsEvent } from "./analytics-events";
 import { getCloudSession } from "./cloud-session";
 import { HeadroomError, PlanIntegrityError } from "./errors";
 import { apiFetch, errorFromResponse, readJson } from "./http";
-import { verifyPlanForSave } from "./plan-integrity";
 import { getStorageMode } from "./repository";
 
 export interface Capabilities { cloudSave: boolean; aiExtraction: boolean; checkoutMode: "demo" | "stripe_test"; localTextImport: boolean }
 
 const OFFLINE_CAPABILITIES: Capabilities = { cloudSave: false, aiExtraction: false, checkoutMode: "demo", localTextImport: false };
 
-/** What the deployment can actually do. On failure, everything optional is reported unavailable. */
+/**
+ * What the deployment can actually do in this browser. On failure, everything optional is
+ * reported unavailable. AI extraction additionally needs this browser's invisible guest session
+ * (the server meters the paid provider per guest), so it is false in local mode.
+ */
 export async function getCapabilities(): Promise<Capabilities> {
   try {
-    return await readJson<Capabilities>(await apiFetch("/api/capabilities", { timeoutMs: 8000 }));
+    const caps = await readJson<Capabilities>(await apiFetch("/api/capabilities", { timeoutMs: 8000 }));
+    return caps.aiExtraction && !(await cloudToken()) ? { ...caps, aiExtraction: false } : caps;
   } catch {
     return OFFLINE_CAPABILITIES;
   }
@@ -36,7 +40,8 @@ export async function extractDocument(file: File, options: { consentToProvider?:
   form.set("file", file);
   if (options.consentToProvider) form.set("consent", "provider");
   try {
-    const response = await apiFetch("/api/documents/extract", { method: "POST", body: form, timeoutMs: 70_000 });
+    const response = await apiFetch("/api/documents/extract", { method: "POST", body: form, timeoutMs: 70_000,
+      token: options.consentToProvider ? await cloudToken() : undefined });
     const body = await response.json().catch(() => null);
     if (body && (body.status === "review_required" || body.status === "unavailable")) return body as ExtractionResult;
     const message = body?.error?.message ?? "The document could not be read. Enter the figures manually.";
@@ -83,23 +88,6 @@ export function exportPlanJson(plan: SavedPlan): Blob {
 export function exportCaseJson(input: CaseInput): Blob {
   return new Blob([JSON.stringify({ kind: CASE_EXPORT_FORMAT, contractVersion: CONTRACT_VERSION, exportedAt: new Date().toISOString(), input }, null, 2)],
     { type: "application/json" });
-}
-
-/**
- * Read a previously exported plan and verify it against the engine. The returned plan has a
- * freshly computed comparison; save it with `repository.save(plan, null)` to restore it.
- */
-export async function importPlanJson(file: File | string): Promise<SavedPlan> {
-  const text = typeof file === "string" ? file : await file.text();
-  let doc: { kind?: string; plan?: SavedPlan; input?: unknown };
-  try { doc = JSON.parse(text); } catch { throw new PlanIntegrityError("INVALID_FILE", "This is not a Headroom plan file."); }
-  if (doc?.kind === CASE_EXPORT_FORMAT) {
-    const input = CaseInputSchema.safeParse(doc.input);
-    if (!input.success) throw new PlanIntegrityError("INVALID_FILE", "The saved inputs are not valid.");
-    throw new PlanIntegrityError("CASE_ONLY", "This file contains inputs only. Open it in the calculator to choose an option.");
-  }
-  if (doc?.kind !== PLAN_EXPORT_FORMAT || !doc.plan) throw new PlanIntegrityError("INVALID_FILE", "This is not a Headroom plan file.");
-  return verifyPlanForSave(doc.plan);
 }
 
 /** Read inputs from a `headroom.case-input` or `headroom.saved-plan` file. */

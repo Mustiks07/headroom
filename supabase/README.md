@@ -4,9 +4,10 @@
 2. Apply the migrations in order (SQL editor or `supabase db push`):
    - `migrations/202611140001_foundation.sql`
    - `migrations/202611140002_hardening.sql`
+   - `migrations/202611150003_round2.sql` (plan revision history, `rules_updated` event kind, durable AI quota)
 3. Set in Vercel (Production + Preview): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
-   and optionally `SUPABASE_SECRET_KEY` (server only; used just for demo/test entitlements and deleting the
-   anonymous user on "Clear my data").
+   and optionally `SUPABASE_SECRET_KEY` (server only; used for the AI quota function, demo/test entitlements
+   and deleting the anonymous user on "Clear my data").
 4. Optional: enable CAPTCHA/rate limits for anonymous sign-ins in Auth settings. If sign-in fails, the app stays in local mode.
 5. Verify once with two guest sessions: `node scripts/verify-rls.mjs` (needs the two public env vars).
 

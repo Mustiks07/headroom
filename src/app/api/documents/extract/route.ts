@@ -1,3 +1,4 @@
+import { assertSameOrigin, authorizeAiCall } from "@/lib/server/ai-guard";
 import { extractDocumentServer, MAX_DOCUMENT_BYTES } from "@/lib/server/extraction";
 import { apiError, handle, json } from "@/lib/server/http";
 import { rateLimited } from "@/lib/server/rate-limit";
@@ -5,6 +6,7 @@ import { rateLimited } from "@/lib/server/rate-limit";
 export const maxDuration = 60;
 
 export const POST = handle(async (request: Request) => {
+  assertSameOrigin(request);
   if (Number(request.headers.get("content-length") ?? "0") > MAX_DOCUMENT_BYTES + 64 * 1024) {
     return apiError(413, "FILE_TOO_LARGE", "The file is larger than 3 MB. Upload a smaller file or enter the figures manually.");
   }
@@ -20,6 +22,7 @@ export const POST = handle(async (request: Request) => {
   const { status, result } = await extractDocumentServer({
     bytes: new Uint8Array(await file.arrayBuffer()), mime: file.type, name: file.name,
     consentToProvider: form.get("consent") === "provider",
+    authorizeProvider: () => authorizeAiCall(request),
   });
   return json(result, status);
 });

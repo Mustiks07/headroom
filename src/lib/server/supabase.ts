@@ -34,7 +34,9 @@ export async function requireOwner(request: Request): Promise<AuthenticatedOwner
     throw new HttpError(503, "CLOUD_UNAVAILABLE", "Cloud save is unavailable right now.");
   }
   if (result.error || !result.data.user) {
-    if (result.error && (result.error.status ?? 0) >= 500) throw new HttpError(503, "CLOUD_UNAVAILABLE", "Cloud save is unavailable right now.");
+    // No HTTP status (network/DNS) or 5xx: the auth service is down, not the session invalid.
+    const status = result.error?.status ?? 0;
+    if (result.error && (status === 0 || status >= 500)) throw new HttpError(503, "CLOUD_UNAVAILABLE", "Cloud save is unavailable right now.");
     throw new HttpError(401, "SESSION_INVALID", "The guest session has expired. Reload the page to continue.");
   }
   return { userId: result.data.user.id, db };

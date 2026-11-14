@@ -5,12 +5,15 @@ import { Check, FileUp, X } from "lucide-react";
 import type { ExtractionResult } from "@/domain/contracts";
 import { EXTRACTION_FIELDS, extractDocument, getCapabilities, type ExtractionFieldPath, type ProposedFieldValue } from "@/lib/client/api";
 import { moneyExact } from "@/features/format";
-import { adults, describePath, getAt, isMoneyFact, personName, setAt, type Draft } from "./draft";
+import { adults, describePath, fieldId, getAt, isMoneyFact, personName, setAt, type Draft } from "./draft";
 import type { Update } from "./editors";
 
 type Field = ExtractionResult["fields"][number];
-/** Where the user wants a proposed figure to go: tax year index and (for income) person. */
-type Target = { yearIndex: number; personId: string };
+/**
+ * Where and how the user wants a proposed figure used: tax year, person (income), whether it is a
+ * final fact or a forecast, and — for year-to-date/unstated income — an explicit decision.
+ */
+type Target = { yearIndex: number; personId: string; status: "confirmed" | "estimated"; partialUse: "starting_point" | "full_year" | null };
 type State =
   | { kind: "idle" }
   | { kind: "consent"; file: File }
@@ -51,11 +54,14 @@ function prepare(field: Field, target: Target, draft: Draft): { ok: true; paths:
       if (isCoverage && (v.period === "annual" || v.period === "year_to_date")) return { ok: false, reason: "This isn't a monthly amount. Enter the monthly figure manually." };
       if (field.path.startsWith("income.") && v.period === "monthly") return { ok: false, reason: "This is a monthly amount. Enter your full-year figure manually." };
       if (isMoneyFact(current)) {
-        const estimate = field.path.startsWith("income.") && v.period !== "annual";
-        return { ok: true, paths, value: { valueCents: v.amountCents, status: estimate ? "estimated" : "confirmed", sourceId: field.evidence.id },
-          note: estimate ? (v.period === "year_to_date"
-            ? "Year-to-date amount: it will be saved as an estimate. Raise it to your full-year forecast."
-            : "The document doesn't say this is a full-year amount, so it will be saved as an estimate.") : undefined };
+        const partial = field.path.startsWith("income.") && v.period !== "annual";
+        if (partial && !target.partialUse) return { ok: false, reason: "Choose how to use this amount first." };
+        // A year-to-date or unstated-period amount is never a confirmed full-year fact.
+        const status = partial ? "estimated" : target.status;
+        return { ok: true, paths, value: { valueCents: v.amountCents, status, sourceId: field.evidence.id },
+          note: partial ? (target.partialUse === "starting_point"
+            ? "Saved as an estimate. The field will open so you can raise it to your full-year forecast."
+            : "Saved as your full-year forecast (an estimate).") : undefined };
       }
       if (typeof current === "number") return { ok: true, paths, value: v.amountCents };
       return { ok: false, reason: "The document value doesn't match this field." };
@@ -93,8 +99,14 @@ function label(field: Field, target: Target, draft: Draft) {
 
 function defaultTarget(field: Field, draft: Draft): Target {
   const yearIndex = Math.max(0, draft.years.findIndex(y => y.year === field.evidence.taxYear));
-  return { yearIndex, personId: adults(draft)[0]?.id ?? "primary" };
+  // Income for a year in progress is a forecast unless the user says it is final; Marketplace
+  // monthly amounts printed on a notice are facts.
+  const status = field.path.startsWith("income.") ? "estimated" : "confirmed";
+  return { yearIndex, personId: adults(draft)[0]?.id ?? "primary", status, partialUse: null };
 }
+
+const isPartialIncome = (field: Field) => field.path.startsWith("income.") && isProposed(field.proposedValue) &&
+  field.proposedValue.kind === "money" && field.proposedValue.period !== "annual";
 
 export function DocumentImport({ draft, update }: { draft: Draft; update: Update }) {
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -128,12 +140,18 @@ export function DocumentImport({ draft, update }: { draft: Draft; update: Update
     const field = state.fields[index];
     const prepared = prepare(field, state.targets[index], draft);
     if (!prepared.ok) return;
+    const focusPath = isPartialIncome(field) && state.targets[index].partialUse === "starting_point" ? prepared.paths[0] : null;
     update(d => {
       let changed = false;
       for (const path of prepared.paths) changed = setAt(d, path, isMoneyFact(prepared.value) ? { ...prepared.value } : prepared.value) || changed;
       if (changed && !d.evidence.some(e => e.id === field.evidence.id)) d.evidence.push(field.evidence);
     });
     setState({ ...state, decided: { ...state.decided, [index]: "applied" } });
+    if (focusPath) setTimeout(() => {
+      const el = document.getElementById(fieldId(focusPath));
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      ((el?.matches("input,select") ? el : el?.querySelector("input,select")) as HTMLElement | null)?.focus({ preventScroll: true });
+    }, 50);
   }
 
   function retarget(index: number, patch: Partial<Target>) {
@@ -149,7 +167,7 @@ export function DocumentImport({ draft, update }: { draft: Draft; update: Update
       </div>
       <label className="btn secondary small file-btn">
         <FileUp size={16} /> Choose a file
-        <input ref={inputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt,application/pdf,image/*,text/csv,text/plain"
+        <input ref={inputRef} type="file" accept={aiAvailable ? ".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt,application/pdf,image/*,text/csv,text/plain" : ".csv,.txt,text/csv,text/plain"}
           onChange={e => onFile(e.target.files?.[0])} disabled={state.kind === "reading"} />
       </label>
     </div>
@@ -201,7 +219,19 @@ export function DocumentImport({ draft, update }: { draft: Draft; update: Update
                 <select value={target.personId} onChange={e => retarget(i, { personId: e.target.value })}>
                   {adults(draft).map(p => <option key={p.id} value={p.id}>{personName(draft, p.id)}</option>)}
                 </select></label>}
+              {isMoneyFact(getAt(draft, targetPaths(field, target, draft)[0] ?? "")) && !isPartialIncome(field) && <label>This figure is{" "}
+                <select value={target.status} onChange={e => retarget(i, { status: e.target.value as Target["status"] })}>
+                  <option value="confirmed">a final, confirmed amount</option>
+                  <option value="estimated">an estimate / forecast</option>
+                </select></label>}
             </div>}
+            {generic && !decided && isPartialIncome(field) && <fieldset className="small">
+              <legend>{(field.proposedValue as { period: string }).period === "year_to_date" ? "This is a year-to-date amount, not your full year." : "The document doesn't say this covers the full year."} How should it be used?</legend>
+              <label className="option-row"><input type="radio" name={`partial-${i}`} checked={target.partialUse === "starting_point"}
+                onChange={() => retarget(i, { partialUse: "starting_point" })} /> As a starting point — I&apos;ll raise it to my full-year forecast</label>
+              <label className="option-row"><input type="radio" name={`partial-${i}`} checked={target.partialUse === "full_year"}
+                onChange={() => retarget(i, { partialUse: "full_year" })} /> It already is my full-year forecast</label>
+            </fieldset>}
             {yearMismatch && <p className="hint warn">This document is for {field.evidence.taxYear}, but the field is for {targetYear}. Only apply it if the figure really belongs to {targetYear}.</p>}
             {prepared.ok && prepared.note && !decided && <p className="hint">{prepared.note}</p>}
             {!prepared.ok && <p className="hint warn">{prepared.reason}</p>}

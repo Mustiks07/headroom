@@ -39,12 +39,12 @@ Rules:
 - Bank statements: do not classify deposits or transfers as business profit; report no income fields for them.
 - If nothing allowed is printed, return an empty fields list. Use notes for short caveats (at most 5).`;
 
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_MS = 40_000; // fits inside the route maxDuration (60 s) with no retries
 
 /** One concrete provider adapter (Anthropic). Selected by AI_PROVIDER=anthropic; key/model are server-only. */
 export async function extractWithAnthropic(media: ProviderMedia, documentId: string, label: string,
   config: { apiKey: string; model: string }): Promise<ExtractionResult> {
-  const client = new Anthropic({ apiKey: config.apiKey, timeout: TIMEOUT_MS, maxRetries: 1 });
+  const client = new Anthropic({ apiKey: config.apiKey, timeout: TIMEOUT_MS, maxRetries: 0 });
   const source = media.kind === "pdf"
     ? { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: media.data.toString("base64") } }
     : { type: "image" as const, source: { type: "base64" as const, media_type: media.mediaType, data: media.data.toString("base64") } };

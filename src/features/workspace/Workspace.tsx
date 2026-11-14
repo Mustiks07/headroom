@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Calculator, FlaskConical, RotateCcw } from "lucide-react";
-import type { CaseInput, ComparisonResult, RiskAssessment } from "@/domain/contracts";
+import type { CaseInput, ComparisonResult, RiskAssessment, SavedPlan } from "@/domain/contracts";
 import { assessCurrentRisk, calculateComparison } from "@/lib/engine";
 import {
   adults, blankDraft, buildCaseInput, draftFromCase, fieldId, normalizePath, type Draft, type Problem,
@@ -17,8 +17,9 @@ import { BlockedResult, ErrorNotice, ProblemsList } from "@/features/results/Blo
 import { RiskResult } from "@/features/results/RiskPanel";
 import { ComparisonView } from "@/features/results/ComparisonView";
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
+import { StorageFallback } from "@/features/plan/StorageFallback";
 import {
-  DRAFT_KEY, describeStorageError, downloadJson, fileStamp, inputFile, saveNewPlan, takeStashedInput,
+  DRAFT_KEY, describeStorageError, downloadJson, draftPlan, fileStamp, inputFile, saveNewPlan, takeStashedInput,
 } from "@/features/plan/storage";
 import { IDLE_RUN, isStale, type Run } from "./useRuns";
 
@@ -37,6 +38,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveFailure, setSaveFailure] = useState<{ error: unknown; plan: SavedPlan } | null>(null);
   const [restoredNote, setRestoredNote] = useState<string | null>(null);
 
   const draftRef = useRef(draft); draftRef.current = draft;
@@ -158,14 +160,16 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   async function onUse(scenarioId: string) {
     const o = comparison.outcome;
     if (!o || o.kind !== "done" || o.result.status !== "ready" || isStale(comparison, version)) return;
-    setSaving(scenarioId); setSaveError(null);
+    setSaving(scenarioId); setSaveError(null); setSaveFailure(null);
     try {
       const saved = await saveNewPlan(o.input, o.result, scenarioId);
       if (mode === "own") { try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } }
       router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`);
     } catch (e) {
       setSaveError(describeStorageError(e));
+      setSaveFailure({ error: e, plan: draftPlan(o.input, o.result, scenarioId) });
       setSaving(null);
+      requestAnimationFrame(() => document.getElementById("save-error")?.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
   }
 
@@ -249,7 +253,9 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
             <span className="muted small">Compares 2026 + 2027, settled when you file in 2027 and 2028.</span>
           </div>
           <div id="compare-area" className="result-area" aria-live="polite">
-            {saveError && <p className="notice warn" role="alert">{saveError}</p>}
+            {saveError && <div id="save-error" className="notice warn" role="alert">{saveError}
+              {saveFailure && <StorageFallback error={saveFailure.error} plan={saveFailure.plan}
+                onSaved={saved => router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`)} />}</div>}
             <ComparisonArea run={comparison} stale={compStale} draft={draft} onGoTo={goTo} onShowCalc={setDrawer} onDownload={downloadData}
               onUse={onUse} saving={saving} onRetry={runComparison} />
           </div>

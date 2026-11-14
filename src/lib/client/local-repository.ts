@@ -16,6 +16,16 @@ interface LocalState {
   version: typeof FORMAT_VERSION;
   plans: Record<string, SavedPlan>;
   events: Record<string, PlanEvent[]>;
+  /** Earlier revisions of each plan, oldest first (added in round 2; optional for older data). */
+  revisions?: Record<string, SavedPlan[]>;
+}
+
+/** Number of earlier revisions kept per plan in this browser. */
+export const MAX_KEPT_REVISIONS = 20;
+
+/** PlanRepository plus read access to earlier revisions. */
+export interface RevisionedPlanRepository extends PlanRepository {
+  listRevisions(planId: string): Promise<SavedPlan[]>;
 }
 
 export interface LocalRepositoryOptions {
@@ -50,7 +60,7 @@ export function isLocalStorageAvailable(): boolean {
  * `save(plan, null)` creates revision 1 with a new id, `save(plan, n)` requires the stored
  * revision to be `n`, otherwise `PlanConflictError` and nothing is overwritten.
  */
-export function createLocalPlanRepository(options: LocalRepositoryOptions = {}): PlanRepository {
+export function createLocalPlanRepository(options: LocalRepositoryOptions = {}): RevisionedPlanRepository {
   const verify = options.verify ?? verifyPlanForSave;
   const now = options.now ?? (() => new Date());
   const newId = options.newId ?? (() => crypto.randomUUID());
@@ -115,6 +125,10 @@ export function createLocalPlanRepository(options: LocalRepositoryOptions = {}):
         if (current.revision !== expectedRevision) throw new PlanConflictError(structuredClone(current));
         saved = { ...verified, id: current.id, revision: current.revision + 1,
           createdAt: current.createdAt, updatedAt: timestamp };
+        // Keep the replaced revision as history instead of discarding it.
+        const history = state.revisions?.[current.id] ?? [];
+        history.push(current);
+        state.revisions = { ...state.revisions, [current.id]: history.slice(-MAX_KEPT_REVISIONS) };
       }
       state.plans[saved.id] = saved;
       write(state);
@@ -124,6 +138,7 @@ export function createLocalPlanRepository(options: LocalRepositoryOptions = {}):
       const state = read();
       delete state.plans[id];
       delete state.events[id];
+      if (state.revisions) delete state.revisions[id];
       write(state);
     },
     async appendEvent(event) {
@@ -140,6 +155,9 @@ export function createLocalPlanRepository(options: LocalRepositoryOptions = {}):
     async listEvents(planId) {
       const events = read().events[planId] ?? [];
       return [...events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).map(e => structuredClone(e));
+    },
+    async listRevisions(planId) {
+      return [...(read().revisions?.[planId] ?? [])].sort((a, b) => b.revision - a.revision).map(p => structuredClone(p));
     },
     async clear() {
       const s = store();

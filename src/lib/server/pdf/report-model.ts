@@ -37,6 +37,20 @@ const INCOME_FIELDS: Array<[keyof CaseInput["years"][number]["incomes"][number],
   ["existingSepContribution", "SEP contribution already made"],
 ];
 
+/** One row per non-zero/unknown item; confirmed zeros are listed together (same facts, shorter report). */
+function incomeRows(inc: CaseInput["years"][number]["incomes"][number], person: string): string[][] {
+  const rows: string[][] = [];
+  const zeros = new Map<string, string[]>();
+  for (const [k, label] of INCOME_FIELDS) {
+    const f = inc[k] as MoneyFact;
+    if (f.status === "confirmed" && f.valueCents === 0 && !f.range) {
+      zeros.set(f.sourceId, [...(zeros.get(f.sourceId) ?? []), label]);
+    } else rows.push([label, person, fact(f)]);
+  }
+  for (const [source, labels] of zeros) rows.push(["Confirmed $0.00", person, `${labels.join(", ")}; source: ${source}`]);
+  return rows;
+}
+
 function yearRows(years: [YearResult, YearResult]): string[][] {
   const row = (label: string, pick: (y: YearResult) => string) => [label, pick(years[0]), pick(years[1])];
   return [
@@ -142,7 +156,7 @@ export function buildReportModel(input: CaseInput, comparison: ReadyComparison, 
   for (const year of input.years) {
     blocks.push({ type: "paragraph", text: `${year.year}: tax family of ${year.taxFamilySize}; ${year.coveredPersonIds.length} covered by the Marketplace plan; benchmark ${year.benchmarkStatus.replace(/_/g, " ")}; scope confirmed: ${yesNo(year.scopeConfirmed)}.` });
     blocks.push({ type: "table", columns: [{ title: `${year.year} income item`, width: 0.35 }, { title: "Person", width: 0.15 }, { title: "Value, status and source", width: 0.5 }],
-      rows: year.incomes.flatMap(inc => INCOME_FIELDS.map(([k, label]) => [label, role(inc.personId), fact(inc[k] as MoneyFact)])) });
+      rows: year.incomes.flatMap(inc => incomeRows(inc, role(inc.personId))) });
     blocks.push({ type: "table", columns: [{ title: "Months", width: 0.16 }, { title: "Plan premium", width: 0.21, align: "right" },
       { title: "Benchmark premium", width: 0.21, align: "right" }, { title: "Advance credit", width: 0.21, align: "right" }, { title: "Eligible", width: 0.21 }],
     rows: coverageSummary(year) });
@@ -178,7 +192,7 @@ export function buildReportModel(input: CaseInput, comparison: ReadyComparison, 
   blocks.push({ type: "heading", text: "Calculation trace for the chosen option" });
   for (const year of chosen.years) {
     blocks.push({ type: "table", columns: [{ title: `${year.year} step`, width: 0.3 }, { title: "Amount", width: 0.18, align: "right" }, { title: "Explanation and sources", width: 0.52 }],
-      rows: year.trace.length ? year.trace.slice(0, 60).map(t => [t.label, t.amountCents === null ? "See explanation" : money(t.amountCents),
+      rows: year.trace.length ? year.trace.map(t => [t.label, t.amountCents === null ? "See explanation" : money(t.amountCents),
         `${t.explanation}${t.sourceIds.length ? ` [${t.sourceIds.join(", ")}]` : ""}`]) : [["No trace items", "-", "-"]] });
   }
 

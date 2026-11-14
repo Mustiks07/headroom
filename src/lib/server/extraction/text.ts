@@ -60,13 +60,34 @@ function looksLikeBankStatement(lines: string[]): boolean {
  * Deterministic reader for supported CSV/TXT exports and pasted text. It proposes only
  * whitelisted figures with a redacted source line; the user must confirm each one.
  */
-export function extractFromText(text: string, documentId: string, label: string): ExtractionResult {
+type DocumentKind = "pay stub" | "Marketplace notice" | "project offer" | "W-2" | null;
+
+/** A coarse, explainable guess used only to label sources and add the right caveat. */
+function documentKind(text: string): DocumentKind {
+  if (/\bw-?2\b|wages,?\s+tips/i.test(text)) return "W-2";
+  if (/gross\s+pay|net\s+pay|pay\s+period|pay\s+date|earnings\s+statement/i.test(text)) return "pay stub";
+  if (/marketplace|healthcare\.gov|premium\s+tax\s+credit|\baptc\b|slcsp|second\s+lowest/i.test(text)) return "Marketplace notice";
+  if (/proposal|statement\s+of\s+work|project\s+(fee|price|amount|total)|contract\s+(fee|amount|value)|offer(ed)?\s+(amount|fee)/i.test(text)) return "project offer";
+  return null;
+}
+
+const KIND_NOTES: Record<Exclude<DocumentKind, null>, string> = {
+  "pay stub": "Pay stub: year-to-date figures cover only part of the year. Decide for each one whether it is a starting point or your full-year forecast.",
+  "Marketplace notice": "Marketplace notice: monthly premium, benchmark and advance credit amounts apply to the months shown on the notice.",
+  "project offer": "Project offer: the fee is revenue, not profit. Expenses and the date you actually receive the money matter.",
+  "W-2": "W-2: a final W-2 only exists for a completed year. Don't carry a prior-year W-2 into 2026 or 2027 without deciding it is still right.",
+};
+
+export function extractFromText(text: string, documentId: string, rawLabel: string): ExtractionResult {
+  const kind = documentKind(text);
+  const label = kind ? `${rawLabel} (looks like a ${kind})` : rawLabel;
   const warnings: string[] = [];
   const lines = text.replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
   if (lines.length > MAX_LINES) warnings.push(`Only the first ${MAX_LINES} lines were read.`);
   const { taxYear, warnings: yw } = yearWarnings(text);
   warnings.push(...yw);
 
+  if (kind && !looksLikeBankStatement(lines)) warnings.push(KIND_NOTES[kind]);
   if (looksLikeBankStatement(lines)) {
     warnings.push("This looks like a bank statement. Deposits, transfers and refunds are not classified as business profit automatically. Enter your profit figures manually.");
     return { status: "review_required", fields: [], warnings };

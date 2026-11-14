@@ -7,7 +7,7 @@ import { extractWithAnthropic, type ProviderMedia } from "./anthropic";
 import { extractFromText } from "./text";
 
 export const MAX_DOCUMENT_BYTES = 3 * 1024 * 1024;
-export const MAX_PDF_PAGES = 10;
+export const MAX_PDF_PAGES = 5;
 export const UNAVAILABLE_MESSAGE = "Document analysis is unavailable. Enter the figures manually.";
 
 type Detected = { kind: "text"; text: string; label: string } | { kind: "pdf" } | { kind: "image"; mediaType: "image/png" | "image/jpeg" | "image/webp" };
@@ -31,7 +31,11 @@ function detect(bytes: Uint8Array, mime: string, name: string): Detected | null 
   }
 }
 
-export interface ExtractRequest { bytes: Uint8Array; mime: string; name: string; consentToProvider: boolean }
+export interface ExtractRequest {
+  bytes: Uint8Array; mime: string; name: string; consentToProvider: boolean;
+  /** Session + durable quota check, run only right before a paid provider call. */
+  authorizeProvider?: () => Promise<void>;
+}
 
 /**
  * Validate and read one uploaded document. CSV/TXT are parsed locally. PDF/images go to the
@@ -67,11 +71,14 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
     media = { kind: "image", data: Buffer.from(req.bytes), mediaType: detected.mediaType };
   }
 
-  const ai = serverConfig().ai;
-  if (!ai) return { status: 200, result: { status: "unavailable", fields: [], warnings: [UNAVAILABLE_MESSAGE] } };
+  const config = serverConfig();
+  const ai = config.ai;
+  if (!ai || !config.supabase?.secretKey) return { status: 200, result: { status: "unavailable", fields: [], warnings: [UNAVAILABLE_MESSAGE] } };
   if (!req.consentToProvider) {
     throw new HttpError(400, "CONSENT_REQUIRED", "Confirm that this document may be sent to the document-analysis provider before it is read.");
   }
+  if (!req.authorizeProvider) throw new HttpError(503, "AI_UNAVAILABLE", UNAVAILABLE_MESSAGE);
+  await req.authorizeProvider();
   try {
     const label = detected.kind === "pdf" ? "Uploaded PDF" : "Uploaded image";
     return { status: 200, result: await extractWithAnthropic(media, documentId, label, ai) };

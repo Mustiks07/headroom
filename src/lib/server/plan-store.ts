@@ -69,6 +69,16 @@ export async function updatePlan(owner: AuthenticatedOwner, id: string, submitte
   assertId(id);
   const plan = await verified(submitted);
   const next = expectedRevision + 1;
+  // Keep the revision being replaced as history (idempotent per plan/revision).
+  const current = await getPlan(owner, id);
+  if (current.revision !== expectedRevision) {
+    throw Object.assign(new HttpError(409, "PLAN_REVISION_CONFLICT",
+      "This plan was changed somewhere else. Reload the latest version before saving again."), { current });
+  }
+  const archived = await owner.db.from("plan_revisions").upsert(
+    { plan_id: id, owner_id: owner.userId, revision: current.revision, payload: current },
+    { onConflict: "plan_id,revision", ignoreDuplicates: true });
+  if (archived.error) dbFailure(archived.error);
   const { id: _i, revision: _r, createdAt: _c, updatedAt: _u, ...payload } = plan;
   const { data, error } = await owner.db.from("plans")
     .update({ revision: next, payload: { ...payload, id, revision: next }, updated_at: new Date().toISOString() })
@@ -76,10 +86,10 @@ export async function updatePlan(owner: AuthenticatedOwner, id: string, submitte
     .select(COLUMNS);
   if (error) dbFailure(error);
   if (data && data.length === 1) return fromRow(data[0] as PlanRow);
-  // No row updated: either a newer revision exists (409) or the plan is not visible to this owner (404).
-  const current = await getPlan(owner, id);
+  // No row updated: a concurrent save won the race (409) or the plan disappeared (404 from getPlan).
+  const latest = await getPlan(owner, id);
   throw Object.assign(new HttpError(409, "PLAN_REVISION_CONFLICT",
-    "This plan was changed somewhere else. Reload the latest version before saving again."), { current });
+    "This plan was changed somewhere else. Reload the latest version before saving again."), { current: latest });
 }
 
 export async function deletePlan({ db }: AuthenticatedOwner, id: string): Promise<void> {
@@ -111,4 +121,12 @@ export async function appendEvent(owner: AuthenticatedOwner, planId: string,
       { onConflict: "id", ignoreDuplicates: true });
   if (error) dbFailure(error);
   return event;
+}
+
+export async function listRevisions(owner: AuthenticatedOwner, planId: string): Promise<SavedPlan[]> {
+  await getPlan(owner, planId);
+  const { data, error } = await owner.db.from("plan_revisions").select("revision, payload")
+    .eq("plan_id", planId).order("revision", { ascending: false }).limit(20);
+  if (error) dbFailure(error);
+  return (data as Array<{ revision: number; payload: SavedPlan }>).map(r => ({ ...r.payload, revision: r.revision }));
 }
