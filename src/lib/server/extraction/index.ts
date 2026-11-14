@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import type { ExtractionResult } from "@/domain/contracts";
 import { serverConfig } from "../env";
@@ -45,7 +46,8 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
   if (req.bytes.byteLength === 0) throw new HttpError(400, "EMPTY_FILE", "The file is empty.");
   if (req.bytes.byteLength > MAX_DOCUMENT_BYTES) throw new HttpError(413, "FILE_TOO_LARGE", "The file is larger than 3 MB. Upload a smaller file or enter the figures manually.");
   const detected = detect(req.bytes, req.mime, req.name);
-  const documentId = crypto.randomUUID();
+  // Content hash: the same file always gets the same id, so re-importing it cannot create doubles.
+  const documentId = createHash("sha256").update(req.bytes).digest("hex").slice(0, 32);
   if (!detected) {
     return { status: 415, result: { status: "unavailable", fields: [],
       warnings: ["This file type is not supported. Upload a PDF, PNG, JPEG, CSV or TXT file, or enter the figures manually."] } };

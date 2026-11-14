@@ -3,10 +3,14 @@ import type { ExtractionResult } from "@/domain/contracts";
 
 type Evidence = ExtractionResult["fields"][number]["evidence"];
 
-export function evidenceFor(documentId: string, label: string, excerpt: string,
+/**
+ * Evidence with a DETERMINISTIC id: `documentId` is a content hash and `locator` the line/field,
+ * so importing the same document again yields the same evidence ids (idempotent apply, no doubles).
+ */
+export function evidenceFor(documentId: string, locator: string, label: string, excerpt: string,
   taxYear: 2026 | 2027 | undefined, page: number | undefined): Evidence {
   return {
-    id: `doc-${documentId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `doc-${documentId.slice(0, 16)}-${locator}`,
     kind: "document", label, documentId,
     ...(taxYear ? { taxYear } : {}),
     ...(page ? { page } : {}),

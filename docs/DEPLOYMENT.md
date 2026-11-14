@@ -16,7 +16,7 @@ The financial engine, browser-local storage and PDF export are implemented. Miss
 ## Supabase (optional cloud save)
 
 1. Create a project. **Authentication → Sign In / Providers → Anonymous sign-ins: on.** Keep email/OAuth UI unused; the app has none. Optionally enable CAPTCHA / the anonymous sign-in rate limit.
-2. Apply, in order (SQL editor or `supabase db push`): `202611140001_foundation.sql`, `202611140002_hardening.sql`, `202611150003_round2.sql` (revision history, `rules_updated` events, AI quota table/function).
+2. Apply, in order (SQL editor or `supabase db push`): `202611140001_foundation.sql`, `202611140002_hardening.sql`, `202611150003_round2.sql` (revision history, `rules_updated` events, AI quota table/function), `202611160004_workspaces.sql` (household workspaces v2: `workspaces` + `workspace_snapshots` for revisions and the original v1 plan).
 3. Vercel env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; optional server-only `SUPABASE_SECRET_KEY`.
 4. Verify once with two guests: `NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… node scripts/verify-rls.mjs`.
 

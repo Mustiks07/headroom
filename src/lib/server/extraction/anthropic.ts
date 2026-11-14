@@ -92,7 +92,7 @@ export async function extractWithAnthropic(media: ProviderMedia, documentId: str
     }
     const page = item.page && item.page >= 1 && item.page <= pageCount ? item.page : undefined;
     fields.push({ path: item.field, proposedValue,
-      evidence: evidenceFor(documentId, `${label}${page ? `, page ${page}` : ""}`, excerpt, taxYear, page) });
+      evidence: evidenceFor(documentId, `${item.field.replace(/\./g, "-")}-${fields.length + 1}`, `${label}${page ? `, page ${page}` : ""}`, excerpt, taxYear, page) });
   }
 
   if (dropped > 0) warnings.push(`${dropped} value(s) were left out because they could not be matched to printed text.`);
