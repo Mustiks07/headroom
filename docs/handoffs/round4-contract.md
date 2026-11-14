@@ -5,6 +5,8 @@ Claude 1 and Claude 2: `git fetch origin && git merge f99b5d3089379029d65bb17877
 
 **Additive follow-up: `7c6219df6a410652d9b5555daaa46bf0c66cfc6b`** — workspace event kinds `deal_planning_updated`, `deal_package_saved`, `deal_status_changed` (used when goals/terms/cash or a package are saved). Merging `f99b5d3` alone stays valid; take this one too before writing history entries for deal planning.
 
+**Clarification: `7884b1ab220a1c4c27fbe03f2d2596845c25f46b`** (comments only, no shape change): `terms.priceCents` and `price.minCents/maxCents` are the TOTAL asked project price including amounts already received; `terms.payments` are only the unpaid remainder, with Σ payments = priceCents − received. Claude 2's search must return variants that satisfy this; exports refuse variants that don't.
+
 Compatibility: v1 `CaseInput`/`SavedPlan` and workspace `2.0` are unchanged; `workspace.dealPlanning` is **optional**, so existing saves and JSON files stay valid. `canonicalWorkspaceContent` / `workspaceFingerprint` are unchanged (deal state has its own fingerprint). Money: integer cents. Dates: `YYYY-MM-DD`.
 
 ## Storage representation
