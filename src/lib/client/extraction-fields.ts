@@ -6,6 +6,7 @@
  *   income.<field>      → years[y].incomes[personId].<field>          (MoneyFact)
  *   coverage.<field>    → years[y].coverage[month].<field>             (MoneyFact, monthly)
  *   opportunity.<field> → opportunity.<field>
+ *   project.<field>     → an ACTUAL amount/date for a payment the user picks (household workspace v2)
  */
 export const EXTRACTION_FIELDS = {
   "income.scheduleCProfit": { kind: "money", label: "Business net profit (Schedule C)" },
@@ -25,6 +26,8 @@ export const EXTRACTION_FIELDS = {
   "opportunity.incrementalExpensesCents": { kind: "money", label: "Project expenses" },
   "opportunity.plannedReceiptDate": { kind: "date", label: "Expected payment date" },
   "opportunity.expensePaymentDate": { kind: "date", label: "Expense payment date" },
+  "project.paymentReceived": { kind: "money", label: "Payment actually received" },
+  "project.paymentReceivedDate": { kind: "date", label: "Date the payment was received" },
 } as const satisfies Record<string, { kind: "money" | "date" | "text"; label: string }>;
 
 export type ExtractionFieldPath = keyof typeof EXTRACTION_FIELDS;

@@ -4,6 +4,8 @@
  * Storage:   createPlanRepository(), getStorageMode(), clearLocalData(); CloudSaveFailedError → repo.saveLocally(plan)
  * Upgrade:   checkPlanCurrency(plan), previewPlanUpgrade(plan), confirmPlanUpgrade(repo, plan, preview, optionId)
  * Restore:   analyzePlanFile(text), planFromAnalysis(analysis, optionId)
+ * Workspace: createWorkspaceRepository(), commitWorkspaceChange(), newWorkspaceEvent(), applyDocumentFact(),
+ *            previewV1Migration(), confirmV1Migration(), analyzeWorkspaceFile(), exportWorkspaceJson(), exportForecastPdf()
  * Documents: extractDocument(file, { consentToProvider }), EXTRACTION_FIELDS
  * Export:    exportPlanPdf(plan), exportPlanJson(plan), exportCaseJson(input)
  * Service:   getCapabilities(), startCheckout(), verifyCheckout(), getLocalEntitlement(), trackEvent()
@@ -18,8 +20,16 @@ export type { RestoreAnalysis } from "./plan-restore";
 export { subscribeToLocalPlanChanges } from "./local-repository";
 export {
   extractDocument, exportPlanPdf, exportPlanJson, exportCaseJson, readCaseInputFromJson,
-  getCapabilities, startCheckout, verifyCheckout, getLocalEntitlement, trackEvent,
+  getCapabilities, startCheckout, verifyCheckout, getLocalEntitlement, trackEvent, exportForecastPdf,
 } from "./features";
+export {
+  createWorkspaceRepository, createLocalWorkspaceRepository, commitWorkspaceChange, newWorkspaceEvent, WorkspaceConflictError,
+} from "./workspace-repository";
+export type { WorkspaceRepository, HybridWorkspaceRepository, WorkspaceSaveOutcome } from "./workspace-repository";
+export { previewV1Migration, confirmV1Migration, analyzeWorkspaceFile, exportWorkspaceJson } from "./workspace-migration";
+export type { V1MigrationPreview, V1MigrationAnswers, V1MigrationQuestion, ExistingSepAnswer, WorkspaceFileAnalysis } from "./workspace-migration";
+export { applyDocumentFact } from "./workspace-facts";
+export type { FactTarget, ApplyFactResult } from "./workspace-facts";
 export type { Capabilities, CheckoutResult } from "./features";
 export { EXTRACTION_FIELDS, type ExtractionFieldPath, type ProposedFieldValue, type AmountPeriod } from "./extraction-fields";
 export { ANALYTICS_EVENTS, type AnalyticsEvent } from "./analytics-events";

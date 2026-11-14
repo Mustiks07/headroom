@@ -5,6 +5,7 @@
    - `migrations/202611140001_foundation.sql`
    - `migrations/202611140002_hardening.sql`
    - `migrations/202611150003_round2.sql` (plan revision history, `rules_updated` event kind, durable AI quota)
+   - `migrations/202611160004_workspaces.sql` (household workspaces v2, their revisions and original v1 snapshots)
 3. Set in Vercel (Production + Preview): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
    and optionally `SUPABASE_SECRET_KEY` (server only; used for the AI quota function, demo/test entitlements
    and deleting the anonymous user on "Clear my data").

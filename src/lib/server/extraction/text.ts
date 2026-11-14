@@ -23,6 +23,8 @@ const LABELS: Array<[RegExp, ExtractionFieldPath]> = [
   [/project\s+(name|title)|engagement\s+name/i, "opportunity.title"],
   [/(project|contract)\s+(fee|amount|price|total|value)|offer(ed)?\s+(amount|fee)/i, "opportunity.grossRevenueCents"],
   [/expense\s+(payment\s+)?date/i, "opportunity.expensePaymentDate"],
+  [/date\s+received|received\s+on|deposit(ed)?\s+(date|on)/i, "project.paymentReceivedDate"],
+  [/(payment|amount)\s+received|deposit(ed)?\s+amount|received\s+amount/i, "project.paymentReceived"],
   [/payment\s+(date|due|expected)|expected\s+payment|receipt\s+date|paid\s+on/i, "opportunity.plannedReceiptDate"],
   [/(project\s+)?expenses?|subcontract(or)?\s+cost/i, "opportunity.incrementalExpensesCents"],
 ];
@@ -125,7 +127,7 @@ export function extractFromText(text: string, documentId: string, rawLabel: stri
       proposedValue = { kind, text: textValue };
     }
     fields.push({ path, proposedValue,
-      evidence: evidenceFor(documentId, `${label}, line ${index + 1}`, redactExcerpt(line), taxYear, undefined) });
+      evidence: evidenceFor(documentId, `l${index + 1}`, `${label}, line ${index + 1}`, redactExcerpt(line), taxYear, undefined) });
   });
 
   const counts = new Map<string, number>();

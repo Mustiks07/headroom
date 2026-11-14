@@ -380,6 +380,26 @@ export function canonicalWorkspaceContent(ws: HouseholdWorkspace): unknown {
   };
 }
 
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value as object).sort()
+      .filter(k => (value as Record<string, unknown>)[k] !== undefined)
+      .map(k => [k, sortKeys((value as Record<string, unknown>)[k])]));
+  }
+  return value;
+}
+
+/**
+ * Reference workspace fingerprint: SHA-256 of key-sorted {content: canonicalWorkspaceContent,
+ * engineVersion, rulesVersion}. Record order, timestamps and history do not change it.
+ */
+export async function workspaceFingerprint(ws: HouseholdWorkspace, engineVersion: string, rulesVersion: string): Promise<string> {
+  const text = JSON.stringify(sortKeys({ content: canonicalWorkspaceContent(ws), engineVersion, rulesVersion }));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Append an event once: the same event id is never added twice (safe retries). */
 export function withEvent(ws: HouseholdWorkspace, event: WorkspaceEvent): HouseholdWorkspace {
   return ws.events.some(e => e.id === event.id) ? ws : { ...ws, events: [...ws.events, event].slice(-500) };
@@ -387,7 +407,7 @@ export function withEvent(ws: HouseholdWorkspace, event: WorkspaceEvent): Househ
 
 /* ------------------------------------------------------------------ v1 adapter */
 
-const centsText = (c: number) => `${c < 0 ? "-" : ""}USD ${(Math.abs(c) / 100).toFixed(2)}`;
+const centsText = (c: number) => `${c < 0 ? "-" : ""}$${(Math.abs(c) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const DERIVED_PROFIT_SOURCE = "derived-profit";
 export const DERIVED_SEP_SOURCE = "derived-sep";

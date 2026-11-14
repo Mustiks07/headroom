@@ -39,6 +39,7 @@ async function startServer() {
 
 (async () => {
   const { base, stop } = await startServer();
+  // CHROMIUM_PATH lets a machine with a preinstalled browser run the pinned Playwright without downloading one.
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const errors = [];
   try {

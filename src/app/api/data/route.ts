@@ -2,7 +2,7 @@ import { handle, json } from "@/lib/server/http";
 import { dbFailure, privilegedClient, requireOwner } from "@/lib/server/supabase";
 
 /**
- * "Clear my data" for the cloud mode. Deletes the caller's plans (events and linked sources
+ * "Clear my data" for the cloud mode. Deletes the caller's plans, household workspaces (snapshots cascade), (events and linked sources
  * cascade) and remaining source metadata through RLS. With a server secret configured it also
  * deletes demo/test entitlements and the anonymous auth user itself.
  */
@@ -10,6 +10,8 @@ export const DELETE = handle(async (request: Request) => {
   const owner = await requireOwner(request);
   const plans = await owner.db.from("plans").delete().eq("owner_id", owner.userId);
   if (plans.error) dbFailure(plans.error);
+  const workspaces = await owner.db.from("workspaces").delete().eq("owner_id", owner.userId);
+  if (workspaces.error) dbFailure(workspaces.error);
   const sources = await owner.db.from("document_sources").delete().eq("owner_id", owner.userId);
   if (sources.error) dbFailure(sources.error);
 
@@ -21,5 +23,5 @@ export const DELETE = handle(async (request: Request) => {
     const removed = await admin.auth.admin.deleteUser(owner.userId);
     guestSessionDeleted = !removed.error;
   }
-  return json({ deleted: { plans: true, events: true, documentSources: true, guestSession: guestSessionDeleted } });
+  return json({ deleted: { plans: true, workspaces: true, events: true, documentSources: true, guestSession: guestSessionDeleted } });
 });
