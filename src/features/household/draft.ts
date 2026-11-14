@@ -1,4 +1,5 @@
-import { CaseInputSchema, CONTRACT_VERSION, type CaseInput, type MoneyFact } from "@/domain/contracts";
+import { CaseInputSchema, CONTRACT_VERSION, type CaseInput, type MoneyFact, type TaxYear } from "@/domain/contracts";
+import { ProfitForecastSchema, forecastTotal, type ProfitForecast } from "@/domain/household-workspace";
 
 /**
  * UI editing model. It mirrors the shared CaseInput but lets the few
@@ -22,10 +23,14 @@ export interface Draft extends Omit<CaseInput, "state" | "filingStatus" | "peopl
     projectStarted: boolean;
     /** Text the person typed that isn't a valid amount yet. Blocks calculation until fixed. */
     invalid?: Record<string, { text: string; message: string; low?: string; high?: string }>;
+    /** How each person's business profit is built (shared ProfitForecast shape). scheduleCProfit is derived from it. */
+    forecasts?: ProfitForecast[];
   };
 }
 
 export const MANUAL_SOURCE_ID = "manual-entry";
+export const FORECAST_SOURCE_ID = "derived-forecast";
+export const FORECAST_EVIDENCE = { id: FORECAST_SOURCE_ID, kind: "manual" as const, label: "Business profit built from your forecast" };
 export const MANUAL_EVIDENCE: Evidence = { id: MANUAL_SOURCE_ID, kind: "manual", label: "Entered by you in Headroom" };
 export const CURRENT_FORECAST_TITLE = "Current forecast (no new project)";
 
@@ -77,7 +82,11 @@ export function blankDraft(): Draft {
 export function draftFromCase(input: CaseInput): Draft {
   const copy = structuredClone(input);
   const evidence = copy.evidence.some(e => e.id === MANUAL_SOURCE_ID) ? copy.evidence : [...copy.evidence, MANUAL_EVIDENCE];
-  return { ...copy, evidence, ui: { projectStarted: copy.opportunity.title !== CURRENT_FORECAST_TITLE } };
+  const projectStarted = copy.opportunity.title !== CURRENT_FORECAST_TITLE;
+  // Sample households state their profit WITHOUT the offered project; own files keep the question open.
+  const forecasts: ProfitForecast[] = copy.years.flatMap(y => y.incomes.filter(r => r.scheduleCProfit.status !== "unknown").map(r => ({
+    method: "annual_total" as const, personId: r.personId, year: y.year, excludesManagedProjects: copy.isSynthetic ? true : null, annualNetProfit: r.scheduleCProfit })));
+  return { ...copy, evidence, ui: { projectStarted, ...(forecasts.length ? { forecasts } : {}) } };
 }
 
 export interface Problem { path: string; reason: string }
@@ -102,6 +111,13 @@ export function buildCaseInput(draft: Draft, purpose: "risk" | "comparison"): Bu
     if (!draft.ui.projectStarted || o.grossRevenueCents <= 0) problems.push({ path: "opportunity.grossRevenueCents", reason: "Enter what the client will pay for the project." });
     if (!isIsoDate(o.plannedReceiptDate)) problems.push({ path: "opportunity.plannedReceiptDate", reason: "Enter when you expect to receive the payment." });
     if (!isIsoDate(o.expensePaymentDate)) problems.push({ path: "opportunity.expensePaymentDate", reason: "Enter when you will pay the project costs." });
+    for (const f of draft.ui.forecasts ?? []) {
+      if (f.personId === o.ownerPersonId && f.excludesManagedProjects !== true) {
+        const yi = draft.years.findIndex(y => y.year === f.year);
+        const ri = draft.years[yi]?.incomes.findIndex(r => r.personId === f.personId) ?? -1;
+        problems.push({ path: `years.${yi}.incomes.${ri}.scheduleCProfit`, reason: `Confirm that the ${f.year} profit forecast leaves out “${o.title}”, so it isn't counted twice.` });
+      }
+    }
   }
   if (problems.length) return { ok: false, problems };
   const { ui: _ui, ...rest } = draft;
@@ -125,7 +141,10 @@ export function pruneInvalid(draft: Draft, prefix?: string) {
   if (!inv) return;
   for (const key of Object.keys(inv)) {
     const base = key.replace(/#.*$/, "");
-    if ((prefix && (base === prefix || base.startsWith(`${prefix}.`))) || getAt(draft, base) === undefined) delete inv[key];
+    if (prefix && (base === prefix || base.startsWith(`${prefix}.`))) { delete inv[key]; continue; }
+    // Forecast fields are addressed as ui.forecasts.<personId>.<year>.<field>; keep them while the person exists.
+    const fc = /^ui\.forecasts\.([^.]+)\./.exec(base);
+    if (fc ? !draft.people.some(p => p.id === fc[1]) : getAt(draft, base) === undefined) delete inv[key];
   }
 }
 
@@ -147,7 +166,8 @@ export function restoreDraft(raw: unknown): Draft | null {
   const invalid = d.ui.invalid && typeof d.ui.invalid === "object" ? Object.fromEntries(Object.entries(d.ui.invalid)
     .filter(([, v]) => v && typeof v.text === "string" && typeof v.message === "string"
       && (v.low === undefined || typeof v.low === "string") && (v.high === undefined || typeof v.high === "string"))) : undefined;
-  return { ...d, ui: { projectStarted: d.ui.projectStarted, ...(invalid && Object.keys(invalid).length ? { invalid } : {}) } };
+  const forecasts = Array.isArray(d.ui.forecasts) ? d.ui.forecasts.filter(f => ProfitForecastSchema.safeParse(f).success) : undefined;
+  return { ...d, ui: { projectStarted: d.ui.projectStarted, ...(invalid && Object.keys(invalid).length ? { invalid } : {}), ...(forecasts?.length ? { forecasts } : {}) } };
 }
 
 function isIsoDate(value: string) { return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)); }
@@ -182,6 +202,27 @@ export function syncHousehold(draft: Draft) {
     if (year.coveredPersonIds.length === 0) year.coveredPersonIds = ["primary"];
   }
   if (!ids.has(draft.opportunity.ownerPersonId)) draft.opportunity.ownerPersonId = "primary";
+}
+
+/* ---------- Business-profit forecasts ---------- */
+
+/** The person/year forecast, or a whole-year forecast seeded from the current profit fact (not stored until edited). */
+export function forecastFor(draft: Pick<Draft, "ui" | "years">, personId: string, year: TaxYear): ProfitForecast {
+  const found = draft.ui.forecasts?.find(f => f.personId === personId && f.year === year);
+  if (found) return found;
+  const row = draft.years.find(y => y.year === year)?.incomes.find(r => r.personId === personId);
+  const fact = row?.scheduleCProfit ?? { valueCents: null, status: "unknown" as const, sourceId: MANUAL_SOURCE_ID };
+  return { method: "annual_total", personId, year, excludesManagedProjects: null,
+    annualNetProfit: fact.sourceId === FORECAST_SOURCE_ID ? { ...fact, sourceId: MANUAL_SOURCE_ID } : fact };
+}
+
+/** Stores the forecast and derives scheduleCProfit from it with the shared contract helper. */
+export function setForecastInDraft(d: Draft, f: ProfitForecast) {
+  const list = (d.ui.forecasts ?? []).filter(x => !(x.personId === f.personId && x.year === f.year));
+  d.ui.forecasts = [...list, f];
+  if (!d.evidence.some(e => e.id === FORECAST_SOURCE_ID)) d.evidence.push(FORECAST_EVIDENCE);
+  const row = d.years.find(y => y.year === f.year)?.incomes.find(r => r.personId === f.personId);
+  if (row) row.scheduleCProfit = forecastTotal(f, FORECAST_SOURCE_ID);
 }
 
 /* ---------- Paths ---------- */

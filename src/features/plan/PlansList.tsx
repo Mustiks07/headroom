@@ -80,6 +80,7 @@ export function PlansList({ deleted }: { deleted: boolean }) {
   return <div className="shell page-pad">
     <p className="eyebrow">My plans</p>
     <h1 className="page-title">Your saved plans</h1>
+    <p className="small">Looking for your household plan with several projects and payments? <Link className="text-link" href="/household">Household plans</Link>.</p>
     <p className="muted">{mode === "cloud" ? "Plans are kept in a private guest session for this browser." : mode === "local" ? "Plans are kept in this browser." : "Plans are saved for this browser."} They aren&apos;t synced to other devices — download a plan&apos;s JSON file to move it.</p>
     {notice && <p className="notice" role="status">{notice}</p>}
     {cloudProblem && <p className="notice warn" role="status">{cloudProblem}</p>}

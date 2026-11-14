@@ -5,9 +5,10 @@ import { Plus, Trash2 } from "lucide-react";
 import type { MoneyFact } from "@/domain/contracts";
 import { MoneyField, TriState } from "@/components/MoneyField";
 import { MONTHS } from "@/features/format";
+import { ForecastEditor } from "@/features/household-plan/ForecastEditor";
 import {
   INTEREST_FIELDS, SCOPE_EXCLUSIONS, SUPPORTED_STATES, US_STATES, WAGE_FIELDS, adults, confirmedZero, fieldId,
-  personName, pruneInvalid, syncHousehold, unknownFact, type Draft, type FilingStatus, type IncomeField,
+  forecastFor, personName, pruneInvalid, setForecastInDraft, syncHousehold, unknownFact, type Draft, type FilingStatus, type IncomeField,
 } from "./draft";
 
 export type Update = (mutate: (draft: Draft) => void) => void;
@@ -143,7 +144,11 @@ export function IncomeEditor({ draft, update, problemAt, yearIndex, personId }: 
 
   return <div className="income-card">
     <h4>{name}</h4>
-    {field("scheduleCProfit", "Business profit (Schedule C)", "No business")}
+    <ForecastEditor forecast={forecastFor(draft, personId, draft.years[yearIndex].year)} year={draft.years[yearIndex].year} personLabel={name} evidence={draft.evidence}
+      pathBase={`ui.forecasts.${personId}.${draft.years[yearIndex].year}`} idAnchor={`${base}.scheduleCProfit`}
+      problemAt={path => problemAt(path) ?? (path.endsWith("excludesManagedProjects") || path.endsWith("annualNetProfit") || path.endsWith("ytdNetProfit") ? problemAt(`${base}.scheduleCProfit`) : undefined)}
+      managedProjects={draft.ui.projectStarted && draft.opportunity.ownerPersonId === personId ? [draft.opportunity.title] : []}
+      onChange={f => update(d => setForecastInDraft(d, f))} />
 
     <div className="subgroup">
       <div className="subgroup-head">
