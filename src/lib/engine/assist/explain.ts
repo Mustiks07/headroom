@@ -283,8 +283,10 @@ async function dealPacket(ws: HouseholdWorkspace, goal: DealGoal, variant: DealV
     }
   }
   // What if the client refuses?
-  if (off) answers.push({ question: "client_refuses", status: "answered", missing: null, statements: [
-    `If the client keeps the original terms (${p.money("offered_price", "Offered total price", ex.offeredPriceCents)} as offered), the change compared with ${base} is ${p.money("offered_cash", "Cash change with the offer as it stands", off.cashDeltaCents)}. If the project does not go ahead, your plan stays as it is without it.`] });
+  const agreedProject = ws.projects.find(x => x.id === goal.projectId)?.status === "agreed";
+  if (off) answers.push({ question: "client_refuses", status: "answered", missing: null, statements: [agreedProject
+    ? `If the client keeps the agreed terms (${p.money("offered_price", "Agreed total price", ex.offeredPriceCents)}), the change compared with ${base} is ${p.money("offered_cash", "Cash change with the agreed terms", off.cashDeltaCents)}. Ending the agreement is not compared here: refunds, costs or obligations are not known.`
+    : `If the client keeps the original terms (${p.money("offered_price", "Offered total price", ex.offeredPriceCents)} as offered), the change compared with ${base} is ${p.money("offered_cash", "Cash change with the offer as it stands", off.cashDeltaCents)}. If the project does not go ahead, your plan stays as it is without it.`] });
   else answers.push({ question: "client_refuses", status: "unresolved", statements: [], missing: "The offer as it stands cannot be calculated in the supported range." });
   // What would change the answer?
   const sens = await evaluateDecisionSensitivity(ws, goal, variant, fp);

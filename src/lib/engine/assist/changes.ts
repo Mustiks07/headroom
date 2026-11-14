@@ -348,7 +348,15 @@ async function agreedMeets(ws: HouseholdWorkspace, projectId: string): Promise<{
  * Preview a proposal on a copy of the workspace. Nothing is saved. `userDate` is the user's calendar
  * date (their time zone); without it the proposal's creation date (UTC) is used and noted.
  */
-export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeProposal, opts: { userDate?: string; now?: string } = {}): Promise<EngineChangePreview | BlockedComparison> {
+export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeProposal, opts: {
+  userDate?: string; now?: string;
+  /**
+   * The function that will save the confirmed proposal (Claude 3's `applyChangeProposal`). When given, the
+   * after-state figures come from it, so the preview shows exactly what will be saved; this module still supplies
+   * the business validation (blockers, notes, before/after lines). Without it, `validateAndApply` is used.
+   */
+  apply?: (ws: HouseholdWorkspace, proposal: ChangeProposal) => Promise<{ workspace: HouseholdWorkspace }>;
+} = {}): Promise<EngineChangePreview | BlockedComparison> {
   const pr = ChangeProposalSchema.safeParse(proposalRaw);
   if (!pr.success) return { status: "needs_data", code: "INVALID_REQUEST", message: "The proposed change is not valid.", fields: pr.error.issues.map(i => ({ path: `proposal.${i.path.join(".")}`, reason: i.message })) };
   const proposal = pr.data;
@@ -372,6 +380,10 @@ export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeP
     if (mine && mine !== rd.date) blockers.push({ path: "resolvedDates", reason: `"${rd.phrase}" is ${mine} from ${userDate}, not ${rd.date}. Check the date.` });
   }
 
+  if (opts.apply && !blockers.length) {
+    try { applied.workspace = (await opts.apply(parsedWs.data, proposal)).workspace; }
+    catch (e) { blockers.push({ path: "proposal", reason: `This change cannot be saved: ${e instanceof Error ? e.message : String(e)}` }); }
+  }
   const before = await summary(parsedWs.data);
   const after = blockers.length ? null : await summary(applied.workspace);
   const yearsBefore = before.years ?? [], yearsAfter = after?.years ?? [];

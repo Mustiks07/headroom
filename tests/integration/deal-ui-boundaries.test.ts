@@ -32,7 +32,9 @@ it("new terms cannot backdate payments, and a January search has no inverted Dec
 });
 
 it("agreement uses fresh terms once; a retry after payment preserves facts and the SEP target", async () => {
-  const ws = dealWorkspace(), { goal, space } = deal();
+  // Offer-only terms with an allowed extra SEP: the search returns an option that adds SEP (round 5 selection policy
+  // gives the third slot of the default example to the sturdier option instead).
+  const ws = dealWorkspace(), { goal, space } = deal({ newTerms: null, minCash: -5000 });
   ws.dealPlanning = { ...emptyDealPlanning(), goals: [goal], termSpaces: [space] };
   const result = await searchDealTerms(ws, goal, space, null);
   if (result.status !== "ready") throw new Error(result.status);
