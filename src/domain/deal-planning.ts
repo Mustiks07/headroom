@@ -14,6 +14,7 @@ import { z } from "zod";
 import { CentsSchema, TaxYearSchema, type BlockedComparison, type TaxYear } from "./contracts";
 import type { HouseholdWorkspace } from "./household-workspace";
 import { DecisionRecordSchema, IssuedCalendarEventSchema } from "./assistance";
+import { DecisionContextSchema, VariantComparisonsSchema, VariantRobustnessSchema } from "./decision-context";
 
 export const DEAL_PLANNING_VERSION = "1.0" as const;
 
@@ -182,6 +183,10 @@ export const DealVariantSchema = z.object({
   differenceFromBestCents: CentsSchema,
   /** The variant was re-checked with the existing exact year calculation. */
   verifiedExact: z.boolean(),
+  /** Round 5 (additive, engine output kept when stored): the same option against both baselines. */
+  comparisons: VariantComparisonsSchema.optional(),
+  /** Round 5 (additive): whether the option holds across declared ranges / the room policy. */
+  robustness: VariantRobustnessSchema.optional(),
 });
 
 export interface DealSearchMeta {
@@ -273,6 +278,8 @@ export const ActionPackageSchema = z.object({
   specialistNote: z.string().max(5000).nullable(),
   /** Only the user moves this forward; "client_agreed" requires the user's explicit confirmation. */
   status: z.enum(["draft", "terms_shared_by_user", "client_agreed", "superseded"]),
+  /** Round 5 (additive): baseline, horizon, the other calculated options and the recommendation reasons at choice time. */
+  decisionContext: DecisionContextSchema.optional(),
 });
 
 export const DealPlanningStateSchema = z.object({

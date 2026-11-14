@@ -59,3 +59,14 @@ All errors: `{ error: { code, message, fields? } }` with the codes above; AI fai
 ## Fixtures (`src/fixtures/assistance.ts`, synthetic)
 
 `sampleDocuments` (P&L through Sep 30, 2026; client offer; payment confirmation), `extractedFactsFixture`, `importDraftFixture`, `changeProposalFixture` ("The remaining payment moved to January 8, 2027" → `update_expected_payment` of `proj-a/a-pay-2`), `explanationPacketFixture` (shape only).
+
+## Follow-up contract (additive, research addendum)
+
+Small commit after `97b608c`; optional fields only, so every earlier save stays valid and fingerprints don't change.
+
+- `src/domain/decision-context.ts`: `OriginalOfferSchema` (price incl. deposit, offered payments, source kind/id, `user_confirmed | captured`, recordedAt), `DecisionContextSchema` (baseline, horizon, ≤ 3 alternatives with engine `comparisons`/`holds`, chosen/recommended flags, `recommendedVariantId`, deterministic `recommendationReasons`, copy of the original offer), `VariantComparisonsSchema`, `VariantRobustnessSchema`.
+- `Project.originalOffer?` — set once (new offer command, or captured from the project lines at the first agreement for pre-round-5 data); agreed terms, chosen variants and the searched maximum price never overwrite it. Excluded from `canonicalWorkspaceContent`.
+- `DealVariant.comparisons?` / `.robustness?` — the engine's existing extra fields now survive storage in a package.
+- `ActionPackage.decisionContext?` (filled by `buildActionPackage` from the ready search) and `DecisionRecord.decisionContext?` (copied at agreement).
+- `ExplainWorkspaceBodySchema` `{workspace, subject, refId?, consentToProvider}` — the server rebuilds the packet with `buildExplanationPacket`; `ExplainResponse.verification?` `{origin: server_recomputed | client_packet_unverified, workspaceId, workspaceRevision, fingerprint, engineVersion, rulesVersion, note}`. The legacy `{packet}` body still works and is labelled `client_packet_unverified`.
+- `src/domain/insurance.ts`: `LocationLookup` (`single | ambiguous | not_available`, counties with `planDataYears`), `BenchmarkLookup` (`confirmed | county_candidate | not_available`, mirrors Claude 2's `resolveBenchmark`), `InsuranceSourceSchema` (kind, url, sha256, dataVersion, sourceDate), `BenchmarkLookupBodySchema`, `LocationQuerySchema`. Routes: `GET /api/insurance/location?zip=…|?state=..&q=…`, `POST /api/insurance/benchmark {workspace, year}`.
