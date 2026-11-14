@@ -207,6 +207,28 @@ export async function proposeChange(request: import("@/domain/assistance").Assis
 }
 
 /** Explain a verified engine packet; deterministic unless the user consents and the provider is enabled. */
+/**
+ * Explanation rebuilt by the SERVER from this exact plan revision (verification.origin "server_recomputed").
+ * Prefer this over explainResult(packet), whose figures the server cannot re-check.
+ */
+export async function explainWorkspace(workspace: import("@/domain/household-workspace").HouseholdWorkspace, subject: (typeof import("@/domain/assistance").EXPLAIN_SUBJECTS)[number],
+  refId?: string, options: { consentToProvider?: boolean } = {}): Promise<import("@/domain/assistance").ExplainResponse> {
+  return readJson(await apiFetch("/api/assist/explain", { method: "POST", timeoutMs: 25_000, headers: { "Content-Type": "application/json" },
+    token: options.consentToProvider ? await cloudToken() : undefined, body: JSON.stringify({ workspace, subject, refId, consentToProvider: !!options.consentToProvider }) }));
+}
+
+/** Insurance: county candidates for a ZIP (official Marketplace API when configured) or a state + county name. */
+export async function lookupLocation(query: { zip: string } | { state: string; q: string }): Promise<import("@/domain/insurance").LocationLookup> {
+  const qs = new URLSearchParams("zip" in query ? { zip: query.zip } : { state: query.state, q: query.q });
+  return readJson(await apiFetch(`/api/insurance/location?${qs}`, { method: "GET", timeoutMs: 10_000 }));
+}
+
+/** Insurance: benchmark for a plan year — confirmed (your notice), county candidate (CMS extract) or not available. */
+export async function lookupBenchmark(workspace: import("@/domain/household-workspace").HouseholdWorkspace, year: 2026 | 2027): Promise<import("@/domain/insurance").BenchmarkLookup> {
+  return readJson(await apiFetch("/api/insurance/benchmark", { method: "POST", timeoutMs: 15_000, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace, year }) }));
+}
+
+/** Legacy: a browser-built packet. The response is labelled "client_packet_unverified". */
 export async function explainResult(packet: import("@/domain/assistance").ExplanationPacket, options: { consentToProvider?: boolean } = {}): Promise<import("@/domain/assistance").ExplainResponse> {
   return readJson(await apiFetch("/api/assist/explain", { method: "POST", timeoutMs: 25_000, headers: { "Content-Type": "application/json" },
     token: options.consentToProvider ? await cloudToken() : undefined, body: JSON.stringify({ packet, consentToProvider: !!options.consentToProvider }) }));

@@ -1,6 +1,8 @@
 import type { IssuedCalendarEvent } from "@/domain/assistance";
 import type { ActionPackage, DealVariant, ReadyDealSearch, Reminder } from "@/domain/deal-planning";
 import { sepPosition, type HouseholdWorkspace } from "@/domain/household-workspace";
+import type { DecisionContext } from "@/domain/decision-context";
+import { originalOfferFromLines } from "./workspace-commands";
 
 /**
  * Deterministic builders for the action package (round 4). No money is calculated here: every
@@ -113,6 +115,45 @@ export function termsAddUp(ws: HouseholdWorkspace, projectId: string, variant: D
   return variant.terms.payments.reduce((t, p) => t + p.amountCents, 0) === variant.terms.priceCents - received;
 }
 
+const PURPOSE_REASON: Record<DealVariant["purpose"], string> = {
+  simplest: "The smallest change to the offered terms that meets your goal.",
+  as_offered: "The offer as it stands already meets your goal.",
+  most_cash: "The most cash among the calculated options; it needs the client to agree to the changed terms.",
+  earliest_money: "Gets the money to you earliest among the calculated options.",
+  most_retirement: "Adds the most to retirement savings among the calculated options.",
+  lowest_risk: "Leaves the most room before a premium tax credit is lost.",
+};
+
+/**
+ * What the choice was compared with: baseline, horizon, the calculated options with the engine's own
+ * comparisons, and deterministic recommendation reasons (engine purpose + engine warnings). Copies
+ * engine figures; computes nothing.
+ */
+function originalOfferOf(ws: HouseholdWorkspace, projectId: string) {
+  const project = ws.projects.find(p => p.id === projectId);
+  if (!project) return null;
+  return project.originalOffer ?? originalOfferFromLines(project, ws.updatedAt, { kind: "existing_project", sourceId: null }, "captured");
+}
+
+export function buildDecisionContext(ws: HouseholdWorkspace, result: ReadyDealSearch, chosenVariantId: string): DecisionContext {
+  const clip = (t: string) => (t.length <= 400 ? t : `${t.slice(0, 399)}…`);
+  const recommended = result.variants.find(v => v.id === result.recommendedVariantId) ?? null;
+  const reasons: string[] = [];
+  if (recommended) reasons.push(`Recommended: ${PURPOSE_REASON[recommended.purpose]}`);
+  if (recommended && recommended.id !== chosenVariantId) reasons.push("You chose a different calculated option than the recommended one.");
+  reasons.push(...result.warnings.map(clip));
+  return {
+    baseline: { kind: result.baseline.kind, label: result.baseline.label.slice(0, 200), description: result.baseline.description.slice(0, 600) },
+    horizon: { ...result.horizon },
+    alternatives: result.variants.slice(0, 3).map(v => ({ variantId: v.id, label: v.label.slice(0, 200), purpose: v.purpose, priceCents: v.terms.priceCents,
+      twoYearCashDeltaCents: v.twoYearCashDeltaCents, comparisons: v.comparisons ?? null, holds: v.robustness?.holds ?? null,
+      chosen: v.id === chosenVariantId, recommended: v.id === result.recommendedVariantId })),
+    recommendedVariantId: result.recommendedVariantId,
+    recommendationReasons: reasons.slice(0, 8),
+    originalOffer: originalOfferOf(ws, result.projectId),
+  };
+}
+
 export function buildActionPackage(ws: HouseholdWorkspace, result: ReadyDealSearch, variantId: string,
   options: { includeHouseholdDetails?: boolean; now?: Date; id?: string } = {}): ActionPackage {
   const variant = result.variants.find(v => v.id === variantId);
@@ -133,6 +174,7 @@ export function buildActionPackage(ws: HouseholdWorkspace, result: ReadyDealSear
     reminders: buildReminders(ws, result.projectId, variant),
     specialistNote: buildSpecialistNote(ws, result, variant),
     status: "draft",
+    decisionContext: buildDecisionContext(ws, result, variant.id),
   };
 }
 

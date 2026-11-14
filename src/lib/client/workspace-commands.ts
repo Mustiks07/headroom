@@ -1,8 +1,9 @@
 import type { ChangeCommand, ChangeProposal } from "@/domain/assistance";
 import { emptyDealPlanning } from "@/domain/deal-planning";
 import {
-  captureSepBudgetContributions, HouseholdWorkspaceSchema, withEvent, type HouseholdWorkspace, type ProjectLine, type WorkspaceEvent,
+  captureSepBudgetContributions, HouseholdWorkspaceSchema, withEvent, type HouseholdWorkspace, type Project, type ProjectLine, type WorkspaceEvent,
 } from "@/domain/household-workspace";
+import type { OriginalOffer } from "@/domain/decision-context";
 import { engineWorkspaceFingerprint } from "@/lib/engine";
 import { HeadroomError } from "./errors";
 
@@ -31,7 +32,32 @@ function line(ws: HouseholdWorkspace, projectId: string, lineId: string): { titl
 }
 
 /** Apply one command to a CLONE; returns the event description and refs. Throws CommandError when not applicable. */
-export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { idBase: string; sourceId: string; at: string }): { description: string; kind: WorkspaceEvent["kind"]; refs: WorkspaceEvent["refs"] } {
+/**
+ * The client's offer as it stands in the project lines (price incl. received + still expected).
+ * Used once per project: at creation from a confirmed offer, or captured at the first agreement
+ * for projects saved before round 5. Never overwritten afterwards.
+ */
+export function originalOfferFromLines(project: Project, at: string, source: OriginalOffer["source"], confirmation: OriginalOffer["confirmation"]): OriginalOffer | null {
+  const lines = project.receipts.filter(l => !l.cancelledAt || l.actual);
+  const payments = lines.map(l => l.actual ? { amountCents: l.actual.amountCents, date: l.actual.date } : l.expected ? { amountCents: l.expected.amountCents, date: l.expected.date } : null)
+    .filter((x): x is { amountCents: number; date: string } => x !== null && x.amountCents > 0)
+    .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 10);
+  if (!payments.length) return null;
+  return { priceCents: payments.reduce((t, p) => t + p.amountCents, 0), payments, source, confirmation, recordedAt: at };
+}
+
+/** Keep the first known offer of a project (no-op when it is already set). Returns true if it was set now. */
+export function ensureOriginalOffer(ws: HouseholdWorkspace, projectId: string, at: string, source: OriginalOffer["source"] = { kind: "existing_project", sourceId: null },
+  confirmation: OriginalOffer["confirmation"] = "captured", from?: Project): boolean {
+  const project = ws.projects.find(p => p.id === projectId);
+  if (!project || project.originalOffer) return false;
+  const offer = originalOfferFromLines(from ?? project, at, source, confirmation);
+  if (!offer) return false;
+  project.originalOffer = offer;
+  return true;
+}
+
+export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { idBase: string; sourceId: string; at: string; origin?: "user_entered" | "document" | "assistant_text" }): { description: string; kind: WorkspaceEvent["kind"]; refs: WorkspaceEvent["refs"] } {
   switch (cmd.type) {
     case "update_expected_payment": {
       const { title, l } = line(ws, cmd.projectId, cmd.lineId);
@@ -106,6 +132,7 @@ export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { 
         terms: { canSplitPayment: cmd.scheduleNegotiable ?? false, canRenegotiatePrice: cmd.priceNegotiable ?? false, nextYearPaymentLatestDate: null },
         receipts: [...cmd.received.map((r, i) => mk("r", r, i, true)), ...cmd.unpaid.map((r, i) => mk("u", r, i, false))],
         expenses: cmd.expenses.map((r, i) => mk("e", r, i, false)), agreedDecision: null });
+      ensureOriginalOffer(ws, id, ctx.at, { kind: ctx.origin ?? "user_entered", sourceId: ctx.sourceId }, "user_confirmed");
       return { kind: "project_added", refs: { projectId: id }, description: `Added the offer “${cmd.title}” (${dollars(received + unpaid)} total).` };
     }
     case "change_goal": {
@@ -162,7 +189,7 @@ export async function applyChangeProposal(ws: HouseholdWorkspace, proposal: Chan
     `${proposal.provenance === "ai_model" ? "Proposed by the assistant from" : "From"} your message${excerpt ? `: “${excerpt.slice(0, 120)}”` : ""} (confirmed ${at.slice(0, 10)})`);
   const events: WorkspaceEvent[] = [];
   proposal.commands.forEach((cmd, i) => {
-    const r = applyCommand(next, cmd, { idBase: `${proposal.id}-${i}`, sourceId, at });
+    const r = applyCommand(next, cmd, { idBase: `${proposal.id}-${i}`, sourceId, at, origin: proposal.provenance === "manual" ? "user_entered" : "assistant_text" });
     const event: WorkspaceEvent = { id: already[i], at, kind: r.kind, description: r.description.slice(0, 500), refs: r.refs, previousFingerprint: proposal.base.fingerprint, nextFingerprint: null };
     next = withEvent(next, event);
     events.push(event);
