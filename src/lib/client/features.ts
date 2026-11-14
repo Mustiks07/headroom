@@ -166,3 +166,29 @@ export async function exportForecastPdf(workspace: import("@/domain/household-wo
   }
   return response.blob();
 }
+
+async function postPackageExport(path: string, workspace: unknown, packageId: string): Promise<Blob> {
+  const response = await apiFetch(path, { method: "POST", timeoutMs: 40_000, headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace, packageId }) });
+  if (!response.ok) {
+    const error = await errorFromResponse(response);
+    if ([400, 404, 409].includes(response.status)) throw new PlanIntegrityError(error.code, error.message);
+    throw error;
+  }
+  return response.blob();
+}
+
+/** Decision package PDF (round 4). Refused when the package is stale; figures re-checked by the engine on the server. */
+export function exportDecisionPdf(workspace: import("@/domain/household-workspace").HouseholdWorkspace, packageId: string): Promise<Blob> {
+  return postPackageExport("/api/export/decision", workspace, packageId);
+}
+
+/** iCalendar (.ics) of the package's open dated actions; stable UIDs so re-imports update, not duplicate. */
+export function exportCalendarIcs(workspace: import("@/domain/household-workspace").HouseholdWorkspace, packageId: string): Promise<Blob> {
+  return postPackageExport("/api/export/calendar", workspace, packageId);
+}
+
+/** Plain-text download of the client draft (the user sends it themselves). */
+export function clientDraftFile(draft: { subject: string; body: string }): Blob {
+  return new Blob([`Subject: ${draft.subject}\n\n${draft.body}\n`], { type: "text/plain;charset=utf-8" });
+}

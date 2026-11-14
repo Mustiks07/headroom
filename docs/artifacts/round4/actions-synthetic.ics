@@ -1,0 +1,61 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Headroom//Plan actions 1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Headroom – December design project
+BEGIN:VEVENT
+UID:ws-family-demo.proj-b.send-terms@headroom.plan
+DTSTAMP:20261114T205251Z
+DTSTART;VALUE=DATE:20261120
+DTEND;VALUE=DATE:20261121
+SEQUENCE:0
+SUMMARY:Send the proposed terms to the client\, if you agree with them
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation e55ff0e3fd5d). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Send the proposed terms to the client\, if you agree with them
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ws-family-demo.proj-b.invoice-1@headroom.plan
+DTSTAMP:20261114T205251Z
+DTSTART;VALUE=DATE:20261201
+DTEND;VALUE=DATE:20261202
+SEQUENCE:0
+SUMMARY:Invoice the first payment\; ask for payment by Dec 20\, 2026
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation e55ff0e3fd5d). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Invoice the first payment\; ask for payment by Dec 20\, 2026
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:ws-family-demo.proj-b.receive-2@headroom.plan
+DTSTAMP:20261114T205251Z
+DTSTART;VALUE=DATE:20270105
+DTEND;VALUE=DATE:20270106
+SEQUENCE:0
+SUMMARY:Confirm the second payment arrived on or after Jan 4\, 2027
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation e55ff0e3fd5d). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Confirm the second payment arrived on or after Jan 4\, 2027
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+END:VCALENDAR

@@ -49,3 +49,20 @@ Minimal production env: none (guest/local mode). Recommended: `NEXT_PUBLIC_APP_U
 Check the exact deployed commit against `ACCEPTANCE.md`. Add the verified URL and actual deck path to README only when they exist. Do not label an integration enabled merely because environment variable names were added.
 
 Official implementation references: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [Next.js on Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs), [Supabase anonymous auth](https://supabase.com/docs/guides/auth/auth-anonymous), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+## Release checklist (exact steps; round 4)
+
+Status at the time of writing: **none of the external steps below has been performed or verified by Claude 3** (no Vercel, Supabase, Anthropic or Stripe access in the development sessions). Everything else was checked on a local production build (`next build && next start`).
+
+1. **Vercel project** — Import `Mustiks07/headroom` → Framework preset *Next.js*, root `./`, install `npm ci`, build `npm run build`, output default, Node.js **22.x** (Project Settings → General). Production branch: `main` (only after Codex's combined review).
+2. **Environment (Production)** — guest path needs nothing. Set `NEXT_PUBLIC_APP_URL=https://<your-production-domain>`. Optional, per feature:
+   - cloud save: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`;
+   - AI document analysis: additionally `SUPABASE_SECRET_KEY`, `AI_PROVIDER=anthropic`, `AI_API_KEY`, optional `AI_MODEL`, `AI_DAILY_LIMIT`, `AI_GUEST_DAILY_LIMIT`, `AI_IP_DAILY_LIMIT`;
+   - Stripe TEST checkout (optional): `STRIPE_SECRET_KEY` (test key), `STRIPE_ANNUAL_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` + webhook endpoint `https://<domain>/api/checkout/webhook` for `checkout.session.completed`.
+   `NEXT_PUBLIC_*` values are build-time: redeploy after changing them.
+3. **Deployment protection** — Settings → Deployment Protection: disable Vercel Authentication for Production so judges can open the URL without a Vercel login.
+4. **Supabase (only if cloud save is wanted)** — create the project; Authentication → Sign In / Providers → enable *Anonymous sign-ins*; SQL editor: run `supabase/migrations/202611140001_foundation.sql`, `…0002_hardening.sql`, `…0003_round2.sql`, `…0004_workspaces.sql` in this order (round 4 deal planning is stored inside the workspace document — no new migration); Authentication → URL configuration: Site URL = production domain. Then locally: `NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… node scripts/verify-rls.mjs` (two anonymous guests; plans, events, revisions, workspaces, snapshots, AI quota, entitlements).
+5. **Smoke on the deployed URL (clean browser profile)** — `/api/capabilities` shows the expected booleans; `BASE_URL=https://<domain> npm run check:ui` (add `CHROMIUM_PATH=…` where a preinstalled Chromium is used); then manually: demo → save → reload → export plan PDF, annual forecast PDF; if cloud is on, open the same URL in a second browser and confirm the first guest's plans are not listed.
+6. **Function limits** — all routes run on the Node.js runtime; JSON bodies ≤ 3 MB (Vercel's 4.5 MB request limit is not reached); `/api/documents/extract` `maxDuration` 60 s, `/api/export/decision` 30 s, others default.
+
+Exports added in round 4 (no new env): `POST /api/export/decision` (decision package PDF; requires the engine's `searchDealTerms`, otherwise 503 `DEAL_SEARCH_UNAVAILABLE`), `POST /api/export/calendar` (`.ics`); client-terms draft is built and downloaded in the browser.
