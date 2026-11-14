@@ -1,0 +1,360 @@
+{
+  "date_checked": "2026-11-15",
+  "unit": "USD; hypothetical economics, not observed customer performance",
+  "base_architecture_note": "products/annual/monthly below use alternative Gemini3.5FlashLite; existing adapter default AnthropicOpus5.5 is modeled under anthropic_profiles; SOM uses Opus5.5; productionAIoff",
+  "anthropic_pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "reference_profile_for_current_adapter": "claude-opus-5-5",
+  "anthropic_profiles": {
+    "claude-opus-5-5": {
+      "input_mtok": 4.0,
+      "output_mtok": 20.0,
+      "document": 0.18,
+      "update": 0.062,
+      "products": {
+        "decision_29": {
+          "gross": 29.0,
+          "net_revenue": 28.13,
+          "processing_and_billing": 1.141,
+          "ai": 1.216,
+          "support": 5.0,
+          "infra": 0.54,
+          "variable_contribution": 20.773,
+          "contribution": 20.233,
+          "contribution_margin": 0.7192676857447565
+        },
+        "season_49": {
+          "gross": 49.0,
+          "net_revenue": 47.53,
+          "processing_and_billing": 1.721,
+          "ai": 3.04,
+          "support": 7.5,
+          "infra": 0.54,
+          "variable_contribution": 35.269,
+          "contribution": 34.729,
+          "contribution_margin": 0.7306753629286766
+        },
+        "annual_99": {
+          "gross": 99.0,
+          "net_revenue": 96.03,
+          "processing_and_billing": 3.864,
+          "ai": 12.16,
+          "support": 10.0,
+          "infra": 0.54,
+          "variable_contribution": 70.006,
+          "contribution": 69.466,
+          "contribution_margin": 0.723378111006977
+        },
+        "monthly_15": {
+          "gross": 15.0,
+          "net_revenue": 14.55,
+          "processing_and_billing": 0.84,
+          "ai": 1.216,
+          "support": 2.5,
+          "infra": 0.045,
+          "variable_contribution": 9.994,
+          "contribution": 9.949,
+          "contribution_margin": 0.6837800687285224
+        }
+      },
+      "annual_cac_ceiling_no_renewal": 23.155333333333335,
+      "annual_ltv_3yr_at_60pct": 136.15336,
+      "annual_cac_ceiling_3yr": 45.38445333333333,
+      "monthly_ltv_12_at_15pct": 56.892245055014826,
+      "monthly_cac_ceiling_12_at_15pct": 18.964081685004942,
+      "free_document_with_retry": 0.36,
+      "free_ai_per_payer_at_5pct": 7.2
+    },
+    "claude-sonnet-5-5": {
+      "input_mtok": 2.0,
+      "output_mtok": 10.0,
+      "document": 0.09,
+      "update": 0.031,
+      "products": {
+        "decision_29": {
+          "gross": 29.0,
+          "net_revenue": 28.13,
+          "processing_and_billing": 1.141,
+          "ai": 0.608,
+          "support": 5.0,
+          "infra": 0.54,
+          "variable_contribution": 21.381,
+          "contribution": 20.841,
+          "contribution_margin": 0.7408816210451475
+        },
+        "season_49": {
+          "gross": 49.0,
+          "net_revenue": 47.53,
+          "processing_and_billing": 1.721,
+          "ai": 1.52,
+          "support": 7.5,
+          "infra": 0.54,
+          "variable_contribution": 36.789,
+          "contribution": 36.249,
+          "contribution_margin": 0.762655165158847
+        },
+        "annual_99": {
+          "gross": 99.0,
+          "net_revenue": 96.03,
+          "processing_and_billing": 3.864,
+          "ai": 6.08,
+          "support": 10.0,
+          "infra": 0.54,
+          "variable_contribution": 76.086,
+          "contribution": 75.546,
+          "contribution_margin": 0.7866916588566073
+        },
+        "monthly_15": {
+          "gross": 15.0,
+          "net_revenue": 14.55,
+          "processing_and_billing": 0.84,
+          "ai": 0.608,
+          "support": 2.5,
+          "infra": 0.045,
+          "variable_contribution": 10.602,
+          "contribution": 10.557,
+          "contribution_margin": 0.7255670103092784
+        }
+      },
+      "annual_cac_ceiling_no_renewal": 25.182,
+      "annual_ltv_3yr_at_60pct": 148.07016,
+      "annual_cac_ceiling_3yr": 49.35672,
+      "monthly_ltv_12_at_15pct": 60.36902513275621,
+      "monthly_cac_ceiling_12_at_15pct": 20.123008377585403,
+      "free_document_with_retry": 0.18,
+      "free_ai_per_payer_at_5pct": 3.6
+    },
+    "claude-haiku-5-5-under-100k": {
+      "input_mtok": 0.1,
+      "output_mtok": 0.5,
+      "document": 0.0045,
+      "update": 0.00155,
+      "products": {
+        "decision_29": {
+          "gross": 29.0,
+          "net_revenue": 28.13,
+          "processing_and_billing": 1.141,
+          "ai": 0.0304,
+          "support": 5.0,
+          "infra": 0.54,
+          "variable_contribution": 21.9586,
+          "contribution": 21.4186,
+          "contribution_margin": 0.761414859580519
+        },
+        "season_49": {
+          "gross": 49.0,
+          "net_revenue": 47.53,
+          "processing_and_billing": 1.721,
+          "ai": 0.076,
+          "support": 7.5,
+          "infra": 0.54,
+          "variable_contribution": 38.233,
+          "contribution": 37.693,
+          "contribution_margin": 0.793035977277509
+        },
+        "annual_99": {
+          "gross": 99.0,
+          "net_revenue": 96.03,
+          "processing_and_billing": 3.864,
+          "ai": 0.304,
+          "support": 10.0,
+          "infra": 0.54,
+          "variable_contribution": 81.862,
+          "contribution": 81.322,
+          "contribution_margin": 0.8468395293137562
+        },
+        "monthly_15": {
+          "gross": 15.0,
+          "net_revenue": 14.55,
+          "processing_and_billing": 0.84,
+          "ai": 0.0304,
+          "support": 2.5,
+          "infra": 0.045,
+          "variable_contribution": 11.1796,
+          "contribution": 11.1346,
+          "contribution_margin": 0.7652646048109966
+        }
+      },
+      "annual_cac_ceiling_no_renewal": 27.107333333333333,
+      "annual_ltv_3yr_at_60pct": 159.39112,
+      "annual_cac_ceiling_3yr": 53.13037333333333,
+      "monthly_ltv_12_at_15pct": 63.67196620661052,
+      "monthly_cac_ceiling_12_at_15pct": 21.22398873553684,
+      "free_document_with_retry": 0.009,
+      "free_ai_per_payer_at_5pct": 0.18
+    }
+  },
+  "ai": {
+    "document": 0.0165,
+    "update": 0.00615,
+    "retry_multiplier": 2,
+    "free_document_with_retry": 0.033,
+    "free_ai_per_payer_at_5pct": 0.66
+  },
+  "products": {
+    "decision_29": {
+      "gross": 29.0,
+      "net_revenue": 28.13,
+      "processing_and_billing": 1.141,
+      "ai": 0.1152,
+      "support": 5.0,
+      "infra": 0.54,
+      "variable_contribution": 21.8738,
+      "contribution": 21.3338,
+      "contribution_margin": 0.7584002843938855
+    },
+    "season_49": {
+      "gross": 49.0,
+      "net_revenue": 47.53,
+      "processing_and_billing": 1.721,
+      "ai": 0.288,
+      "support": 7.5,
+      "infra": 0.54,
+      "variable_contribution": 38.021,
+      "contribution": 37.481,
+      "contribution_margin": 0.7885756364401431
+    },
+    "annual_99": {
+      "gross": 99.0,
+      "net_revenue": 96.03,
+      "processing_and_billing": 3.864,
+      "ai": 1.152,
+      "support": 10.0,
+      "infra": 0.54,
+      "variable_contribution": 81.014,
+      "contribution": 80.474,
+      "contribution_margin": 0.8380089555347288
+    },
+    "monthly_15": {
+      "gross": 15.0,
+      "net_revenue": 14.55,
+      "processing_and_billing": 0.84,
+      "ai": 0.1152,
+      "support": 2.5,
+      "infra": 0.045,
+      "variable_contribution": 11.0948,
+      "contribution": 11.0498,
+      "contribution_margin": 0.7594364261168385
+    }
+  },
+  "annual": {
+    "renewal_hypothesis": 0.6,
+    "three_year_ltv": 157.72904,
+    "three_year_cac_ceiling": 52.576346666666666,
+    "no_renewal_cac_ceiling": 26.824666666666666,
+    "infinite_ltv_diagnostic_only": 201.185
+  },
+  "season": {
+    "two_season_ltv_at_40pct_repurchase": 52.4734,
+    "two_season_cac_ceiling": 17.491133333333334,
+    "single_season_cac_ceiling": 12.493666666666666
+  },
+  "decision_cac_ceiling": 7.111266666666666,
+  "monthly": {
+    "0.10": {
+      "expected_billed_months": 10.0,
+      "infinite_ltv": 110.498,
+      "ltv_12": 79.29010107792246,
+      "cac_ceiling_3_to_1_12mo": 26.43003369264082,
+      "cohort_payback_cac25": 3,
+      "cohort_payback_cac40": 5
+    },
+    "0.15": {
+      "expected_billed_months": 6.666666666666667,
+      "infinite_ltv": 73.66533333333334,
+      "ltv_12": 63.18704687997817,
+      "cac_ceiling_3_to_1_12mo": 21.062348959992722,
+      "cohort_payback_cac25": 3,
+      "cohort_payback_cac40": 5
+    },
+    "0.25": {
+      "expected_billed_months": 4.0,
+      "infinite_ltv": 44.1992,
+      "ltv_12": 42.799130581617355,
+      "cac_ceiling_3_to_1_12mo": 14.266376860539118,
+      "cohort_payback_cac25": 3,
+      "cohort_payback_cac40": 9
+    }
+  },
+  "annual_support_sensitivity": {
+    "10": 85.474,
+    "20": 80.474,
+    "60": 60.474,
+    "120": 30.474
+  },
+  "annual_scale_sensitivity": {
+    "10": 27.014,
+    "100": 75.614,
+    "1000": 80.474,
+    "10000": 80.96
+  },
+  "annual_ai_10x_contribution": 70.106,
+  "cac_grid": {
+    "0.5": {
+      "0.02": 25.0,
+      "0.05": 10.0,
+      "0.10": 5.0
+    },
+    "1": {
+      "0.02": 50.0,
+      "0.05": 20.0,
+      "0.10": 10.0
+    },
+    "2": {
+      "0.02": 100.0,
+      "0.05": 40.0,
+      "0.10": 20.0
+    },
+    "5": {
+      "0.02": 250.0,
+      "0.05": 100.0,
+      "0.10": 50.0
+    }
+  },
+  "som_scenarios": [
+    {
+      "clicks": 3000,
+      "conversion": 0.02,
+      "cpc": 1.0,
+      "unique_payers": 60.0,
+      "revenue": 5940.0,
+      "media": 3000.0,
+      "media_cac": 50.0,
+      "contribution_after_media_and_fixed": 660.36
+    },
+    {
+      "clicks": 5000,
+      "conversion": 0.05,
+      "cpc": 1.0,
+      "unique_payers": 250.0,
+      "revenue": 24750.0,
+      "media": 5000.0,
+      "media_cac": 20.0,
+      "contribution_after_media_and_fixed": 11961.5
+    },
+    {
+      "clicks": 10000,
+      "conversion": 0.08,
+      "cpc": 1.5,
+      "unique_payers": 800.0,
+      "revenue": 79200.0,
+      "media": 15000.0,
+      "media_cac": 18.75,
+      "contribution_after_media_and_fixed": 40464.8
+    }
+  ],
+  "irs": {
+    "tax2025_partial_repayment_returns": 6131638,
+    "tax2025_partial_repayment_usd": 8186288000,
+    "tax2025_partial_average_usd": 1335.0899058294049,
+    "tax2024_nov_repayment_returns": 6391741,
+    "tax2024_nov_average_usd": 1378.7332747055927,
+    "tax2025_partial_aptc_returns": 11159789
+  },
+  "market": {
+    "cms_three_state_300_500_fpl_people": 455449,
+    "treasury_three_state_people": 1108650,
+    "hypothetical_all_aptc_returns_times99_not_tam": 1104819111,
+    "household_subscriptions_for_100m_arr_at99": 1010102
+  },
+  "zero_purchases_100_trials_one_sided_95pct_upper": 0.029513049607039932
+}
