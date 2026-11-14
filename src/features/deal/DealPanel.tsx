@@ -157,7 +157,7 @@ function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: Househo
     <p className="baseline-note"><strong>Compared with: {result.baseline.label}.</strong> {humanizeDates(result.baseline.description)} Cash is what your family keeps after both tax years settle (through {shortDate(result.horizon.settlementThrough)}) — not a bank balance.</p>
     {result.cashCompleteness === "household_incomplete" && <p className="notice warn small">Your balance goal can&apos;t be confirmed because the cash picture isn&apos;t marked complete. Only this project&apos;s money is shown; Headroom doesn&apos;t say whether your household will cover every bill.</p>}
     <div className={`variant-grid ${stale ? "is-stale" : ""}`}>
-      {result.variants.map(v => <VariantCard key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
+      {[...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId)).map(v => <VariantCard key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
         onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} />)}
     </div>
     <p className="hint">Searched {searchedText(result)}. {result.search.exhaustiveWithinSpace ? "Every combination within your limits was checked." : humanizeDates(result.search.note)}
@@ -171,12 +171,18 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
   result: ReadyDealSearch; onGoToForecast: () => void;
 }) {
   const goalMet = v.constraints.every(c => c.satisfied) && v.dateTargets.every(t => t.met !== false);
+  // Round 5 engine fields (Claude 2): cash vs declining AND vs the offer as it stands; robustness of the pick.
+  const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null } }).comparisons;
+  const rob = (v as { robustness?: { holds: boolean; basis: string; roomCents: number | null } }).robustness;
   return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"}`} aria-labelledby={`v-${v.id}`}>
     <header><p className="tile-k">{PURPOSE[v.purpose]}</p>{recommended && <span className="pill good"><Star size={13} aria-hidden="true" /> Our pick</span>}</header>
     <h3 id={`v-${v.id}`} className="variant-title">{humanizeDates(v.label)}</h3>
     <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
     <p className="tile-sub">cash after both tax years · {result.baseline.kind === "accept_as_offered" ? "vs. accepting as offered" : "vs. declining these terms"}</p>
     {v.retirementAddedCents > 0 && <p className="tile-line">+ <strong className="num">{money(v.retirementAddedCents)}</strong> into retirement (not counted as cash)</p>}
+    {cmp && cmp.versusOfferedCents !== null && v.purpose !== "as_offered" && <p className="tile-line"><span className={`num ${signClass(cmp.versusOfferedCents)}`}>{signedMoney(cmp.versusOfferedCents)}</span> compared with the offer as it stands</p>}
+    {v.purpose !== "as_offered" && <p className="tile-line small"><strong>Needs the client&apos;s agreement</strong> to the changed price or payment dates.</p>}
+    {rob && !rob.holds && <p className="notice warn small">Little room: {rob.roomCents !== null ? `about ${money(rob.roomCents)} of extra 2026–2027 profit could break this` : "a small change in income could break this"}{rob.basis === "declared_ranges" ? " within the income ranges you entered" : ""}. Check the details before you choose.</p>}
     <dl className="terms">
       <div><dt>Ask for</dt><dd className="num">{money(v.terms.priceCents)}</dd></div>
       <div><dt>Payments</dt><dd>{v.terms.payments.map(p => `${money(p.amountCents)} on ${shortDate(p.date)}`).join(" · ") || "—"}</dd></div>

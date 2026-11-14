@@ -6,7 +6,7 @@ import type { AssistanceRequest, ChangeCommand, ChangeProposal } from "@/domain/
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { engineWorkspaceFingerprint, previewChange, type EngineChangePreview } from "@/lib/engine";
 import {
-  CommandError, answerAmbiguity, buildAssistanceContext, commitProposal, getCapabilities, proposeChange, trackEvent,
+  applyChangeProposal, CommandError, answerAmbiguity, buildAssistanceContext, commitProposal, getCapabilities, proposeChange, trackEvent,
 } from "@/lib/client/api";
 import { humanizeDates, money, shortDate, signedMoney } from "@/features/format";
 import { workspaceRepo } from "@/features/household-plan/store";
@@ -43,7 +43,8 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
 
   async function preview(proposal: ChangeProposal) {
     if (proposal.ambiguities.length || !proposal.commands.length) return null;
-    const p = await previewChange(ws, proposal, { userDate: today() });
+    // One apply path (Claude 2's note): the after-figures are computed on exactly what Apply saves.
+    const p = await previewChange(ws, proposal, { userDate: today(), apply: (w, pr) => applyChangeProposal(w, pr) });
     return "proposalId" in p ? p : { status: "blocked" as const, message: p.message };
   }
 
@@ -113,7 +114,7 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
       {p.preview && "status" in p.preview && p.preview.status === "blocked" && <p className="notice warn">{p.preview.message}</p>}
       {pv && <PreviewView pv={pv} />}
       <div className="row gap wrap">
-        {p.proposal.commands.length > 0 && <button type="button" className="btn primary" disabled={busy || !pv || pv.status !== "ready" || p.proposal.ambiguities.length > 0 || pv.changes.length === 0} onClick={() => void apply()}>{busy ? "Saving…" : pv && pv.blockers.length > 0 && pv.changes.length === 0 ? "Can't apply" : pv && pv.changes.length === 0 ? "Nothing to save" : "Apply"}</button>}
+        {p.proposal.commands.length > 0 && <button type="button" className="btn primary" disabled={busy || !pv || pv.status !== "ready" || p.proposal.ambiguities.length > 0 || pv.changes.length === 0} onClick={() => void apply()}>{busy ? "Saving…" : pv && pv.status !== "ready" ? "Can't apply" : pv && pv.changes.length === 0 ? "Nothing to save" : "Apply"}</button>}
         <button type="button" className="btn ghost" onClick={() => setState({ kind: "idle" })}>Edit</button>
         <button type="button" className="btn ghost" onClick={() => { setState({ kind: "idle" }); setText(""); }}>Cancel</button>
       </div>
@@ -134,10 +135,11 @@ function PreviewView({ pv }: { pv: EngineChangePreview }) {
         <td className="num">{y.before && y.after ? signedMoney(y.after.spendableCents - y.before.spendableCents) : "—"}</td></tr>)}</tbody></table></div>}
     {pv.changes.length > 0 && pv.agreedChecks.filter(a => a.after && !a.after.met).map(a => <p key={a.projectId} className="notice warn small">After this change, the terms you agreed for this project no longer meet your goal.</p>)}
     {pv.staleDependencies.length > 0 && <ul className="bullets small">{pv.staleDependencies.map(d => <li key={d.kind + d.id}>{humanizeDates(d.reason)}</li>)}</ul>}
-    {pv.changes.length === 0 && pv.blockers.length > 0 ? <p className="notice warn small" role="status">This can&apos;t be applied as written — see why below. Change the sentence and try again.</p>
+    {pv.status !== "ready" ? <p className="notice warn small" role="status">This can&apos;t be applied as written — see why below. Change the sentence and try again.</p>
       : pv.changes.length === 0 ? <p className="notice ok small" role="status">This is already in your plan — there is nothing to save.</p>
       : pv.noOps.length > 0 && <p className="hint">Part of this is already in your plan — it isn&apos;t added twice.</p>}
-    {pv.blockers.length > 0 && <ul className="bullets small warn-text">{pv.blockers.map(b => <li key={b.path}>{humanizeDates(b.reason)}</li>)}</ul>}
+    {pv.blockers.length > 0 && <ul className="bullets small warn-text">{pv.blockers.map(b => <li key={b.path + b.reason}>{humanizeDates(b.reason)}</li>)}</ul>}
+    {pv.status === "ready" && pv.changes.length > 0 && pv.blockers.length > 0 && <p className="hint">You can still apply this — the change is saved as stated, and Headroom then asks only for the facts listed above.</p>}
     {pv.notes.length > 0 && <ul className="bullets small muted">{pv.notes.map(n => <li key={n}>{humanizeDates(n)}</li>)}</ul>}
   </div>;
 }
