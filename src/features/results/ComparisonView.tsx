@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Check, CircleAlert, FileSearch, Info, Star } from "lucide-react";
-import type { CaseInput, ReadyComparison, ScenarioResult, YearResult } from "@/domain/contracts";
-import { money, shortDate, signClass, signedMoney } from "@/features/format";
+import type { CaseInput, ReadyComparison, ReadyRiskAssessment, ScenarioResult, YearResult } from "@/domain/contracts";
+import { humanizeDates, money, shortDate, signClass, signedMoney } from "@/features/format";
 import { personName } from "@/features/household/draft";
 import type { DrawerContent } from "./CalculationDrawer";
 
@@ -29,77 +29,76 @@ export function deltaVs(s: ScenarioResult, base: ScenarioResult) {
 
 export function scenarioTrace(s: ScenarioResult, comparison: ReadyComparison, input: CaseInput): DrawerContent {
   return {
-    title: s.label, subtitle: "2026 and 2027 tax years, settled when you file in 2027 and 2028.",
+    title: humanizeDates(s.label), subtitle: "2026 and 2027 tax years, settled when you file in 2027 and 2028.",
     trace: s.years.flatMap(y => y.trace.map(t => ({ ...t, id: `${y.year}-${t.id}`, label: `${y.year} · ${t.label}` }))),
     input, assumptions: s.assumptions,
     meta: { engineVersion: comparison.engineVersion, rulesVersion: comparison.rulesVersion, fingerprint: comparison.calculationFingerprint },
   };
 }
 
-export function ComparisonView({ comparison, input, stale, onShowCalc, onUse, busyScenarioId }: {
+export function ComparisonView({ comparison, input, stale, onShowCalc, onUse, busyScenarioId, risk, hideOverview, useLabel = "Use this plan", currentId }: {
   comparison: ReadyComparison; input: CaseInput; stale: boolean;
   onShowCalc: (content: DrawerContent) => void;
   onUse?: (scenarioId: string) => void;
   busyScenarioId?: string | null;
+  risk?: ReadyRiskAssessment | null;
+  hideOverview?: boolean;
+  useLabel?: string;
+  currentId?: string;
 }) {
   const scenarios = comparison.scenarios;
-  const engineBase = scenarios.find(s => s.id === comparison.baselineScenarioId);
+  const base = scenarios.find(s => s.id === comparison.baselineScenarioId);
   const accept = scenarios.find(s => s.kind === "accept_now");
-  const [choice, setChoice] = useState<BaselineChoice>("engine");
-  const base = (choice === "accept" && accept) ? accept : engineBase;
-  const recommended = scenarios.find(s => s.id === comparison.recommendedScenarioId) ?? null;
+  const recommended = scenarios.find(s => s.id === comparison.recommendedScenarioId && s.feasible) ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = scenarios.find(s => s.id === selectedId) ?? recommended ?? scenarios.find(s => s.feasible && s.id !== base?.id) ?? scenarios[0];
 
   if (!base) return <p className="field-error">The engine result has no baseline scenario, so it can&apos;t be shown.</p>;
 
-  const finding = describeFinding(comparison, base, recommended, accept);
-
   return <section className={`comparison ${stale ? "is-stale" : ""}`} aria-busy={stale} aria-labelledby="compare-title">
     {stale && <p className="stale-banner" role="status">Your inputs changed. These options are out of date until they recalculate.</p>}
-    <div className="baseline-bar">
-      <span className="baseline-label"><Info size={15} aria-hidden="true" /> {baselineLabel(base)} · 2026 + 2027</span>
-      {accept && engineBase && accept.id !== engineBase.id && <div className="seg small" role="radiogroup" aria-label="Choose the comparison baseline">
-        <label className={choice === "engine" ? "on" : ""}><input type="radio" name="baseline" checked={choice === "engine"} onChange={() => setChoice("engine")} />
-          {engineBase.kind === "decline" ? "Without this project" : engineBase.label}</label>
-        <label className={choice === "accept" ? "on" : ""}><input type="radio" name="baseline" checked={choice === "accept"} onChange={() => setChoice("accept")} />Accept as offered</label>
-      </div>}
-    </div>
+    {!hideOverview && <DecisionOverview comparison={comparison} input={input} risk={risk ?? null} stale={stale} onShowCalc={onShowCalc} onUse={onUse} busy={busyScenarioId} />}
 
-    <div className="finding-block">
-      <h3 id="compare-title" className="finding">{finding.title}</h3>
-      {!stale && <p className="finding-body">{finding.body}</p>}
-      {!stale && comparison.warnings.length > 0 && <ul className="warnings">{comparison.warnings.map(w => <li key={w}>{w}</li>)}</ul>}
+    <div className="options-head">
+      <h3 id="compare-title" className="small-head">All options</h3>
+      <p className="muted small">Each card shows cash after both tax years settle (2026 + 2027) — first compared with not taking the project, then with accepting it as offered. Retirement savings are shown separately.</p>
     </div>
-
     <div className="scenario-grid">
       {scenarios.map(s => {
-        const d = deltaVs(s, base);
         const isBase = s.id === base.id;
-        const isRec = s.id === comparison.recommendedScenarioId && s.feasible;
+        const isRec = s.id === recommended?.id;
+        const vsDecline = deltaVs(s, base);
+        const vsAccept = accept && s.id !== accept.id && !isBase ? deltaVs(s, accept) : null;
         return <article key={s.id} className={`scenario ${isRec ? "recommended" : ""} ${!s.feasible ? "infeasible" : ""} ${selected?.id === s.id ? "selected" : ""}`}>
           <header>
-            <h4>{s.label}</h4>
-            {isRec && <span className="pill good"><Star size={13} aria-hidden="true" /> Best within your limits</span>}
-            {isBase && <span className="pill neutral">Baseline</span>}
-            {!s.feasible && <span className="pill neutral">Not available</span>}
+            <h4>{humanizeDates(s.label)}</h4>
+            {isRec && <span className="pill good"><Star size={13} aria-hidden="true" /> Best found within your limits</span>}
+            {s.id === currentId && <span className="pill neutral">In your plan</span>}
+            {!s.feasible && <span className="pill bad">Not available</span>}
           </header>
-          {isBase ? <p className="muted small">Other options are measured against this one.</p> : <>
-            <p className="metric-label">Cash after tax-year settlements</p>
-            <p className={`metric num ${signClass(d.cash)}`}>{signedMoney(d.cash)}</p>
+          {isBase ? <p className="muted small">Your current forecast without this project. Other options are measured against it.</p> : <>
+            <div className="delta-line">
+              <span className="metric-label">Compared with not taking it</span>
+              <span className={`metric num ${signClass(vsDecline.cash)}`}>{signedMoney(vsDecline.cash)}</span>
+            </div>
+            {vsAccept && <div className="delta-line second">
+              <span className="metric-label">Compared with accepting as offered</span>
+              <span className={`num ${signClass(vsAccept.cash)}`}>{signedMoney(vsAccept.cash)}</span>
+            </div>}
           </>}
-          {s.grossAdditionalRetirementCents > 0 && <p className="retire"><span>Moved into retirement savings</span><strong className="num">{money(s.grossAdditionalRetirementCents)}</strong>
-            <small>Pre-tax savings, taxed when withdrawn. Not spendable cash.</small></p>}
-          <DecisionSummary s={s} input={input} />
+          {s.grossAdditionalRetirementCents > 0 && <p className="retire"><span>Also moved into retirement savings</span><strong className="num">{money(s.grossAdditionalRetirementCents)}</strong>
+            <small>Not counted in the cash above. Taxed when withdrawn later.</small></p>}
+          <PaymentSummary s={s} input={input} />
           {s.stress.status !== "not_tested" && <p className={`stress ${s.stress.status}`}>
             {s.stress.status === "within_declared_range" ? <Check size={14} aria-hidden="true" /> : <CircleAlert size={14} aria-hidden="true" />}
             {s.stress.status === "within_declared_range" ? "Holds across your declared range" : `Can fail within your range (worst: ${signedMoney(s.stress.worstCashDeltaCents)})`}
             <span className="muted"> · {s.stress.checkedDescription}</span></p>}
-          {!s.feasible && s.infeasibilityReasons.length > 0 && <ul className="reasons">{s.infeasibilityReasons.map(r => <li key={r}>{r}</li>)}</ul>}
+          {!s.feasible && <div className="reasons"><strong>Why it isn&apos;t available:</strong>
+            <ul>{(s.infeasibilityReasons.length ? s.infeasibilityReasons : ["It doesn't fit the limits you set."]).map(r => <li key={r}>{humanizeDates(r)}</li>)}</ul></div>}
           <div className="card-actions">
             <button type="button" className="btn ghost small" aria-pressed={selected?.id === s.id} onClick={() => setSelectedId(s.id)}>Details</button>
-            {onUse && s.feasible && <button type="button" className="btn primary small" disabled={stale || !!busyScenarioId} onClick={() => onUse(s.id)}>
-              {busyScenarioId === s.id ? "Saving…" : "Use this plan"}</button>}
+            {onUse && s.feasible && s.id !== currentId && <button type="button" className="btn primary small" disabled={stale || !!busyScenarioId} onClick={() => onUse(s.id)}>
+              {busyScenarioId === s.id ? "Saving…" : useLabel}</button>}
           </div>
         </article>;
       })}
@@ -109,29 +108,92 @@ export function ComparisonView({ comparison, input, stale, onShowCalc, onUse, bu
   </section>;
 }
 
-function describeFinding(c: ReadyComparison, base: ScenarioResult, rec: ScenarioResult | null, accept: ScenarioResult | undefined) {
-  if (!rec) return { title: "None of the options fit your limits",
-    body: "Each option is shown with the reason it doesn't work. Try changing a limit, such as the retirement amount or payment dates." };
-  const recDelta = deltaVs(rec, base).cash;
-  if (rec.kind === "decline") return { title: "With these figures, not taking the project leaves your family with the most cash",
-    body: "That can happen when extra income ends the subsidy. A higher price or different timing may change the answer." };
-  if (rec.kind === "accept_now") return recDelta >= 0 || base.id === rec.id
-    ? { title: "This project increases the cash your family keeps", body: "No special arrangement is needed. Accepting as offered is the best option within your limits." }
-    : { title: "Accepting as offered is the best option within your limits", body: `${baselineLabel(base)}, it changes your cash by ${signedMoney(recDelta)}.` };
-  const acceptText = accept && accept.id !== base.id ? ` Accepting as offered: ${signedMoney(deltaVs(accept, base).cash)}.` : "";
-  return { title: `${rec.label}: ${signedMoney(recDelta)} cash after both tax years`,
-    body: `${baselineLabel(base)}.${acceptText} ${c.scenarios.some(s => !s.feasible) ? "Options outside your limits are shown but not recommended." : ""}`.trim() };
+/** Notes that qualify the inputs themselves (sample data, benchmark source, draft tables). */
+const DATA_NOTE = /synthetic|benchmark|illustrative/i;
+const SEARCH_NOTE = /searched|grid|worst-case gap/i;
+
+/**
+ * Result-first summary: the subsidy today, what accepting as offered does,
+ * and the best feasible option found. Every number is an engine field or a
+ * difference of two engine fields from the same result.
+ */
+export function DecisionOverview({ comparison, input, risk, stale, onShowCalc, onUse, busy }: {
+  comparison: ReadyComparison; input: CaseInput; risk: ReadyRiskAssessment | null; stale: boolean;
+  onShowCalc: (c: DrawerContent) => void; onUse?: (id: string) => void; busy?: string | null;
+}) {
+  const base = comparison.scenarios.find(s => s.id === comparison.baselineScenarioId);
+  const accept = comparison.scenarios.find(s => s.kind === "accept_now");
+  const rec = comparison.scenarios.find(s => s.id === comparison.recommendedScenarioId && s.feasible) ?? null;
+  if (!base) return null;
+  const acceptDelta = accept ? deltaVs(accept, base).cash : null;
+  const lostCredit = accept ? accept.years.map((y, i) => ({ year: y.year, before: base.years[i].ptcCents, after: y.ptcCents })).filter(x => x.after < x.before) : [];
+  const repay = accept ? accept.years.filter(y => y.aptcSettlementCents > 0) : [];
+  const searchNote = rec?.assumptions.find(a => SEARCH_NOTE.test(a));
+  const gap = searchNote ? /gap\s*≤\s*(\$[\d,]+)/.exec(searchNote)?.[1] : undefined;
+  const nextSteps = rec ? [...rec.actions].sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999")).slice(0, 2) : [];
+  const dataNotes = [...comparison.warnings, ...(risk?.warnings ?? [])].filter((w, i, all) => DATA_NOTE.test(w) && all.indexOf(w) === i);
+  const allNotes = [...new Set([...comparison.warnings, ...(rec?.assumptions ?? [])])];
+  const r = risk?.risk;
+
+  return <div className={`overview ${stale ? "is-stale" : ""}`}>
+    <div className="overview-grid">
+      <div className="tile">
+        <p className="tile-k">Your subsidy now · {r?.year ?? base.years[0].year}</p>
+        {r ? <>
+          <p className={`pill ${RISK_TONE[r.state]}`}>{RISK_TEXT[r.state]}</p>
+          <p className="tile-line">Income counted for the subsidy <strong className="num">{money(r.forecastMagiCents)}</strong> of a <strong className="num">{money(r.thresholdMagiCents)}</strong> limit</p>
+          <p className="tile-line">Premium tax credit <strong className="num">{money(r.subsidyCents)}</strong>/year</p>
+        </> : <p className="tile-line">Premium tax credit without the project <strong className="num">{money(base.years[0].ptcCents)}</strong> in {base.years[0].year}</p>}
+      </div>
+      {accept && acceptDelta !== null && <div className="tile">
+        <p className="tile-k">If you accept as offered</p>
+        <p className={`tile-big num ${signClass(acceptDelta)}`}>{signedMoney(acceptDelta)}</p>
+        <p className="tile-sub">cash after both tax years, compared with not taking it</p>
+        {lostCredit.map(l => <p key={l.year} className="tile-line">{l.year} premium tax credit <span className="num">{money(l.before)}</span> → <strong className="num">{money(l.after)}</strong></p>)}
+        {repay.map(y => <p key={y.year} className="tile-line warn-text">Repay <strong className="num">{money(y.aptcSettlementCents)}</strong> of advance credit when you file in {y.year + 1}</p>)}
+      </div>}
+      <div className={`tile ${rec ? "tile-rec" : ""}`}>
+        <p className="tile-k">Best option found within your limits</p>
+        {!rec ? <p className="tile-line">None of the options fits your limits. Each card below explains why.</p>
+          : rec.kind === "accept_now" ? <>
+            <p className="tile-title">Accept as offered</p>
+            <p className="tile-line">No special arrangement is needed — this project increases the cash your family keeps.</p>
+          </> : rec.kind === "decline" ? <>
+            <p className="tile-title">Not taking the project</p>
+            <p className="tile-line">With these figures every way of taking it leaves less cash. A higher price may change that.</p>
+          </> : <>
+            <p className="tile-title">{humanizeDates(rec.label)}</p>
+            <p className={`tile-big num ${signClass(deltaVs(rec, base).cash)}`}>{signedMoney(deltaVs(rec, base).cash)}</p>
+            <p className="tile-sub">compared with not taking it{accept ? <> · <strong className="num">{signedMoney(deltaVs(rec, accept).cash)}</strong> better than accepting as offered</> : null}</p>
+            {rec.grossAdditionalRetirementCents > 0 && <p className="tile-line">Plus <strong className="num">{money(rec.grossAdditionalRetirementCents)}</strong> into retirement savings (not spendable cash)</p>}
+          </>}
+        {nextSteps.length > 0 && <div className="next-steps"><p className="tile-k">Next steps</p>
+          <ul>{nextSteps.map(a => <li key={a.id}>{humanizeDates(a.title)}{a.dueDate && <span className="muted"> · by {shortDate(a.dueDate)}</span>}</li>)}</ul></div>}
+        <div className="row gap wrap">
+          {rec && onUse && <button type="button" className="btn primary small" disabled={stale || !!busy} onClick={() => onUse(rec.id)}>{busy === rec.id ? "Saving…" : "Use this plan"}</button>}
+          {rec && <button type="button" className="btn ghost small" disabled={stale} onClick={() => onShowCalc(scenarioTrace(rec, comparison, input))}><FileSearch size={15} /> Show the calculation</button>}
+        </div>
+        {searchNote && <p className="hint" title={humanizeDates(searchNote)}>“Best” comes from a bounded search, not an exact optimum{gap ? <> — the engine reports it is within about <strong>{gap}</strong> of the exact best</> : ""}. Details are in the calculation notes.</p>}
+      </div>
+    </div>
+    {dataNotes.length > 0 && <ul className="data-notes" aria-label="Limits of these figures">{dataNotes.map(n => <li key={n}><Info size={14} aria-hidden="true" /> {humanizeDates(n)}</li>)}</ul>}
+    {allNotes.length > 0 && <details className="explain"><summary>All conditions and calculation notes ({allNotes.length})</summary>
+      <ul className="bullets small">{allNotes.map(n => <li key={n}>{humanizeDates(n)}</li>)}</ul></details>}
+  </div>;
 }
 
-function DecisionSummary({ s, input }: { s: ScenarioResult; input: CaseInput }) {
+const RISK_TEXT = { below_cliff: "Below the limit", at_risk: "Close to the limit", over_cliff: "Above the limit", no_credit: "No credit expected" } as const;
+const RISK_TONE = { below_cliff: "good", at_risk: "warn", over_cliff: "bad", no_credit: "neutral" } as const;
+
+function PaymentSummary({ s, input }: { s: ScenarioResult; input: CaseInput }) {
   const d = s.decisions;
-  if (s.kind === "decline") return <p className="decision muted small">No project income or costs.</p>;
-  return <ul className="decision">
-    {s.kind === "renegotiate" && <li><span>Price to ask</span><strong className="num">{money(d.grossRevenueCents)}</strong></li>}
-    {d.receipts.map(r => <li key={r.date + r.amountCents}><span>Paid {shortDate(r.date)}</span><strong className="num">{money(r.amountCents)}</strong></li>)}
-    {d.additionalSep.filter(x => x.amountCents > 0).map(x => <li key={`${x.year}${x.personId}`}><span>Extra SEP-IRA {x.year} · {personName(input, x.personId)}</span><strong className="num">{money(x.amountCents)}</strong></li>)}
-    {d.expenses.filter(x => x.amountCents > 0).map(x => <li key={`e${x.year}`}><span>Project costs {x.year}</span><strong className="num">{money(x.amountCents)}</strong></li>)}
-  </ul>;
+  if (s.kind === "decline") return null;
+  return <div className="decision">
+    {s.kind === "renegotiate" && <p>Ask the client for <strong className="num">{money(d.grossRevenueCents)}</strong> instead of {money(input.opportunity.grossRevenueCents)}.</p>}
+    {d.receipts.length > 0 && <p>You receive {d.receipts.map((r, i) => <span key={r.date + r.amountCents}>{i > 0 ? (i === d.receipts.length - 1 ? " and " : ", ") : ""}<strong className="num">{money(r.amountCents)}</strong> on {shortDate(r.date)}</span>)}.</p>}
+    {d.additionalSep.filter(x => x.amountCents > 0).map(x => <p key={`${x.year}${x.personId}`}>{personName(input, x.personId) === "You" ? "You put" : `${personName(input, x.personId)} puts`} <strong className="num">{money(x.amountCents)}</strong> into a SEP-IRA for {x.year}.</p>)}
+    {d.expenses.filter(x => x.amountCents > 0).map(x => <p key={`e${x.year}`}>Project costs paid in {x.year}: <strong className="num">{money(x.amountCents)}</strong></p>)}
+  </div>;
 }
 
 function ScenarioDetails({ s, base, comparison, input, stale, onShowCalc }: {
@@ -141,7 +203,7 @@ function ScenarioDetails({ s, base, comparison, input, stale, onShowCalc }: {
   const max = Math.max(1, ...waterfall.map(w => Math.abs(w.cents)));
   return <section className="details" aria-labelledby="details-title">
     <div className="details-head">
-      <div><p className="eyebrow">Details</p><h3 id="details-title">{s.label}</h3><p className="muted small">{baselineLabel(base)}</p></div>
+      <div><p className="eyebrow">Details</p><h3 id="details-title">{humanizeDates(s.label)}</h3><p className="muted small">{baselineLabel(base)}</p></div>
       <button type="button" className="btn ghost small" disabled={stale} onClick={() => onShowCalc(scenarioTrace(s, comparison, input))}><FileSearch size={16} /> Show the calculation</button>
     </div>
     {s.id !== base.id && <div className="waterfall" role="table" aria-label="How the cash change adds up">
@@ -171,8 +233,8 @@ function ScenarioDetails({ s, base, comparison, input, stale, onShowCalc }: {
     <p className="hint"><strong>When is this settled?</strong> 2026 taxes and premium credit are settled when you file in 2027; 2027&apos;s when you file in 2028. “Cash after tax-year settlements” counts both — it is not a bank balance on any one day.</p>
 
     {s.actions.length > 0 && <div><h4 className="small-head">What you would do</h4>
-      <ul className="action-preview">{s.actions.map(a => <li key={a.id}><span>{a.title}</span><span className="muted">{a.dueDate ? `by ${shortDate(a.dueDate)}` : "No fixed date"}</span></li>)}</ul></div>}
-    {s.assumptions.length > 0 && <div><h4 className="small-head">Assumptions</h4><ul className="bullets small">{s.assumptions.map(a => <li key={a}>{a}</li>)}</ul></div>}
+      <ul className="action-preview">{s.actions.map(a => <li key={a.id}><span>{humanizeDates(a.title)}</span><span className="muted">{a.dueDate ? `by ${shortDate(a.dueDate)}` : "No fixed date"}</span></li>)}</ul></div>}
+    {s.assumptions.length > 0 && <div><h4 className="small-head">Assumptions</h4><ul className="bullets small">{s.assumptions.map(a => <li key={a}>{humanizeDates(a)}</li>)}</ul></div>}
   </section>;
 }
 

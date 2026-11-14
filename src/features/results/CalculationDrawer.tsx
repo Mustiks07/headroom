@@ -2,10 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { CaseInput, TraceItem } from "@/domain/contracts";
+import type { CaseInput, MoneyFact, TraceItem } from "@/domain/contracts";
 import { resolveSource } from "@/domain/sources";
-import { moneyExact, shortFingerprint } from "@/features/format";
-import { describePath, getAt, isMoneyFact } from "@/features/household/draft";
+import { MONTHS, moneyExact, shortFingerprint } from "@/features/format";
+import { describePath, getAt, isMoneyFact, normalizePath } from "@/features/household/draft";
 
 export interface DrawerContent {
   title: string;
@@ -23,12 +23,24 @@ const STATUS_TEXT = { confirmed: "Confirmed", estimated: "Estimate", unknown: "U
 export function CalculationDrawer({ content, onClose }: { content: DrawerContent | null; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const lastFocus = useRef<Element | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!content) return;
     lastFocus.current = document.activeElement;
     closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      // Keep keyboard focus inside the dialog while it is open.
+      const focusables = [...dialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')]
+        .filter(el => el.offsetParent !== null || el === document.activeElement);
+      if (focusables.length === 0) { e.preventDefault(); return; }
+      const first = focusables[0]; const last = focusables[focusables.length - 1];
+      const inside = dialogRef.current.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener("keydown", onKey);
     document.body.classList.add("no-scroll");
     return () => {
@@ -43,7 +55,7 @@ export function CalculationDrawer({ content, onClose }: { content: DrawerContent
   const sourceFor = (id: string) => resolveSource(input, id);
 
   return <div className="drawer-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <aside ref={dialogRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
       <header className="drawer-head">
         <div>
           <p className="eyebrow">Show the calculation</p>
@@ -97,15 +109,33 @@ export function CalculationDrawer({ content, onClose }: { content: DrawerContent
 }
 
 function InputValue({ path, input }: { path: string; input: CaseInput }) {
+  const n = normalizePath(path);
+  if (n.includes(".*.")) return <WildcardValue path={n} input={input} />;
   const value = getAt(input, path);
   const label = describePath(path, input);
-  if (isMoneyFact(value)) {
-    const ev = input.evidence.find(e => e.id === value.sourceId);
-    return <>{label}: <strong className="num">{value.valueCents === null ? "Unknown" : moneyExact(value.valueCents)}</strong>
-      <span className="muted"> · {STATUS_TEXT[value.status]}{value.range ? ` (range ${moneyExact(value.range.lowCents)}–${moneyExact(value.range.highCents)})` : ""} · {ev ? ev.label : value.sourceId}</span></>;
-  }
+  if (isMoneyFact(value)) return <>{label}: <FactText fact={value} input={input} /></>;
   if (value === undefined) return <>{label}</>;
   const shown = typeof value === "number" && /Cents$/.test(path) ? moneyExact(value)
     : typeof value === "boolean" ? (value ? "Yes" : "No") : value === null ? "Not answered" : Array.isArray(value) ? `${value.length} item(s)` : typeof value === "object" ? "" : String(value);
   return <>{label}{shown && <>: <strong>{shown}</strong></>}</>;
+}
+
+function FactText({ fact, input }: { fact: MoneyFact; input: CaseInput }) {
+  const ev = resolveSource(input, fact.sourceId);
+  return <><strong className="num">{fact.valueCents === null ? "Unknown" : moneyExact(fact.valueCents)}</strong>
+    <span className="muted"> · {STATUS_TEXT[fact.status]}{fact.range ? ` (range ${moneyExact(fact.range.lowCents)}–${moneyExact(fact.range.highCents)})` : ""} · {ev ? ev.label : fact.sourceId}</span></>;
+}
+
+/** Expands engine paths such as years[0].coverage[*].enrollmentPremium into the actual monthly inputs. */
+function WildcardValue({ path, input }: { path: string; input: CaseInput }) {
+  const [head, tail] = path.split(".*.");
+  const list = getAt(input, head);
+  if (!Array.isArray(list)) return <>{describePath(path, input)}</>;
+  const values = list.map((_, i) => getAt(input, `${head}.${i}.${tail}`));
+  const label = describePath(path.replace(".*.", ".0."), input).replace(/^(\d{4} · )January · /, "$1");
+  const same = values.every(v => JSON.stringify(v) === JSON.stringify(values[0]));
+  const show = (v: unknown) => isMoneyFact(v) ? <FactText fact={v} input={input} /> : <strong>{v === null ? "Not answered" : v === true ? "Yes" : v === false ? "No" : String(v)}</strong>;
+  if (same) return <>{label}, every month: {show(values[0])}</>;
+  return <details className="month-values"><summary>{label}: varies by month</summary>
+    <ul>{values.map((v, i) => <li key={i}>{MONTHS[i]}: {show(v)}</li>)}</ul></details>;
 }

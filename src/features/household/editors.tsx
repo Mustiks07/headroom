@@ -7,7 +7,7 @@ import { MoneyField, TriState } from "@/components/MoneyField";
 import { MONTHS } from "@/features/format";
 import {
   INTEREST_FIELDS, SCOPE_EXCLUSIONS, SUPPORTED_STATES, US_STATES, WAGE_FIELDS, adults, confirmedZero, fieldId,
-  personName, syncHousehold, unknownFact, type Draft, type FilingStatus, type IncomeField,
+  personName, pruneInvalid, syncHousehold, unknownFact, type Draft, type FilingStatus, type IncomeField,
 } from "./draft";
 
 export type Update = (mutate: (draft: Draft) => void) => void;
@@ -111,7 +111,7 @@ export function HouseholdBasics({ draft, update, problemAt }: { draft: Draft; up
 /* ---------------- Income ---------------- */
 
 const fieldHints: Partial<Record<IncomeField, string>> = {
-  scheduleCProfit: "Expected net profit for the whole year: what clients pay minus business expenses. Not the same as money received.",
+  scheduleCProfit: "Whole-year 2026 profit: what clients pay minus business expenses. Where to find it: profit so far in your bookkeeping, plus what you expect by December 31. Not the same as bank deposits.",
   grossWages: "Total pay before deductions: year-to-date from your latest pay stub plus expected remaining paychecks.",
   payrollPretaxDeductions: "401(k), HSA, cafeteria-plan and similar deductions taken before tax.",
   w2Box1: "Taxable wages. You don't need a 2026 W-2 yet — estimate from pay stubs.",
@@ -136,7 +136,7 @@ export function IncomeEditor({ draft, update, problemAt, yearIndex, personId }: 
 
   const set = (key: IncomeField, fact: MoneyFact) => update(d => { d.years[yearIndex].incomes[rowIndex][key] = fact; });
   const setGroup = (keys: readonly IncomeField[], make: () => MoneyFact) =>
-    update(d => { for (const k of keys) d.years[yearIndex].incomes[rowIndex][k] = make(); });
+    update(d => { for (const k of keys) { d.years[yearIndex].incomes[rowIndex][k] = make(); pruneInvalid(d, `${base}.${k}`); } });
   const field = (key: IncomeField, label: string, noneLabel?: string) =>
     <MoneyField key={key} path={`${base}.${key}`} label={label} hint={fieldHints[key]} fact={row[key]} evidence={draft.evidence}
       onChange={f => set(key, f)} noneLabel={noneLabel} problem={problemAt(`${base}.${key}`)} />;
@@ -208,9 +208,9 @@ export function CoverageEditor({ draft, update, problemAt, yearIndex }: { draft:
     update(d => { for (const m of d.years[yearIndex].coverage) m[key] = v; });
 
   const labels: Record<CoverageKey, [string, string, string?]> = {
-    enrollmentPremium: ["Full monthly premium", "The plan's price before any credit, for everyone on the plan."],
-    benchmarkPremium: ["Benchmark premium (second-lowest-cost silver plan)", "From your Marketplace eligibility notice or HealthCare.gov plan preview. Headroom doesn't look this up."],
-    advancePtc: ["Advance credit paid each month", "The premium tax credit sent to your insurer. Your bill is the premium minus this.", "None"],
+    enrollmentPremium: ["Full monthly premium", "The plan's price before any credit. Where to find it: your Marketplace account under “My plans”, or the plan's monthly premium on your insurer's statement."],
+    benchmarkPremium: ["Benchmark premium (second-lowest-cost silver plan)", "Where to find it: your Marketplace eligibility notice, or HealthCare.gov's plan preview for your household (the second-cheapest Silver plan). Headroom doesn't look this up."],
+    advancePtc: ["Advance credit paid each month", "Where to find it: “premium tax credit” or “APTC” per month in your Marketplace account. Your bill is the premium minus this.", "None"],
   };
 
   return <div className="stack">
@@ -241,7 +241,11 @@ export function CoverageEditor({ draft, update, problemAt, yearIndex }: { draft:
     </div>}
     <div className="row gap">
       <button type="button" className="link-btn" onClick={() => {
-        if (byMonth) update(d => { const first = d.years[yearIndex].coverage[0]; for (const m of d.years[yearIndex].coverage) for (const k of COVERAGE_KEYS) m[k] = { ...first[k] }; });
+        if (byMonth) update(d => {
+          const first = d.years[yearIndex].coverage[0];
+          for (const m of d.years[yearIndex].coverage) for (const k of COVERAGE_KEYS) m[k] = { ...first[k] };
+          for (let i = 1; i < 12; i++) pruneInvalid(d, `${base}.coverage.${i}`);
+        });
         setByMonth(v => !v);
       }}>{byMonth ? "Use January's amounts for every month" : "Amounts change during the year? Enter month by month"}</button>
     </div>

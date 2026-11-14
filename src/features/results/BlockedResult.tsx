@@ -19,10 +19,10 @@ export function BlockedResult({ result, draft, onGoTo, onDownloadData, context }
     return <div className="blocked needs" role="status">
       <div className="blocked-head"><AlertTriangle size={20} aria-hidden="true" />
         <div><h3>{context === "risk" ? "A few facts are needed before we can check your subsidy" : "A few facts are needed before we can compare options"}</h3>
-          <p>{result.message}</p></div></div>
+          <p>{result.fields.length ? `Add ${result.fields.length === 1 ? "this fact" : `these ${result.fields.length} facts`}, an estimate, or confirm “none”. Unknown amounts are never treated as zero.` : result.message}</p></div></div>
       {result.fields.length > 0 && <ul className="missing-list">
         {result.fields.map(f => <li key={f.path + f.reason}>
-          <div><strong>{describePath(f.path, draft)}</strong><span>{f.reason}</span></div>
+          <div><strong>{describePath(f.path, draft)}</strong><span>{plainReason(f.reason)}</span></div>
           {onGoTo && <button type="button" className="btn small secondary" onClick={() => onGoTo(f.path)}>Add this</button>}
         </li>)}
       </ul>}
@@ -67,4 +67,10 @@ export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (
       <div><h3>Something went wrong while calculating</h3><p>{message}</p><p className="hint">Your entries are kept.</p></div></div>
     {onRetry && <button type="button" className="btn small secondary" onClick={onRetry}>Try again</button>}
   </div>;
+}
+
+/** Drops the engine's internal "person: field is unknown for year." prefix; the label above already names the field. */
+function plainReason(reason: string): string {
+  const cleaned = reason.replace(/^\w+: \w+ is unknown for \d{4}\.\s*/, "");
+  return cleaned || reason;
 }
