@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CountyPicker } from "@/features/insurance/CountyPicker";
 import { Plus, Trash2 } from "lucide-react";
 import type { MoneyFact } from "@/domain/contracts";
 import { MoneyField, TriState } from "@/components/MoneyField";
@@ -61,10 +62,8 @@ export function HouseholdBasics({ draft, update, problemAt }: { draft: Draft; up
         {problemAt("state") && <p className="field-error">{problemAt("state")}</p>}
       </div>
       <div className="field">
-        <label className="field-label" htmlFor={fieldId("countyFips")}>County code <span className="optional">optional</span></label>
-        <input id={fieldId("countyFips")} inputMode="numeric" maxLength={5} placeholder="5-digit FIPS, e.g. 47037" value={draft.countyFips ?? ""}
-          onChange={e => { const v = e.target.value.replace(/\D/g, ""); update(d => { d.countyFips = v.length === 5 ? v : v === "" ? null : d.countyFips; }); }} />
-        <p className="hint">Only used to label county plan estimates. Your Marketplace benchmark premium matters more.</p>
+        <label className="field-label" htmlFor={fieldId("countyFips")}>County <span className="optional">optional</span></label>
+        <CountyPicker id={fieldId("countyFips")} state={draft.state} countyFips={draft.countyFips} onChange={fips => update(d => { d.countyFips = fips; })} />
       </div>
     </div>
 

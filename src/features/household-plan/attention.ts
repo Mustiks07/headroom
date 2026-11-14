@@ -59,7 +59,9 @@ export function attentionItems(ws: HouseholdWorkspace, evaluation: WorkspaceEval
       detail: "Headroom doesn't send anything. When you've sent them, mark it in Chosen terms.", action: { kind: "packages", label: "Open chosen terms" } });
     // Payments to receive are already listed from the project's own lines (and disappear once recorded).
     const kindOf = (r: { actionId: string }) => pkg.variant.actions.find(a => a.id === r.actionId)?.kind;
-    for (const r of pkg.reminders.filter(r => r.status === "open" && r.date && r.date <= addDays(today, 14) && kindOf(r) !== "receive_payment").slice(0, 2))
+    // SEP contributions are already listed from the retirement goal above; sending terms from the draft item.
+    const covered = (r: { actionId: string }) => { const k = kindOf(r); return k === "receive_payment" || (k === "sep_contribution" && ws.retirement.targets.length > 0) || (k === "send_terms" && pkg.status === "draft"); };
+    for (const r of pkg.reminders.filter(r => r.status === "open" && r.date && r.date <= addDays(today, 14) && !covered(r)).slice(0, 2))
       items.push({ id: `rem-${r.uid}`, tone: "due", title: humanizeDates(r.title), detail: `By ${shortDate(r.date)} · from the terms for “${title}”.`, action: { kind: "packages", label: "Open chosen terms" } });
   }
 
@@ -74,7 +76,9 @@ export function attentionItems(ws: HouseholdWorkspace, evaluation: WorkspaceEval
   // What was recently done (recorded facts), so progress is visible.
   const done = [...ws.events].filter(e => e.kind === "payment_recorded" || e.kind === "sep_contribution_recorded").sort((a, b) => b.at.localeCompare(a.at)).slice(0, 2);
   for (const e of done) items.push({ id: `done-${e.id}`, tone: "done", title: "Done", detail: humanizeDates(e.description) });
-  return items;
+  // One entry per thing: the same id or the same open title is shown once.
+  const seen = new Set<string>();
+  return items.filter(i => { const key = i.tone === "done" ? i.id : i.title.toLowerCase(); if (seen.has(i.id) || seen.has(key)) return false; seen.add(i.id); seen.add(key); return true; });
 }
 
 function addDays(iso: string, n: number) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }

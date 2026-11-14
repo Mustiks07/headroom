@@ -1,0 +1,4 @@
+SYNTHETIC payment confirmation - not a real bank record
+Client: Bakery website redesign
+Payment received: $3,000.00
+Date received: 2026-12-14

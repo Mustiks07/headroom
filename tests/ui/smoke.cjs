@@ -155,6 +155,26 @@ async function startServer() {
       check(await page.locator("#deal-result .no-terms").count() === 1 && await page.locator("#deal-result .variant").count() === 0, "unreachable goal shows 'no terms' (no success card)");
     }
 
+    // 10. Round 5: "What changed?" → engine preview → Apply = one revision; the same sentence again saves nothing.
+    {
+      const wc = page.locator("#what-changed");
+      const show = async (t) => { await page.locator("#wc-text").fill(t); await wc.getByRole("button", { name: "Show the change" }).click();
+        await page.waitForFunction(() => { const w = document.querySelector("#what-changed"); return w && (w.querySelector(".proposal") || w.querySelector(".notice")) && !/Reading…/.test(w.textContent ?? ""); }, null, { timeout: 20000 }); };
+      const rev = async () => Number(/Revision (\d+)/.exec(await page.locator(".save-status").innerText())?.[1] ?? 0);
+      await page.locator("#deal-panel").getByRole("button", { name: "Close" }).click().catch(() => {});
+      await show("The bakery final payment moved to January 8, 2027");
+      check(await wc.locator(".preview table").count() >= 1, "update sentence shows an engine preview before anything is saved");
+      const r0 = await rev();
+      await wc.getByRole("button", { name: "Apply" }).click();
+      await page.waitForFunction(n => new RegExp(`Revision ${n + 1}\\b`).test(document.querySelector(".save-status")?.textContent ?? ""), r0, { timeout: 20000 });
+      await show("The bakery final payment moved to January 8, 2027");
+      const again = wc.getByRole("button", { name: /Nothing to save|Apply/ });
+      check(await again.isDisabled() && /already in your plan/i.test(await wc.innerText()), "repeating the same update saves nothing twice");
+      await wc.getByRole("button", { name: "Cancel" }).click();
+      await page.reload(); await settled();
+      check(await rev() === r0 + 1, `after reload the plan is at revision ${r0 + 1} (one revision for the update)`);
+    }
+
     for (const path of ["/", "/demo?case=family-cliff", "/check", "/household", "/plans", "/pricing"]) {
       await mobile.goto(base + path); await mobile.waitForTimeout(1200);
       const w = await mobile.evaluate(() => document.documentElement.scrollWidth);

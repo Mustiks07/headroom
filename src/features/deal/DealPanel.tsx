@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Readiness } from "@/features/assist/Readiness";
+import { Explain } from "@/features/assist/Explain";
+import { trackEvent } from "@/lib/client/api";
 import { AlertTriangle, CheckCircle2, CircleSlash, Star, XCircle } from "lucide-react";
 import type { DealSearchResult, DealVariant, DecisionSensitivityResult, NoFeasibleTerms, ReadyDealSearch } from "@/domain/deal-planning";
 import { effectiveLine, type HouseholdWorkspace, type Project } from "@/domain/household-workspace";
@@ -21,13 +24,16 @@ type SearchState = { key: string; pending: boolean; result?: DealSearchResult; e
  * Goal-first deal planning for one project: the household says what it needs; Claude 2's engine
  * searches allowed terms; this panel only displays the result and lets the person choose.
  */
-export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, onClose }: {
+export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, onClose, onSubmitAnswer, onGoToPath }: {
   ws: HouseholdWorkspace; project: Project;
   /** Saves goal + allowed terms (+ cash context) as a plan revision; returns the saved workspace or null on failure. */
   onSaveGoal: (built: Extract<ReturnType<typeof buildGoal>, { ok: true }>) => Promise<HouseholdWorkspace | null>;
   onChoose: (variant: DealVariant, result: ReadyDealSearch) => void;
   onGoToForecast: () => void;
   onClose: () => void;
+  onSubmitAnswer: (next: HouseholdWorkspace, summary: string) => Promise<boolean>;
+  /** Opens the plan editor that holds a fact the search still needs. */
+  onGoToPath: (path: string) => void;
 }) {
   const savedGoal = ws.dealPlanning?.goals.find(g => g.projectId === project.id);
   const savedSpace = ws.dealPlanning?.termSpaces.find(t => t.projectId === project.id);
@@ -54,12 +60,14 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
       const space = saved.dealPlanning!.termSpaces.find(t => t.projectId === project.id)!;
       const result = await searchTerms(saved, goal, space, saved.dealPlanning!.cashContext);
       setSearch({ key: draftKey, pending: false, result });
+      if (result.status === "ready") void trackEvent("result_calculated", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "manual" });
     } catch (e) { setSearch({ key: draftKey, pending: false, error: e instanceof Error ? e.message : String(e) }); }
     setBusy(false);
     setTimeout(() => document.getElementById("deal-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   }
 
   const stale = !!search && search.key !== draftKey;
+  const savedGoalId = (ws.dealPlanning?.goals ?? []).filter(g => g.projectId === project.id).at(-1)?.id ?? null;
   const r = search?.result;
 
   /** A computed one-constraint relaxation can be applied to the form, then searched again. */
@@ -79,6 +87,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
     </div>
     <p className="muted small">Tell Headroom what your household needs. It searches prices and payment dates you&apos;d be willing to ask for — on top of your agreed projects — and shows only terms it actually calculated.
       {unpaid.length > 0 && <> Still open: {unpaid.map(e => `${money(e.amountCents)} expected ${shortDate(e.date)}`).join(", ")}.</>}</p>
+    <Readiness ws={ws} intent="two_year_terms" projectId={project.id} onAnswer={onGoToPath} onSubmit={onSubmitAnswer} />
     <GoalForm ws={ws} project={project} goal={draft} onChange={setDraft} problems={problems} touched={touched} fixedReceived={fixed} />
     {message && <p className="field-error" role="alert">{message}</p>}
     <div className="row gap wrap">
@@ -93,6 +102,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
       {r && !search?.pending && (r.status === "needs_data" || r.status === "unsupported" || r.status === "unavailable") && <BlockedDeal result={r} onGoToForecast={onGoToForecast} />}
       {!search?.pending && r?.status === "no_feasible_terms" && <NoTerms result={r} onApply={applyRelaxation} />}
       {!search?.pending && r?.status === "ready" && <Variants ws={ws} result={r} stale={stale} onChoose={v => onChoose(v, r)} onGoToForecast={onGoToForecast} />}
+      {!search?.pending && r?.status === "ready" && !stale && savedGoalId && <Explain ws={ws} subject="deal_choice" refId={savedGoalId} label="Why these options?" />}
     </div>
   </section>;
 }
@@ -143,36 +153,87 @@ function searchedText(r: ReadyDealSearch | NoFeasibleTerms) {
 
 function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: HouseholdWorkspace; result: ReadyDealSearch; stale: boolean; onChoose: (v: DealVariant) => void; onGoToForecast: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<"settled" | "by_date">("settled");
+  // Mobile (design C): one selected option shown in full, the others as selection rows.
+  const [sel, setSel] = useState(result.recommendedVariantId);
+  useEffect(() => { setSel(result.recommendedVariantId); }, [result]);
+  const sorted = [...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId));
   return <div className="deal-result">
+    <div className="horizon" role="radiogroup" aria-label="Which money to show">
+      {([["settled", "After tax settlements"], ["by_date", "By your date"]] as const).map(([k, label]) =>
+        <label key={k} className={view === k ? "on" : ""}><input type="radio" name="horizon" checked={view === k} onChange={() => setView(k)} />{label}</label>)}
+    </div>
     <p className="baseline-note"><strong>Compared with: {result.baseline.label}.</strong> {humanizeDates(result.baseline.description)} Cash is what your family keeps after both tax years settle (through {shortDate(result.horizon.settlementThrough)}) — not a bank balance.</p>
     {result.cashCompleteness === "household_incomplete" && <p className="notice warn small">Your balance goal can&apos;t be confirmed because the cash picture isn&apos;t marked complete. Only this project&apos;s money is shown; Headroom doesn&apos;t say whether your household will cover every bill.</p>}
     <div className={`variant-grid ${stale ? "is-stale" : ""}`}>
-      {result.variants.map(v => <VariantCard key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
-        onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} />)}
+      {sorted.map(v => <VariantCard selected={v.id === sel} key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
+        onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} view={view} />)}
     </div>
+    {sorted.length > 1 && <fieldset className="choice-rows">
+      <legend className="section-title small">Compare your choices</legend>
+      {sorted.map(v => {
+        const rob = (v as { robustness?: { holds: boolean } }).robustness;
+        const date = v.dateTargets.find(t => t.achievedCents !== null);
+        const amount = view === "by_date" ? (date?.achievedCents ?? null) : v.twoYearCashDeltaCents;
+        return <label key={v.id} className={`choice-row ${v.id === sel ? "on" : ""}`}>
+          <input type="radio" name="variant-choice" checked={v.id === sel} onChange={() => setSel(v.id)} />
+          <span className="choice-main"><strong>{PURPOSE[v.purpose]}{v.id === result.recommendedVariantId ? " · Our pick" : ""}</strong>
+            <span>{v.retirementAddedCents > 0 ? `+${money(v.retirementAddedCents)} retirement` : "No added retirement"}{rob && !rob.holds ? " · Sensitive to income" : ""}</span></span>
+          <span className={`choice-amount num ${amount !== null && view === "settled" ? signClass(amount) : ""}`}>{amount === null ? "—" : view === "settled" ? signedMoney(amount) : money(amount)}</span>
+        </label>;
+      })}
+      <p className="hint">{view === "settled" ? "Amounts are cash after both tax settlements, compared with declining. Retirement is separate." : "Amounts are project money received by your date — gross, not profit after tax."}</p>
+    </fieldset>}
     <p className="hint">Searched {searchedText(result)}. {result.search.exhaustiveWithinSpace ? "Every combination within your limits was checked." : humanizeDates(result.search.note)}
       {result.simplerVariantThresholdCents > 0 && ` A simpler option is preferred when the more complex one adds less than ${money(result.simplerVariantThresholdCents)}.`}</p>
     {result.warnings.length > 0 && <details className="explain"><summary>Conditions and notes ({result.warnings.length})</summary><ul className="bullets small">{result.warnings.map(w => <li key={w}>{humanizeDates(w)}</li>)}</ul></details>}
   </div>;
 }
 
-function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disabled, result, onGoToForecast }: {
+function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disabled, result, onGoToForecast, view, selected }: {
   ws: HouseholdWorkspace; v: DealVariant; recommended: boolean; expanded: boolean; onToggle: () => void; onChoose: () => void; disabled: boolean;
-  result: ReadyDealSearch; onGoToForecast: () => void;
+  result: ReadyDealSearch; onGoToForecast: () => void; view: "settled" | "by_date"; selected: boolean;
 }) {
   const goalMet = v.constraints.every(c => c.satisfied) && v.dateTargets.every(t => t.met !== false);
-  return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"}`} aria-labelledby={`v-${v.id}`}>
+  // Round 5 engine fields (Claude 2): cash vs declining AND vs the offer as it stands; robustness of the pick.
+  const byDate = v.dateTargets.find(t => t.achievedCents !== null) ?? null;
+  // Round 5 engine fields (Claude 2 bc99600): who must agree, and money from this project at each date.
+  const agree = (v as { clientAgreement?: { required: boolean; changes: Array<"price" | "dates">; note: string | null } }).clientAgreement;
+  const mbd = (v as { moneyByDate?: Array<{ date: string; receivedCents: number; availableCents: number; event: string }> }).moneyByDate ?? [];
+  const yearEnd = mbd.find(r => r.date === "2026-12-31") ?? null;
+  const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null } }).comparisons;
+  const rob = (v as { robustness?: { holds: boolean; basis: string; roomCents: number | null } }).robustness;
+  return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"} ${selected ? "is-selected" : "is-unselected"}`} aria-labelledby={`v-${v.id}`}>
     <header><p className="tile-k">{PURPOSE[v.purpose]}</p>{recommended && <span className="pill good"><Star size={13} aria-hidden="true" /> Our pick</span>}</header>
     <h3 id={`v-${v.id}`} className="variant-title">{humanizeDates(v.label)}</h3>
-    <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
-    <p className="tile-sub">cash after both tax years · {result.baseline.kind === "accept_as_offered" ? "vs. accepting as offered" : "vs. declining these terms"}</p>
+    {view === "settled" ? <>
+      <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
+      <p className="tile-sub">Extra cash after both tax settlements · {result.baseline.kind === "accept_as_offered" ? "compared with accepting as offered" : "compared with declining this project"} · 2026–2027 tax years, final settlement in {result.horizon.settlementThrough.slice(0, 4)}</p>
+    </> : <>
+      {byDate && byDate.achievedCents !== null ? <>
+        <p className="tile-big num">{money(byDate.achievedCents)}</p>
+        <p className="tile-sub">{humanizeDates(byDate.explanation)}</p>
+      </> : yearEnd ? <>
+        <p className="tile-big num">{money(yearEnd.availableCents)}</p>
+        <p className="tile-sub">Available from this project by Dec 31, 2026 — after its costs, any extra SEP-IRA and the tax set aside. No date goal is set.</p>
+      </> : <p className="tile-sub">No money-by-date figures for this option.</p>}
+      {mbd.length > 0 && <table className="mbd"><caption className="visually-hidden">Money from this project by date</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col">Received</th><th scope="col">Available</th></tr></thead>
+        <tbody>{mbd.map(r => <tr key={r.date}><th scope="row"><span>{shortDate(r.date)}</span><span className="mbd-event">{humanizeDates(r.event)}</span></th>
+          <td className="num">{money(r.receivedCents)}</td><td className={`num ${r.availableCents < 0 ? "neg" : ""}`}>{money(r.availableCents)}</td></tr>)}</tbody></table>}
+      {mbd.length > 0 && <p className="hint">Received = gross payments. Available = after this project&apos;s costs, extra SEP-IRA and the tax and credit change set aside; the last row matches the result after both returns.</p>}
+    </>}
     {v.retirementAddedCents > 0 && <p className="tile-line">+ <strong className="num">{money(v.retirementAddedCents)}</strong> into retirement (not counted as cash)</p>}
+    {cmp && cmp.versusOfferedCents !== null && v.purpose !== "as_offered" && <p className="tile-line"><span className={`num ${signClass(cmp.versusOfferedCents)}`}>{signedMoney(cmp.versusOfferedCents)}</span> compared with the offer as it stands</p>}
+    {(agree ? agree.required : v.purpose !== "as_offered") && <p className="tile-line small"><span className="client-agreement">Client agreement needed</span>{" "}
+      for the changed {agree && agree.changes.length ? agree.changes.map(c => c === "price" ? "price" : "payment dates").join(" and ") : "price or payment dates"}. Proposed payments, not money received.{agree?.note ? ` ${humanizeDates(agree.note)}` : ""}</p>}
+    {rob && !rob.holds && <p className="notice warn small">Little room: {rob.roomCents !== null ? `about ${money(rob.roomCents)} of extra 2026–2027 profit could break this` : "a small change in income could break this"}{rob.basis === "declared_ranges" ? " within the income ranges you entered" : ""}. Check the details before you choose.</p>}
     <dl className="terms">
       <div><dt>Ask for</dt><dd className="num">{money(v.terms.priceCents)}</dd></div>
       <div><dt>Payments</dt><dd>{v.terms.payments.map(p => `${money(p.amountCents)} on ${shortDate(p.date)}`).join(" · ") || "—"}</dd></div>
       {v.terms.additionalSep && <div><dt>Extra SEP-IRA</dt><dd>{money(v.terms.additionalSep.amountCents)} for {v.terms.additionalSep.year} ({personName(ws.household, v.terms.additionalSep.personId)})</dd></div>}
     </dl>
-    {v.dateTargets.map(t => <p key={t.targetId} className={`target ${t.met ? "met" : t.met === false ? "missed" : ""}`}>
+    {view === "settled" && v.dateTargets.map(t => <p key={t.targetId} className={`target ${t.met ? "met" : t.met === false ? "missed" : ""}`}>
       {t.met ? <CheckCircle2 size={14} aria-hidden="true" /> : <XCircle size={14} aria-hidden="true" />} {humanizeDates(t.explanation)}{t.achievedCents !== null ? ` (${money(t.achievedCents)})` : ""}</p>)}
     {v.aca.some(a => a.creditLost) && <p className="target missed"><XCircle size={14} aria-hidden="true" /> Loses the {v.aca.filter(a => a.creditLost).map(a => a.year).join(" and ")} premium tax credit</p>}
     {v.differenceFromBestCents !== 0 && <p className="hint">{money(Math.abs(v.differenceFromBestCents))} less cash than the option with the most cash{v.purpose === "simplest" || v.purpose === "as_offered" ? " — with fewer changes to ask for" : ""}.</p>}

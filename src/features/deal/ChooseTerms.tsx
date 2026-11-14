@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Explain } from "@/features/assist/Explain";
 import { CalendarDays, Check, Copy, Download, FileText } from "lucide-react";
 import type { ActionPackage, DealVariant, ReadyDealSearch } from "@/domain/deal-planning";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
@@ -117,10 +118,14 @@ export function PackageCard({ ws, pkg, onShared, onAgreed, onReminder, onNotice 
       <button type="button" className="btn small ghost" disabled={!usable || busy === "pdf"} onClick={() => void exp("pdf")}><FileText size={14} /> {busy === "pdf" ? "Preparing…" : "Decision summary (PDF)"}</button>
       <button type="button" className="btn small ghost" disabled={!usable || busy === "ics"} onClick={() => void exp("ics")}><CalendarDays size={14} /> Calendar (.ics)</button>
     </div>
+    {pkg.status === "client_agreed" && !usable && <p className="hint">The dated decision record and the calendar of current actions are under “Decisions and calendar” below.</p>}
     {!usable && currency && pkg.status !== "client_agreed" && <p className="hint">Exports and agreement need a current calculation. Open “Find terms for my goal” and search again.</p>}
     <details className="explain"><summary>Message to your client and next actions</summary>
       <ClientDraftView draft={pkg.clientDraft} notes={clientDraftNotes(v)} />
       <RemindersView pkg={pkg} onToggle={onReminder} />
     </details>
+    {pkg.status === "client_agreed"
+      ? <Explain ws={ws} subject="agreed_plan" refId={pkg.projectId} label="How the agreed terms work on today's figures" />
+      : <Explain ws={ws} subject="deal_choice" refId={pkg.id} label="Why this option?" />}
   </article>;
 }

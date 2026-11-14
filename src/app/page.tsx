@@ -1,23 +1,39 @@
 import Link from "next/link";
-import { ArrowRight, Briefcase, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
+import { TrackVisit } from "@/features/start/TrackVisit";
+import { ArrowRight, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { samples } from "@/features/samples";
+import { ContinuePlan } from "@/features/start/ContinuePlan";
+import { HeroEntry } from "@/features/start/HeroEntry";
 
 export default function Home() {
   return <>
-    <SiteHeader />
+    <SiteHeader stage />
     <main id="main">
-      <section className="hero shell">
-        <p className="eyebrow">For self-employed people with Marketplace health insurance</p>
-        <h1>Plan your income.<br />Protect your health-insurance subsidy.</h1>
-        <p className="intro">See how changing income affects your family&apos;s coverage—and compare what you can do next.</p>
-        <div className="cta-row">
-          <Link href="/check" className="btn primary large">Check my subsidy <ArrowRight size={18} /></Link>
-          <Link href="/demo" className="btn secondary large">Try a sample household</Link>
+      <section className="hero" aria-labelledby="hero-title">
+        <div className="shell hero-inner">
+          <h1 id="hero-title">Before you say yes.</h1>
+          <p className="hero-lead">See what a client offer leaves you after tax and health insurance.</p>
+          <div className="hero-entry"><HeroEntry /></div>
+          <div className="hero-scene" aria-hidden="true">
+            <picture>
+              <source type="image/webp" srcSet="/brand/hero-scene-640.webp 640w, /brand/hero-scene-1024.webp 1024w, /brand/hero-scene-1536.webp 1536w" sizes="(max-width: 800px) 92vw, 960px" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/hero-scene-1024.webp" alt="" width={1536} height={1024} decoding="async" fetchPriority="high" />
+            </picture>
+            <div className="offer-paper"><span>Client offer</span><strong>$12,000</strong></div>
+          </div>
         </div>
-        <p className="cta-aside"><Briefcase size={16} aria-hidden="true" /> Got a new client offer? <Link href="/check?start=project" className="text-link">Check a new project</Link></p>
-        <p className="muted small">No account, no card. Free to check your risk.</p>
       </section>
+    <div className="after-stage">
+      <ol className="shell flow-strip" aria-label="How it works">
+        <li>Your offer</li><li>Your facts</li><li>Your next move</li>
+      </ol>
+      <div className="shell after-entry">
+        <ContinuePlan />
+        <TrackVisit />
+        <p className="small muted">Not about an offer? <Link className="text-link" href="/start?intent=year">Check my year&apos;s income</Link> — whether this year keeps your subsidy, no project needed. The $12,000 above is illustrative.</p>
+      </div>
 
       <section className="shell band" aria-labelledby="why">
         <div className="why-grid">
@@ -82,6 +98,7 @@ export default function Home() {
           <p className="muted">Checking your risk is free. A year of plan updates, scenarios and accountant-ready exports is $99. In this demo, everything is unlocked.</p></div>
         <Link href="/pricing" className="btn ghost">See what&apos;s included</Link>
       </section>
+    </div>
     </main>
     <SiteFooter />
   </>;

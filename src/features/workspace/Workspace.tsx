@@ -22,6 +22,14 @@ import { RiskResult } from "@/features/results/RiskPanel";
 import { ComparisonView, DecisionOverview } from "@/features/results/ComparisonView";
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { StorageFallback } from "@/features/plan/StorageFallback";
+import { PASTED_KEY } from "@/features/start/StartChooser";
+import { trackEvent } from "@/lib/client/api";
+import { useJourney } from "@/components/JourneyNav";
+
+/** Pasted offer/statement text is used once for this import, then removed from the browser. */
+function takePasted(): string | null {
+  try { const t = sessionStorage.getItem(PASTED_KEY); sessionStorage.removeItem(PASTED_KEY); return t; } catch { return null; }
+}
 import { workspaceFromCase } from "@/features/household-plan/ops";
 import { workspaceRepo } from "@/features/household-plan/store";
 import {
@@ -51,14 +59,16 @@ function firstIncomplete(d: Draft): SectionKey {
   return "D";
 }
 
-export function Workspace({ seed, mode, initialStep = "household", entry }: {
-  seed: CaseInput | null; mode: "own" | "demo"; initialStep?: Step; entry?: "project";
+export function Workspace({ seed, mode, initialStep = "household", entry, importMode }: {
+  seed: CaseInput | null; mode: "own" | "demo"; initialStep?: Step; entry?: "project"; importMode?: "doc" | "pasted";
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(() => seed ? draftFromCase(seed) : blankDraft());
   const [version, setVersion] = useState(0);
   const [loaded, setLoaded] = useState(mode === "demo");
   const [step, setStep] = useState<Step>(initialStep);
+  const [pastedText, setPastedText] = useState<string | null>(null);
+  useEffect(() => { if (importMode === "pasted") setPastedText(takePasted()); }, [importMode]);
   const [risk, setRisk] = useState<Run<RiskAssessment>>(IDLE_RUN);
   const [comparison, setComparison] = useState<Run<ComparisonResult>>(IDLE_RUN);
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
@@ -221,6 +231,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
     try {
       const ws = workspaceFromCase(built.input, draftRef.current.ui.forecasts ?? [], draftRef.current.ui.projectStarted);
       const saved = await workspaceRepo().save(ws, null);
+      void trackEvent("plan_saved", { dataKind: mode === "own" ? "own" : "sample", inputPath: importMode === "doc" ? "document" : importMode === "pasted" ? "paste" : "manual" });
       router.push(`/household/${encodeURIComponent(saved.id)}?saved=1`);
     } catch (e) { setSaveError(`The household plan couldn't be saved: ${e instanceof Error ? e.message : String(e)}. Your figures here are kept.`); }
   }
@@ -249,6 +260,18 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   const riskStale = isStale(risk, version) || risk.pending;
   const compStale = isStale(comparison, version) || comparison.pending;
   const riskReady = risk.outcome?.kind === "done" && risk.outcome.result.status === "ready" ? risk.outcome.result : null;
+  const compareReady = comparison.outcome?.kind === "done" && comparison.outcome.result.status === "ready";
+  useJourney({ current: step === "household" ? "facts" : compareReady ? "terms" : "offer" }, s => {
+    if (s === "facts") { setStep("household"); window.scrollTo({ top: 0 }); }
+    else if (s === "offer") { setStep("compare"); window.scrollTo({ top: 0 }); }
+    else { setStep("compare"); if (!compareReady) void runComparison(); scrollToId("compare-area"); }
+  });
+  const tracked = useRef(false);
+  useEffect(() => {
+    if (!riskReady || tracked.current) return;
+    tracked.current = true;
+    void trackEvent("result_calculated", { dataKind: mode === "own" ? "own" : "sample", inputPath: importMode === "doc" ? "document" : importMode === "pasted" ? "paste" : mode === "own" ? "manual" : "none" });
+  }, [riskReady, mode, importMode]);
   const invalidCount = invalidProblems(draft).length;
   const progressive = mode === "own";
   const sectionProps = (key: SectionKey) => ({ k: key, open: openSections.has(key), onToggle: () => toggleSection(key),
@@ -265,7 +288,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
         <HouseholdBasics draft={draft} update={update} problemAt={problemAt} />
       </Section>
       <Section {...sectionProps("B")} title="2026 income forecast" lead="Your best estimate for the whole year, each adult separately. Leave anything you don't know blank — it stays unknown, never zero.">
-        <details className="doc-disclosure"><summary>Have a pay stub or statement? Import figures from it (optional)</summary><DocumentImport draft={draft} update={update} /></details>
+        {!importMode && <details className="doc-disclosure"><summary>Have a pay stub or statement? Import figures from it (optional)</summary><DocumentImport draft={draft} update={update} /></details>}
         {adults(draft).map(p => <IncomeEditor key={p.id} draft={draft} update={update} problemAt={problemAt} yearIndex={0} personId={p.id} />)}
       </Section>
       <Section {...sectionProps("C")} title="2026 health coverage" lead="Your Marketplace plan for 2026.">
@@ -346,7 +369,9 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
             <button type="button" className="btn ghost small" onClick={startOver}><RotateCcw size={15} /> Start over</button>
           </div>
           {restoredNote && <p className="notice" role="status">{restoredNote}</p>}
-          {entry === "project" && step === "household" && <p className="notice">First, a few facts about this year — the project is measured against them. You&apos;ll add the project in step 2.</p>}
+          {entry === "project" && step === "compare" && <p className="notice">Start with the offer. When you compare, Headroom lists only the household facts it still needs — nothing unknown is treated as $0.</p>}
+          {importMode && loaded && <div className="import-first"><h2 className="small-head">{importMode === "pasted" ? "Figures from the text you pasted" : "Your documents"}</h2>
+            <DocumentImport draft={draft} update={update} initialText={pastedText} /></div>}
           {step === "household" && <p className="muted small">About 5 minutes. Your figures stay in this browser while you work.</p>}
         </div>
         <div className="ws-grid">

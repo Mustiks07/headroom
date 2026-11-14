@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, FileUp, X } from "lucide-react";
 import type { ExtractionResult } from "@/domain/contracts";
-import { EXTRACTION_FIELDS, extractDocument, getCapabilities, type ExtractionFieldPath, type ProposedFieldValue } from "@/lib/client/api";
+import { EXTRACTION_FIELDS, extractDocument, getCapabilities, trackEvent, type ExtractionFieldPath, type ProposedFieldValue } from "@/lib/client/api";
 import { moneyExact } from "@/features/format";
 import { adults, describePath, fieldId, getAt, isMoneyFact, personName, setAt, type Draft } from "./draft";
 import type { Update } from "./editors";
@@ -108,11 +108,19 @@ function defaultTarget(field: Field, draft: Draft): Target {
 const isPartialIncome = (field: Field) => field.path.startsWith("income.") && isProposed(field.proposedValue) &&
   field.proposedValue.kind === "money" && field.proposedValue.period !== "annual";
 
-export function DocumentImport({ draft, update }: { draft: Draft; update: Update }) {
+export function DocumentImport({ draft, update, initialText = null }: { draft: Draft; update: Update; initialText?: string | null }) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [aiAvailable, setAiAvailable] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const started = useRef(false);
   useEffect(() => { void getCapabilities().then(c => setAiAvailable(c.aiExtraction)); }, []);
+  // Pasted text is read like a .txt file by the same deterministic reader (no provider involved).
+  useEffect(() => {
+    if (!initialText || started.current) return;
+    started.current = true;
+    void read(new File([initialText], "pasted-text.txt", { type: "text/plain" }), false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText]);
 
   async function read(file: File, consentToProvider: boolean) {
     setState({ kind: "reading", name: file.name });
@@ -145,13 +153,47 @@ export function DocumentImport({ draft, update }: { draft: Draft; update: Update
       let changed = false;
       for (const path of prepared.paths) changed = setAt(d, path, isMoneyFact(prepared.value) ? { ...prepared.value } : prepared.value) || changed;
       if (changed && !d.evidence.some(e => e.id === field.evidence.id)) d.evidence.push(field.evidence);
+      // An offer figure starts the project, so its price/date show as entered (not "unknown").
+      if (changed && prepared.paths.some(x => x.startsWith("opportunity."))) d.ui.projectStarted = true;
     });
-    setState({ ...state, decided: { ...state.decided, [index]: "applied" } });
+    const decided = { ...state.decided, [index]: "applied" as const };
+    setState({ ...state, decided });
+    if (Object.keys(decided).length === state.fields.length) void trackEvent("review_completed", { dataKind: "own", inputPath: initialText ? "paste" : "document" });
     if (focusPath) setTimeout(() => {
       const el = document.getElementById(fieldId(focusPath));
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
       ((el?.matches("input,select") ? el : el?.querySelector("input,select")) as HTMLElement | null)?.focus({ preventScroll: true });
     }, 50);
+  }
+
+  /** A figure is "clear" when it maps to one field with no choice left (year, person, period, status). */
+  function isClear(i: number): boolean {
+    if (state.kind !== "review" || state.decided[i]) return false;
+    const field = state.fields[i];
+    if (isGeneric(field.path) && !field.path.startsWith("opportunity.")) return false;
+    if (isPartialIncome(field)) return false;
+    return prepare(field, state.targets[i], draft).ok;
+  }
+
+  /** One confirmation for every clear figure; anything needing a choice stays below, undecided. */
+  function applyClear() {
+    if (state.kind !== "review") return;
+    const idx = state.fields.map((_, i) => i).filter(isClear);
+    if (!idx.length) return;
+    const batch = idx.map(i => ({ field: state.fields[i], prepared: prepare(state.fields[i], state.targets[i], draft) }));
+    update(d => {
+      for (const { field, prepared } of batch) {
+        if (!prepared.ok) continue;
+        let changed = false;
+        for (const path of prepared.paths) changed = setAt(d, path, isMoneyFact(prepared.value) ? { ...prepared.value } : prepared.value) || changed;
+        if (changed && !d.evidence.some(e => e.id === field.evidence.id)) d.evidence.push(field.evidence);
+        if (changed && prepared.paths.some(x => x.startsWith("opportunity."))) d.ui.projectStarted = true;
+      }
+    });
+    const decided = { ...state.decided } as typeof state.decided;
+    for (const i of idx) decided[i] = "applied";
+    setState({ ...state, decided });
+    if (Object.keys(decided).length === state.fields.length) void trackEvent("review_completed", { dataKind: "own", inputPath: initialText ? "paste" : "document" });
   }
 
   function retarget(index: number, patch: Partial<Target>) {
@@ -190,8 +232,18 @@ export function DocumentImport({ draft, update }: { draft: Draft; update: Update
         <ul className="bullets small">{state.warnings.filter(w => !/^Document analysis is unavailable/.test(w)).map(w => <li key={w}>{w}</li>)}</ul>}
     </div>}
     {state.kind === "error" && <div className="notice warn" role="alert"><strong>We couldn&apos;t read that file.</strong> {state.message} Your entries are unchanged.</div>}
-    {state.kind === "review" && <div className="review">
+    {state.kind === "review" && <div className={`review ${initialText ? "with-source" : ""}`}>
+      {initialText && <aside className="source-card" aria-label="Source text">
+        <p className="source-head"><strong>Your text</strong><span className="muted small">only used for this import</span></p>
+        <pre className="source-text">{initialText.slice(0, 2000)}</pre>
+      </aside>}
+      <div className="review-col">
       <p className="small"><strong>Review figures from {state.name}</strong></p>
+      {(() => { const clear = state.fields.map((_, i) => i).filter(isClear); const open = state.fields.filter((_, i) => !state.decided[i]).length;
+        return open > 0 && <div className="review-summary" role="status">
+          <p><strong>{clear.length} of {open} figure{open === 1 ? "" : "s"}</strong> read clearly{open - clear.length > 0 ? `; ${open - clear.length} need${open - clear.length === 1 ? "s" : ""} your choice below` : ""}. Nothing changes until you confirm.</p>
+          {clear.length > 0 && <button type="button" className="btn primary" onClick={applyClear}><Check size={16} aria-hidden="true" /> Use {clear.length === 1 ? "this figure" : `these ${clear.length} figures`}</button>}
+        </div>; })()}
       {state.fields.length === 0 && <p className="hint">No usable figures were found. Enter them manually below.</p>}
       {state.warnings.length > 0 && <ul className="warnings">{state.warnings.map(w => <li key={w}>{w}</li>)}</ul>}
       <ul className="review-list">
@@ -237,12 +289,13 @@ export function DocumentImport({ draft, update }: { draft: Draft; update: Update
             {!prepared.ok && <p className="hint warn">{prepared.reason}</p>}
             {decided ? <p className="small">{decided === "applied" ? "✓ Applied" : "Skipped"}</p>
               : <div className="row gap">
-                <button type="button" className="btn small primary" disabled={!prepared.ok} onClick={() => apply(i)}><Check size={14} /> Use this figure</button>
+                <button type="button" className="btn small secondary" disabled={!prepared.ok} onClick={() => apply(i)}><Check size={14} /> Use only this</button>
                 <button type="button" className="btn small ghost" onClick={() => setState({ ...state, decided: { ...state.decided, [i]: "skipped" } })}><X size={14} /> Skip</button>
               </div>}
           </li>;
         })}
       </ul>
+      </div>
     </div>}
   </div>;
 }
