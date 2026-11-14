@@ -35,6 +35,31 @@ describe("document import", () => {
     expect(result.warnings.join(" ")).toMatch(/bank statement/);
   });
 
+  it("keeps expense dates separate from expense amounts and client payment dates", async () => {
+    const response = await upload([
+      "Project expenses: $900", "Expense payment date: 2026-12-10", "Payment date: 2027-01-05",
+    ].join("\n"), "project.txt", "text/plain");
+    const result = await response.json();
+    expect(result.fields.map((f: { path: string; proposedValue: unknown }) => [f.path, f.proposedValue])).toEqual([
+      ["opportunity.incrementalExpensesCents", { kind: "money", amountCents: 90_000, period: "one_time", asPrinted: "$900" }],
+      ["opportunity.expensePaymentDate", { kind: "date", date: "2026-12-10", asPrinted: "2026-12-10" }],
+      ["opportunity.plannedReceiptDate", { kind: "date", date: "2027-01-05", asPrinted: "2027-01-05" }],
+    ]);
+  });
+
+  it("skips ambiguous or partial amounts instead of silently changing their value", async () => {
+    const response = await upload([
+      "Annual business profit,118,000", "Business profit,45000,55000", "Project expenses: −500",
+      "Project fee: 500.123", "Project fee: 2026-12-10", "Project fee: $1,000 to $2,000",
+      "Annual business profit\t118,000",
+    ].join("\n"), "amounts.txt", "text/plain");
+    const result = await response.json();
+    expect(result.fields).toHaveLength(1);
+    expect(result.fields[0].proposedValue.amountCents).toBe(11_800_000);
+    expect(result.warnings.join(" ")).toMatch(/more than one value column/);
+    expect(result.warnings.join(" ")).toMatch(/unreadable and was skipped/);
+  });
+
   it("rejects an unsupported file with a manual-entry path", async () => {
     const response = await upload(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0, 0]), "notes.docx", "application/octet-stream");
     expect(response.status).toBe(415);

@@ -22,13 +22,12 @@ const LABELS: Array<[RegExp, ExtractionFieldPath]> = [
   [/(monthly\s+)?premium/i, "coverage.enrollmentPremium"],
   [/project\s+(name|title)|engagement\s+name/i, "opportunity.title"],
   [/(project|contract)\s+(fee|amount|price|total|value)|offer(ed)?\s+(amount|fee)/i, "opportunity.grossRevenueCents"],
-  [/(project\s+)?expenses?|subcontract(or)?\s+cost/i, "opportunity.incrementalExpensesCents"],
-  [/payment\s+(date|due|expected)|expected\s+payment|receipt\s+date|paid\s+on/i, "opportunity.plannedReceiptDate"],
   [/expense\s+(payment\s+)?date/i, "opportunity.expensePaymentDate"],
+  [/payment\s+(date|due|expected)|expected\s+payment|receipt\s+date|paid\s+on/i, "opportunity.plannedReceiptDate"],
+  [/(project\s+)?expenses?|subcontract(or)?\s+cost/i, "opportunity.incrementalExpensesCents"],
 ];
 
 const MAX_LINES = 5000;
-const AMOUNT_RE = /\(?-?\$?\s*\d[\d,]*(?:\.\d{1,2})?\)?/;
 const DATE_RE = /\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}/;
 
 function periodOf(line: string, field: ExtractionFieldPath): AmountPeriod {
@@ -39,14 +38,15 @@ function periodOf(line: string, field: ExtractionFieldPath): AmountPeriod {
   return "unknown";
 }
 
-/** Split "label: value", "label,value", "label\tvalue" or a 2+ column CSV row. */
-function splitLine(line: string): { label: string; value: string } | null {
-  const csv = line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, ""));
+/** A value must occupy one cell; multiple values must never be joined or guessed. */
+function splitLine(line: string): { label: string; value: string | null } | null {
   const colon = /^([^:]{2,80}):\s*(.+)$/.exec(line);
   if (colon) return { label: colon[1].trim(), value: colon[2].trim() };
+  const separator = line.includes("\t") ? /\t/ : /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
+  const csv = line.split(separator).map(c => c.trim().replace(/^"|"$/g, ""));
   if (csv.length >= 2 && /[A-Za-z]/.test(csv[0])) {
-    const value = csv.slice(1).find(c => c.length > 0);
-    return value ? { label: csv[0], value: csv.length === 2 ? value : csv.slice(1).join(" ") } : null;
+    const values = csv.slice(1).filter(c => c.length > 0);
+    return values.length ? { label: csv[0], value: values.length === 1 ? values[0] : null } : null;
   }
   return null;
 }
@@ -78,12 +78,15 @@ export function extractFromText(text: string, documentId: string, label: string)
     if (!parts) return;
     const match = LABELS.find(([re]) => re.test(parts.label));
     if (!match) return;
+    if (parts.value === null) {
+      warnings.push(`Line ${index + 1}: more than one value column was found. Use one amount per row and quote CSV amounts containing commas.`);
+      return;
+    }
     const path = match[1];
     const kind = EXTRACTION_FIELDS[path].kind;
     let proposedValue: ProposedFieldValue | null = null;
     if (kind === "money") {
-      const printed = AMOUNT_RE.exec(parts.value)?.[0];
-      if (!printed) return;
+      const printed = parts.value;
       const cents = parseUsdToCents(printed);
       if (cents === null) {
         warnings.push(`Line ${index + 1}: "${EXTRACTION_FIELDS[path].label}" is negative or unreadable and was skipped.`);
