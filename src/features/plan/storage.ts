@@ -1,7 +1,7 @@
 "use client";
 
 import { CaseInputSchema, CONTRACT_VERSION, type CaseInput, type PlanRepository, type ReadyComparison, type SavedPlan } from "@/domain/contracts";
-import { createPlanRepository } from "@/lib/client/api";
+import { createPlanRepository, HeadroomError, PlanConflictError } from "@/lib/client/api";
 
 let repo: PlanRepository | null = null;
 export function planRepository(): PlanRepository {
@@ -36,6 +36,12 @@ export function storageText(mode: StorageMode): string {
 }
 
 export function describeStorageError(e: unknown): string {
+  // Typed errors from the storage adapter (Claude 3) carry English UI copy and a stable code.
+  if (e instanceof PlanConflictError) return "This plan was changed somewhere else (maybe another tab). Reload to see the latest version — your edits here are kept until you leave.";
+  if (e instanceof HeadroomError) {
+    if (e.code === "STALE_RESULT") return "These results are out of date for the current inputs. Recalculate, then save again.";
+    return `Your plan couldn't be saved: ${e.message}`;
+  }
   const text = e instanceof Error ? e.message : String(e);
   if (/409|conflict|revision/i.test(text)) return "This plan was changed somewhere else (maybe another tab). Reload to see the latest version — your edits here are kept until you leave.";
   if (/not implemented|unavailable/i.test(text)) return `Saving isn't available in this build: ${text}`;
@@ -115,5 +121,5 @@ export function takeStashedInput(): CaseInput | null {
 
 export const DRAFT_KEY = "headroom.check.draft.v1";
 export function clearBrowserDrafts() {
-  try { localStorage.removeItem(DRAFT_KEY); sessionStorage.removeItem(HANDOFF_KEY); localStorage.removeItem("headroom.demo-access.v1"); } catch { /* ignore */ }
+  try { localStorage.removeItem(DRAFT_KEY); sessionStorage.removeItem(HANDOFF_KEY); localStorage.removeItem("headroom.demo-access.v1"); localStorage.removeItem("headroom:v1:entitlement"); } catch { /* ignore */ }
 }

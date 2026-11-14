@@ -16,7 +16,9 @@ export interface StorageModeInfo {
 
 export interface HeadroomPlanRepository extends PlanRepository {
   /** Which storage this repository actually uses in this browser session. */
-  storageMode(): Promise<StorageModeInfo>;
+  storageMode(): Promise<StorageMode>;
+  /** Same, with truthful English label/detail for the UI. */
+  storageModeInfo(): Promise<StorageModeInfo>;
 }
 
 const LOCAL_INFO: StorageModeInfo = {
@@ -68,7 +70,8 @@ export function createPlanRepository(): HeadroomPlanRepository {
     return local; // in "unavailable" mode the local repository throws a truthful StorageUnavailableError
   };
   return {
-    storageMode: getStorageMode,
+    storageMode: async () => (await getStorageMode()).mode,
+    storageModeInfo: getStorageMode,
     list: async () => (await target()).list(),
     get: async id => (await target()).get(id),
     save: async (plan, expectedRevision) => (await target()).save(plan, expectedRevision),
@@ -92,7 +95,8 @@ export async function clearLocalData(): Promise<void> {
     const keys: string[] = [];
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);
-      if (key && (key.startsWith("headroom:") || key === LOCAL_STORAGE_KEY)) keys.push(key);
+      // "headroom:" keys are storage/session/unlock; "headroom." keys are UI drafts and handoffs.
+      if (key && (key.startsWith("headroom:") || key.startsWith("headroom.") || key === LOCAL_STORAGE_KEY)) keys.push(key);
     }
     keys.forEach(key => window.localStorage.removeItem(key));
     window.sessionStorage?.clear?.();

@@ -68,18 +68,20 @@ export async function exportPlanPdf(plan: SavedPlan): Promise<Blob> {
   return response.blob();
 }
 
-export const PLAN_EXPORT_FORMAT = "headroom.plan" as const;
+/** File kinds shared with the UI (src/features/plan/storage.ts). */
+export const PLAN_EXPORT_FORMAT = "headroom.saved-plan" as const;
+export const CASE_EXPORT_FORMAT = "headroom.case-input" as const;
 
 /** Machine-readable plan for restoring later. Contains the input, result, choice and fingerprint. */
 export function exportPlanJson(plan: SavedPlan): Blob {
-  const document = { format: PLAN_EXPORT_FORMAT, formatVersion: 1, contractVersion: CONTRACT_VERSION,
-    calculationFingerprint: plan.comparison.calculationFingerprint, exportedAt: new Date().toISOString(), plan };
+  const document = { kind: PLAN_EXPORT_FORMAT, contractVersion: CONTRACT_VERSION, exportedAt: new Date().toISOString(),
+    calculationFingerprint: plan.comparison.calculationFingerprint, plan };
   return new Blob([JSON.stringify(document, null, 2)], { type: "application/json" });
 }
 
 /** Collected inputs only, for unsupported/blocked cases where no plan can be calculated. */
 export function exportCaseJson(input: CaseInput): Blob {
-  return new Blob([JSON.stringify({ format: "headroom.case", formatVersion: 1, contractVersion: CONTRACT_VERSION, input }, null, 2)],
+  return new Blob([JSON.stringify({ kind: CASE_EXPORT_FORMAT, contractVersion: CONTRACT_VERSION, exportedAt: new Date().toISOString(), input }, null, 2)],
     { type: "application/json" });
 }
 
@@ -89,21 +91,21 @@ export function exportCaseJson(input: CaseInput): Blob {
  */
 export async function importPlanJson(file: File | string): Promise<SavedPlan> {
   const text = typeof file === "string" ? file : await file.text();
-  let doc: { format?: string; plan?: SavedPlan; input?: unknown };
+  let doc: { kind?: string; plan?: SavedPlan; input?: unknown };
   try { doc = JSON.parse(text); } catch { throw new PlanIntegrityError("INVALID_FILE", "This is not a Headroom plan file."); }
-  if (doc?.format === "headroom.case") {
+  if (doc?.kind === CASE_EXPORT_FORMAT) {
     const input = CaseInputSchema.safeParse(doc.input);
     if (!input.success) throw new PlanIntegrityError("INVALID_FILE", "The saved inputs are not valid.");
     throw new PlanIntegrityError("CASE_ONLY", "This file contains inputs only. Open it in the calculator to choose an option.");
   }
-  if (doc?.format !== PLAN_EXPORT_FORMAT || !doc.plan) throw new PlanIntegrityError("INVALID_FILE", "This is not a Headroom plan file.");
+  if (doc?.kind !== PLAN_EXPORT_FORMAT || !doc.plan) throw new PlanIntegrityError("INVALID_FILE", "This is not a Headroom plan file.");
   return verifyPlanForSave(doc.plan);
 }
 
-/** Read inputs from a `headroom.case` or `headroom.plan` file. */
+/** Read inputs from a `headroom.case-input` or `headroom.saved-plan` file. */
 export function readCaseInputFromJson(text: string): CaseInput {
   const doc = JSON.parse(text);
-  const parsed = CaseInputSchema.safeParse(doc?.format === PLAN_EXPORT_FORMAT ? doc.plan?.input : doc?.input);
+  const parsed = CaseInputSchema.safeParse(doc?.kind === PLAN_EXPORT_FORMAT ? doc.plan?.input : doc?.input);
   if (!parsed.success) throw new PlanIntegrityError("INVALID_FILE", "This file does not contain valid Headroom inputs.");
   return parsed.data;
 }
