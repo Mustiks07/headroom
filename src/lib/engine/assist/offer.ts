@@ -53,7 +53,8 @@ export interface ReadyOfferEvaluation {
   years: OfferYearEffect[];
   /** Sum over the years the offer touches; other years are unchanged by construction. */
   cashChangeCents: number;
-  verdict: "accept_as_offered" | "review_terms";
+  /** keep_agreed_terms = accept_as_offered for a project that is already agreed. */
+  verdict: "accept_as_offered" | "keep_agreed_terms" | "review_terms";
   reasons: string[];
   baseline: { label: string; description: string };
   fingerprint: string;
@@ -114,8 +115,9 @@ export async function evaluateOfferAsOffered(raw: HouseholdWorkspace, projectId:
     let verdict: ReadyOfferEvaluation["verdict"] = "accept_as_offered";
     if (lost.length) { verdict = "review_terms"; reasons.push(...lost.map(y => `On these terms the ${y.year} premium tax credit of ${formatUsd(y.creditBeforeCents)} is lost.`)); }
     if (cash <= 0) { verdict = "review_terms"; reasons.push(`On these terms the offer leaves ${formatUsd(cash)} after tax and credit changes.`); }
-    if (verdict === "accept_as_offered") {
-      reasons.push(`No credit is lost: the offer adds ${formatUsd(cash)} after tax and credit changes; no change to the terms is needed for the subsidy.`);
+    if (verdict === "accept_as_offered" && project.status === "agreed") verdict = "keep_agreed_terms";
+    if (verdict !== "review_terms") {
+      reasons.push(`No credit is lost: the ${project.status === "agreed" ? "agreed terms add" : "offer adds"} ${formatUsd(cash)} after tax and credit changes; no change to the terms is needed for the subsidy.`);
       for (const y of years) if (y.roomAfterCents !== null && y.roomAfterCents < THIN_ROOM_CENTS)
         reasons.push(`${y.year}: ${formatUsd(y.roomAfterCents)} more profit would lose the credit; keep that in mind for further work this year.`);
     }

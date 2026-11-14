@@ -378,6 +378,10 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
   const keys = new Set<string>();
   const re: RefineEnv = { slots, space, meets, ev, sepOpt, shift, ctx, p, priceStep };
   const offeredCash = asOfferedNoSep ? asOfferedNoSep.cashDelta + shift : null;           // vs declining
+  const agreedProject = p.cc.candidate.status === "agreed";
+  if (agreedProject) warnings.push(goal.baseline === "decline_unpaid_terms"
+    ? `"${p.cc.candidate.title}" is already agreed: declining its unpaid part is not a free choice (a deposit refund, costs or obligations may apply and are not known here, so they are not counted as $0). Compare options with the agreed terms first; the comparison with declining is for reference only.`
+    : `"${p.cc.candidate.title}" is already agreed: options are compared with the agreed terms. Changing them needs the client's agreement.`);
   for (const { purpose, c } of picks) {
     let refined = fixedTerms ? c : purpose === "most_cash" ? refineSplit(c, re) : purpose === "simplest" ? refinePrice(c, re) : c;
     if (purpose === "simplest" && !conditional && !holds(refined)) refined = c;                // refinement never trades away the margin
@@ -394,6 +398,7 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     if (highModels && v.robustness.worstCashInRangesCents !== null && v.robustness.worstCashInRangesCents < goal.minimumTwoYearCashDeltaCents) v.robustness.holds = false;
     const changesTerms = refined.price !== p.offeredPrice || scheduleChanged(refined);
     if (purpose === "most_cash" && changesTerms) v.label = clip(v.label.replace(PURPOSE_LABEL.most_cash, "More cash, if the client agrees"), 200);
+    if (purpose === "as_offered" && agreedProject) v.label = clip(v.label.replace(PURPOSE_LABEL.as_offered, "Keep the agreed terms"), 200);
     variants.push(v);
   }
   const best = variants.length ? Math.max(...variants.map(v => v.twoYearCashDeltaCents)) : 0;

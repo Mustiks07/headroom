@@ -55,6 +55,10 @@ describe("round 5 scenarios", () => {
     // $3,000 received on 2026-10-02 stays; the asked total $6,750 includes it, payments cover only $3,750.
     expect([rec.terms.priceCents, rec.terms.payments.map(p => [p.date, p.amountCents]), rec.twoYearCashDeltaCents, rec.comparisons.versusOfferedCents])
       .toEqual([usd(6750), [["2026-12-15", usd(3750)]], usd(2598), usd(515)]);
+    // A is already agreed: declining its unpaid part is not presented as a free choice.
+    expect(r.warnings.join(" ")).toMatch(/already agreed: declining its unpaid part is not a free choice/);
+    const keep = await searchDealTerms(ws, { ...d.goal, minimumTwoYearCashDeltaCents: usd(2000) }, d.space, null);
+    expect(keep.status === "ready" && keep.variants.find(v => v.id === keep.recommendedVariantId)!.label).toMatch(/^Keep the agreed terms/);
     // The client agrees: the agreed remainder replaces the open line (what the agreement operation records).
     const agreed = structuredClone(ws);
     agreed.projects[0].receipts = [agreed.projects[0].receipts[0], { ...line("a2", 3750, "2026-12-15"), id: "a2" }];
