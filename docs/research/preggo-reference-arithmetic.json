@@ -1,0 +1,31 @@
+{
+  "status": "Reproduction of Preggo's stated assumptions, not observed business performance. Stress cases are Codex calculations.",
+  "source_commit": "124af030070567fdcd6612f1cd96f1bfa63a19db",
+  "source_pdf": "https://github.com/bizhanchik/Preggo/blob/124af030070567fdcd6612f1cd96f1bfa63a19db/pregnancy_2.pdf",
+  "assumptions": {
+    "annual_price": 159,
+    "monthly_price": 15,
+    "annual_share": 0.8,
+    "monthly_paid_months": 6,
+    "platform_fee": 0.15,
+    "variable_cost": 9,
+    "cost_per_install": 3.8,
+    "install_to_paid": 0.06,
+    "paid_acquisition_share": 0.55,
+    "monetization_months_for_payback": 7
+  },
+  "base": {
+    "gross_revenue": 145.2,
+    "contribution_ltv": 114.42,
+    "paid_cac": 63.33333333,
+    "blended_cac": 34.83333333,
+    "ltv_to_blended_cac": 3.28478469,
+    "modeled_payback_months": 2.1310377
+  },
+  "codex_sensitivity": {
+    "all_acquisition_paid_ltv_cac": 1.80663158,
+    "organic_cac20_blended": 43.83333333,
+    "organic_cac20_ltv_cac": 2.61034221,
+    "conversion3pct_ltv_cac": 1.64239234
+  }
+}

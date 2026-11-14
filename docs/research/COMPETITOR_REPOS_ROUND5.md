@@ -196,7 +196,7 @@
 | [procrastipredator/claro_zimran_business_cup](https://github.com/procrastipredator/claro_zimran_business_cup) | created Apr11, pushed Apr12 | Lovable boilerplate README, название Claro/Zimran; недостаточно для business оценки. |
 | [MedgatAuken/sharks-business-cup](https://github.com/MedgatAuken/sharks-business-cup) | created/pushed Apr11 | React MVP starter; конкретная customer job по прочитанному README не установлена. |
 
-Preggo — апрельский победитель по [первичному посту Bizhan Ashykhatov](https://www.linkedin.com/posts/bizhanchik_we-won-1st-place-among-270-teams-2500-activity-7449205016449597440-yGzi) и предыдущему исследованию ROUND5_BUSINESS_RESEARCH. Его исходная презентация/репозиторий/реальный paid CAC этой работой не найдены. Публично описанный competitive ads analysis не равен запуску собственных платных объявлений.
+Preggo — апрельский победитель по [первичному посту Bizhan Ashykhatov](https://www.linkedin.com/posts/bizhanchik_we-won-1st-place-among-270-teams-2500-activity-7449205016449597440-yGzi). **Дополнение 15 ноября:** найдены [репозиторий приложения](https://github.com/bizhanchik/Preggo), [лендинг](https://github.com/LeonKazaryan/preggolanding) и первичный PDF **Business Cup Stage 2** с моделью. [Новый разбор](PREGGO_WINNER_DATA.md) уточняет прежнюю запись о ненайденных материалах. Финальные слайды защиты и измеренный paid CAC не подтверждены. Публично описанный competitive ads analysis не равен запуску собственных платных объявлений.
 
 ### Исключённые ложные совпадения
 

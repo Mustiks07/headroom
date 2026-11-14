@@ -1,5 +1,9 @@
 # Research and decision evidence
 
+## Newly found: the first winner's primary materials
+
+[Preggo winner data review](PREGGO_WINNER_DATA.md) identifies the public app/landing repositories and the team's ten-page **Business Cup Stage 2** economics PDF, inspected in full. This corrects the earlier search's missing-repository/document finding. [Reproduced arithmetic](preggo-reference-arithmetic.json) separates the team's assumptions from Codex stress cases. The review maps their evidence categories to what Headroom already has and still needs; the PDF is not verified as the final pitch deck or as measured campaign results.
+
 ## Latest: subscription and repeat-value review, November 15
 
 [Round 6 monetization review](round6-monetization-review.md) rechecks paid alternatives, proposes the next event-driven product improvements, defines case/season/year experiments and separates first-period contribution from modeled renewal LTV. This is research for the next iteration, not a live pricing change or a replacement for the current Claude assignments.
