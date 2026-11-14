@@ -1,5 +1,13 @@
 # Research and decision evidence
 
+## Latest: subscription and repeat-value review, November 15
+
+[Round 6 monetization review](round6-monetization-review.md) rechecks paid alternatives, proposes the next event-driven product improvements, defines case/season/year experiments and separates first-period contribution from modeled renewal LTV. This is research for the next iteration, not a live pricing change or a replacement for the current Claude assignments.
+
+[Editable assumptions](round6-economics/inputs.json), [reproducible model](round6-economics/model.py), [calculated results](round6-economics/results.json) and [readable tables](round6-economics/summary.md) include refunds, support, nonpayer AI, acquisition labor and heavy-use sensitivity. The revised annual99 base contribution is $66.53 under its explicitly different assumptions; the older model below remains a historical scenario. No real customer cohort or campaign is claimed.
+
+## Earlier evidence
+
 The [round 5 research memo](round5-business-research.md) covers customer pain, alternatives, first-Business-Cup evidence, pricing hypotheses, acquisition, unit economics and the evidence needed for a ten-slide pitch. It distinguishes observed source material from modeled assumptions and unperformed experiments. It is an internal research artifact, not a customer testimonial or final deck.
 
 - [Source register](ROUND5_EVIDENCE.csv): 62 records, with interpretation and limitations.

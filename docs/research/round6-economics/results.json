@@ -1,0 +1,271 @@
+{
+  "status": "Scenario assumptions, not measured Headroom customers or invoices",
+  "checked_date": "2026-11-15",
+  "reserved_document_cost": 0.36,
+  "reserved_update_cost": 0.124,
+  "products": {
+    "case29": {
+      "gross": 29.0,
+      "expected_net_collections": 27.55,
+      "processing_billing": 1.141,
+      "ai": 1.216,
+      "support": 5.0,
+      "variable_infra": 0.25,
+      "service_cost_reserve": 6.466,
+      "contribution_before_cac_fixed": 19.943,
+      "contribution_fraction_of_net": 0.72388385,
+      "one_period_cac_budget_at_3x": 6.64766667
+    },
+    "season49": {
+      "gross": 49.0,
+      "expected_net_collections": 46.55,
+      "processing_billing": 1.721,
+      "ai": 3.04,
+      "support": 7.5,
+      "variable_infra": 0.6,
+      "service_cost_reserve": 11.14,
+      "contribution_before_cac_fixed": 33.689,
+      "contribution_fraction_of_net": 0.72371643,
+      "one_period_cac_budget_at_3x": 11.22966667
+    },
+    "annual99": {
+      "gross": 99.0,
+      "expected_net_collections": 94.05,
+      "processing_billing": 3.864,
+      "ai": 12.16,
+      "support": 10.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 23.66,
+      "contribution_before_cac_fixed": 66.526,
+      "contribution_fraction_of_net": 0.70734716,
+      "one_period_cac_budget_at_3x": 22.17533333
+    },
+    "annual149_test": {
+      "gross": 149.0,
+      "expected_net_collections": 141.55,
+      "processing_billing": 5.664,
+      "ai": 12.16,
+      "support": 10.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 23.66,
+      "contribution_before_cac_fixed": 112.226,
+      "contribution_fraction_of_net": 0.79283645,
+      "one_period_cac_budget_at_3x": 37.40866667
+    },
+    "monthly15_test": {
+      "gross": 15.0,
+      "expected_net_collections": 14.25,
+      "processing_billing": 0.84,
+      "ai": 1.216,
+      "support": 1.5,
+      "variable_infra": 0.1,
+      "service_cost_reserve": 2.816,
+      "contribution_before_cac_fixed": 10.594,
+      "contribution_fraction_of_net": 0.7434386,
+      "one_period_cac_budget_at_3x": 3.53133333
+    }
+  },
+  "acquisition": {
+    "before_qualification": {
+      "visitors": 10000.0,
+      "payers": 360.0,
+      "visitor_to_paid": 0.036,
+      "media": 10000.0,
+      "nonpayer_ai": 3470.4,
+      "labor": 500.0,
+      "cac": 38.80666667,
+      "annual99_first_period_contribution_to_cac": 1.71429308
+    },
+    "after_qualification": {
+      "visitors": 10000.0,
+      "payers": 360.0,
+      "visitor_to_paid": 0.036,
+      "media": 10000.0,
+      "nonpayer_ai": 950.4,
+      "labor": 500.0,
+      "cac": 31.80666667,
+      "annual99_first_period_contribution_to_cac": 2.09157409
+    }
+  },
+  "annual_cohorts": {
+    "0.25": {
+      "renewal_probability": 0.25,
+      "contribution_ltv_36_months": 87.315375,
+      "ltv_to_modeled_cac": 2.745191,
+      "cumulative_billing_periods": 1.3125,
+      "cac_budget_3x": 29.105125
+    },
+    "0.5": {
+      "renewal_probability": 0.5,
+      "contribution_ltv_36_months": 116.4205,
+      "ltv_to_modeled_cac": 3.66025466,
+      "cumulative_billing_periods": 1.75,
+      "cac_budget_3x": 38.80683333
+    },
+    "0.7": {
+      "renewal_probability": 0.7,
+      "contribution_ltv_36_months": 145.69194,
+      "ltv_to_modeled_cac": 4.58054726,
+      "cumulative_billing_periods": 2.19,
+      "cac_budget_3x": 48.56398
+    }
+  },
+  "monthly_cohorts": {
+    "0.1": {
+      "churn": 0.1,
+      "survival_after_12_renewal_opportunities": 0.28242954,
+      "expected_paid_months_first_12": 7.17570464,
+      "contribution_ltv_12": 71.01941491,
+      "contribution_ltv_36": 98.55334135,
+      "cohort_payback_billing_period": 5
+    },
+    "0.2": {
+      "churn": 0.2,
+      "survival_after_12_renewal_opportunities": 0.06871948,
+      "expected_paid_months_first_12": 4.65640262,
+      "contribution_ltv_12": 44.32992932,
+      "contribution_ltv_36": 47.95281025,
+      "cohort_payback_billing_period": 6
+    },
+    "0.3": {
+      "churn": 0.3,
+      "survival_after_12_renewal_opportunities": 0.01384129,
+      "expected_paid_months_first_12": 3.28719571,
+      "contribution_ltv_12": 29.82455134,
+      "contribution_ltv_36": 30.31323969,
+      "cohort_payback_billing_period": null
+    }
+  },
+  "one_extra_purchase_in_12_months": {
+    "case29": {
+      "0.25": 24.92875,
+      "0.5": 29.9145,
+      "0.75": 34.90025
+    },
+    "season49": {
+      "0.25": 42.11125,
+      "0.5": 50.5335,
+      "0.75": 58.95575
+    }
+  },
+  "annual99_stress": {
+    "base": {
+      "gross": 99.0,
+      "expected_net_collections": 94.05,
+      "processing_billing": 3.864,
+      "ai": 12.16,
+      "support": 10.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 23.66,
+      "contribution_before_cac_fixed": 66.526,
+      "contribution_fraction_of_net": 0.70734716,
+      "one_period_cac_budget_at_3x": 22.17533333
+    },
+    "refund_10pct": {
+      "gross": 99.0,
+      "expected_net_collections": 89.1,
+      "processing_billing": 3.864,
+      "ai": 12.16,
+      "support": 10.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 23.66,
+      "contribution_before_cac_fixed": 61.576,
+      "contribution_fraction_of_net": 0.69108866,
+      "one_period_cac_budget_at_3x": 20.52533333
+    },
+    "support_60min": {
+      "gross": 99.0,
+      "expected_net_collections": 94.05,
+      "processing_billing": 3.864,
+      "ai": 12.16,
+      "support": 30.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 43.66,
+      "contribution_before_cac_fixed": 46.526,
+      "contribution_fraction_of_net": 0.49469431,
+      "one_period_cac_budget_at_3x": 15.50866667
+    },
+    "ai3x_support60": {
+      "gross": 99.0,
+      "expected_net_collections": 94.05,
+      "processing_billing": 3.864,
+      "ai": 36.48,
+      "support": 30.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 67.98,
+      "contribution_before_cac_fixed": 22.206,
+      "contribution_fraction_of_net": 0.23610845,
+      "one_period_cac_budget_at_3x": 7.402
+    },
+    "ai5x_support120": {
+      "gross": 99.0,
+      "expected_net_collections": 94.05,
+      "processing_billing": 3.864,
+      "ai": 60.8,
+      "support": 60.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 122.3,
+      "contribution_before_cac_fixed": -32.114,
+      "contribution_fraction_of_net": -0.34145667,
+      "one_period_cac_budget_at_3x": -10.70466667
+    },
+    "mor_fee_comparison": {
+      "gross": 99.0,
+      "expected_net_collections": 94.05,
+      "processing_billing": 5.45,
+      "ai": 12.16,
+      "support": 10.0,
+      "variable_infra": 1.5,
+      "service_cost_reserve": 23.66,
+      "contribution_before_cac_fixed": 64.94,
+      "contribution_fraction_of_net": 0.69048379,
+      "one_period_cac_budget_at_3x": 21.64666667
+    }
+  },
+  "conversion_sensitivity": {
+    "0.01": {
+      "cac": 115.44,
+      "contribution_to_cac": 0.57628205
+    },
+    "0.02": {
+      "cac": 57.54,
+      "contribution_to_cac": 1.15616962
+    },
+    "0.036": {
+      "cac": 31.80666667,
+      "contribution_to_cac": 2.09157409
+    },
+    "0.05": {
+      "cac": 22.8,
+      "contribution_to_cac": 2.91780702
+    },
+    "0.10": {
+      "cac": 11.22,
+      "contribution_to_cac": 5.92923351
+    }
+  },
+  "min_visitor_to_paid_first_year_3x": 0.05138597,
+  "price149_vs99_equal_contribution_conversion_ratio": 0.59278599,
+  "annual99_uniform_service_cost_adjusted_earned_payback_months": 5.73730572,
+  "first_year_break_even": {
+    "540": {
+      "fixed_annual": 540.0,
+      "first_year_new_annual_buyers_to_cover": 16
+    },
+    "12000": {
+      "fixed_annual": 12000.0,
+      "first_year_new_annual_buyers_to_cover": 346
+    },
+    "120000": {
+      "fixed_annual": 120000.0,
+      "first_year_new_annual_buyers_to_cover": 3457
+    }
+  },
+  "scale": {
+    "annual99_active_households_for_100m_arr": 1010102,
+    "annual149_active_households_for_100m_arr": 671141,
+    "monthly15_active_households_for_100m_arr": 555556,
+    "case29_sales_for_100m_nonrecurring_revenue": 3448276,
+    "season49_sales_for_100m_nonrecurring_revenue": 2040817
+  }
+}
