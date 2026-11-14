@@ -1,8 +1,9 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { ExtractionResult } from "@/domain/contracts";
+import type { ExtractionResponse } from "@/lib/client/import-draft";
 import {
   EXTRACTION_FIELDS, EXTRACTION_FIELD_PATHS, parseDate, parseUsdToCents, redactExcerpt,
   type ProposedFieldValue,
@@ -39,25 +40,34 @@ Rules:
 - Bank statements: do not classify deposits or transfers as business profit; report no income fields for them.
 - If nothing allowed is printed, return an empty fields list. Use notes for short caveats (at most 5).`;
 
-const TIMEOUT_MS = 40_000; // fits inside the route maxDuration (60 s) with no retries
+type ExtractionResponseKind = NonNullable<ExtractionResponse["document"]>["kind"];
 
-/** One concrete provider adapter (Anthropic). Selected by AI_PROVIDER=anthropic; key/model are server-only. */
+/** Provider outcome used to settle the budget reservation (token counts only, no content). */
+export interface ProviderCallInfo { usage: { inputTokens: number; outputTokens: number } | null; outcome: string }
+
+/**
+ * One concrete provider adapter (Anthropic, official SDK). Structured output via
+ * `output_config.format` (GA, no beta header), explicit model from env, low effort, no retries and
+ * NO server-side fallback to another model (cost must stay predictable). Selected by
+ * AI_PROVIDER=anthropic; key/model are server-only.
+ */
 export async function extractWithAnthropic(media: ProviderMedia, documentId: string, label: string,
-  config: { apiKey: string; model: string }): Promise<ExtractionResult> {
-  const client = new Anthropic({ apiKey: config.apiKey, timeout: TIMEOUT_MS, maxRetries: 0 });
+  config: { apiKey: string; model: string; maxOutputTokens?: number; timeoutMs?: number }, info: ProviderCallInfo = { usage: null, outcome: "not_called" }): Promise<ExtractionResponse> {
+  const client = new Anthropic({ apiKey: config.apiKey, timeout: config.timeoutMs ?? 40_000, maxRetries: 0 });
   const source = media.kind === "pdf"
     ? { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: media.data.toString("base64") } }
     : { type: "image" as const, source: { type: "base64" as const, media_type: media.mediaType, data: media.data.toString("base64") } };
 
-  const response = await client.beta.messages.parse({
+  const response = await client.messages.parse({
     model: config.model,
-    max_tokens: 4000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: "medium", format: betaZodOutputFormat(ModelOutputSchema) },
+    max_tokens: config.maxOutputTokens ?? 4000,
+    output_config: { effort: "low", format: zodOutputFormat(ModelOutputSchema) },
     system: SYSTEM,
     messages: [{ role: "user", content: [source, { type: "text", text: "Report the allowed printed figures from this document." }] }],
   });
+  info.usage = { inputTokens: (response.usage.input_tokens ?? 0) + (response.usage.cache_creation_input_tokens ?? 0) + (response.usage.cache_read_input_tokens ?? 0),
+    outputTokens: response.usage.output_tokens ?? 0 };
+  info.outcome = response.stop_reason ?? "unknown";
 
   if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens" || !response.parsed_output) {
     return { status: "unavailable", fields: [],
@@ -102,5 +112,7 @@ export async function extractWithAnthropic(media: ProviderMedia, documentId: str
   // Free-text notes from the model are derived from untrusted document text and are not shown.
   if (fields.length === 0) warnings.push("No supported figures were found. Enter the figures manually.");
   warnings.unshift("Figures were read by an AI model. Check each value against your document before using it.");
-  return { status: "review_required", fields, warnings };
+  const KIND: Record<string, ExtractionResponseKind> = { pay_stub: "pay_stub", w2: "w2", marketplace_notice: "marketplace_statement", client_offer: "client_offer",
+    invoice: "invoice", bank_statement: "bank_statement", tax_return: "prior_year_tax_return" };
+  return { status: "review_required", fields, warnings, document: { documentId, kind: KIND[output.documentKind] ?? "other" } };
 }

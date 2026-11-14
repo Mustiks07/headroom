@@ -1,4 +1,5 @@
-import { assertSameOrigin, authorizeAiCall } from "@/lib/server/ai-guard";
+import { assertSameOrigin } from "@/lib/server/ai-guard";
+import { reserveAiCall } from "@/lib/server/ai-budget";
 import { extractDocumentServer, MAX_DOCUMENT_BYTES } from "@/lib/server/extraction";
 import { apiError, handle, json } from "@/lib/server/http";
 import { rateLimited } from "@/lib/server/rate-limit";
@@ -22,7 +23,7 @@ export const POST = handle(async (request: Request) => {
   const { status, result } = await extractDocumentServer({
     bytes: new Uint8Array(await file.arrayBuffer()), mime: file.type, name: file.name,
     consentToProvider: form.get("consent") === "provider",
-    authorizeProvider: () => authorizeAiCall(request),
+    authorizeProvider: estimate => reserveAiCall(request, "extraction", estimate),
   });
   return json(result, status);
 });

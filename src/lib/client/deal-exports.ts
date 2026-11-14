@@ -1,3 +1,4 @@
+import type { IssuedCalendarEvent } from "@/domain/assistance";
 import type { ActionPackage, DealVariant, ReadyDealSearch, Reminder } from "@/domain/deal-planning";
 import { sepPosition, type HouseholdWorkspace } from "@/domain/household-workspace";
 
@@ -176,3 +177,89 @@ export function buildCalendar(ws: HouseholdWorkspace, pkg: ActionPackage, now = 
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";
 }
+
+/* ------------------------------------------------------------------ current agreed-plan calendar (round 5) */
+
+
+export interface PlanCalendarEvent { uid: string; date: string; title: string; description: string }
+
+/** Due date of the individual return for a tax year (no extension). SEP can be later only with a filed extension (IRS Pub. 560). */
+const RETURN_DUE: Record<number, string> = { 2026: "2027-04-15", 2027: "2028-04-17" };
+
+/**
+ * What is still relevant NOW: open expected payments of agreed projects, open package actions
+ * (except payment receipts, already covered), and remaining SEP-IRA goals. Received payments,
+ * paid SEP, cancelled lines and done/superseded actions are not included.
+ */
+export function currentPlanEvents(ws: HouseholdWorkspace): PlanCalendarEvent[] {
+  const events: PlanCalendarEvent[] = [];
+  const uid = (...parts: string[]) => `${parts.map(p => p.replace(/[^A-Za-z0-9._-]/g, "-")).join(".")}@headroom.plan`;
+  for (const p of ws.projects) {
+    if (p.status !== "agreed") continue;
+    for (const l of p.receipts) {
+      if (l.actual || l.cancelledAt || !l.expected) continue;
+      events.push({ uid: uid(ws.id, p.id, l.id, "receipt"), date: l.expected.date, title: `Expect ${money(l.expected.amountCents)} from “${p.title}”`,
+        description: "Agreed payment date. When it arrives, record the actual amount and date in Headroom." });
+    }
+  }
+  for (const pkg of ws.dealPlanning?.packages ?? []) {
+    if (pkg.status === "superseded") continue;
+    for (const r of pkg.reminders) {
+      const action = pkg.variant.actions.find(a => a.id === r.actionId);
+      if (r.status !== "open" || !r.date || action?.kind === "receive_payment") continue;
+      events.push({ uid: r.uid, date: r.date, title: r.title, description: "Action from your saved terms in Headroom. Planning reminder, not an official deadline notice." });
+    }
+  }
+  for (const year of [2026, 2027] as const) for (const person of ws.household.people) {
+    const s = sepPosition(ws, person.id, year);
+    if (s.targetCents === null || s.remainingCents <= 0) continue;
+    events.push({ uid: uid(ws.id, "sep", person.id, String(year)), date: RETURN_DUE[year],
+      title: `SEP-IRA: ${money(s.remainingCents)} of your ${year} goal still to contribute${person.role === "spouse" ? " (spouse)" : ""}`,
+      description: `${year} SEP-IRA contributions are due by the due date of your ${year} return; a later date applies only if you file an extension (IRS Publication 560). Record the contribution in Headroom when you make it.` });
+  }
+  return events.sort((a, b) => a.date.localeCompare(b.date) || a.uid.localeCompare(b.uid));
+}
+
+/**
+ * Calendar of the CURRENT plan. Events issued before keep their UID; a changed date/title gets
+ * SEQUENCE + 1; events that no longer apply are sent as STATUS:CANCELLED (SEQUENCE + 1) so that
+ * calendars honouring UID/SEQUENCE remove them on re-import. Returns the ICS text and the updated
+ * issued list, which the caller saves (see exportCurrentCalendar).
+ */
+export function buildCurrentCalendar(ws: HouseholdWorkspace, now = new Date()): { ics: string; issued: IssuedCalendarEvent[]; active: number; cancelled: number } {
+  const previous = new Map((ws.dealPlanning?.calendar?.issued ?? []).map(e => [e.uid, e]));
+  const current = currentPlanEvents(ws);
+  const at = now.toISOString();
+  const issued: IssuedCalendarEvent[] = [];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Headroom//Current plan 1.0//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Headroom plan"];
+  const vevent = (e: { uid: string; date: string; title: string; description: string }, sequence: number, status: "CONFIRMED" | "CANCELLED") => {
+    lines.push("BEGIN:VEVENT", `UID:${e.uid}`, `DTSTAMP:${stamp(now)}`, `DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${nextDay(e.date)}`,
+      `SEQUENCE:${sequence}`, `SUMMARY:${escapeText(status === "CANCELLED" ? `Cancelled: ${e.title}` : e.title)}`, `DESCRIPTION:${escapeText(e.description)}`,
+      `STATUS:${status}`, "TRANSP:TRANSPARENT");
+    if (status === "CONFIRMED") lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${escapeText(e.title)}`, "TRIGGER:-P1D", "END:VALARM");
+    lines.push("END:VEVENT");
+  };
+  let cancelled = 0;
+  for (const e of current) {
+    const prev = previous.get(e.uid);
+    const sequence = !prev ? 0 : prev.status === "cancelled" || prev.date !== e.date || prev.title !== e.title ? prev.sequence + 1 : prev.sequence;
+    vevent(e, sequence, "CONFIRMED");
+    issued.push({ uid: e.uid, sequence, date: e.date, title: e.title.slice(0, 300), status: "active", issuedAt: at });
+  }
+  const currentUids = new Set(current.map(e => e.uid));
+  for (const prev of previous.values()) {
+    if (currentUids.has(prev.uid)) continue;
+    const sequence = prev.status === "cancelled" ? prev.sequence : prev.sequence + 1;
+    // Keep sending the cancellation for a while so a later import still removes it.
+    const ageDays = (now.getTime() - new Date(`${prev.date}T00:00:00Z`).getTime()) / 86_400_000;
+    if (ageDays > 60) continue;
+    vevent({ uid: prev.uid, date: prev.date, title: prev.title, description: "This plan action no longer applies (paid, moved or cancelled in Headroom)." }, sequence, "CANCELLED");
+    issued.push({ ...prev, sequence, status: "cancelled", issuedAt: at });
+    cancelled++;
+  }
+  lines.push("END:VCALENDAR");
+  return { ics: lines.map(fold).join("\r\n") + "\r\n", issued: issued.slice(0, 300), active: current.length, cancelled };
+}
+
+/** Honest note for the export button: downloaded files never update by themselves. */
+export const CALENDAR_IMPORT_NOTE = "Downloaded calendar files don't update by themselves. Download again after changes: Apple Calendar and Outlook update or cancel events with the same ID; Google Calendar's file import may add duplicates and ignore cancellations, so delete outdated events there yourself.";

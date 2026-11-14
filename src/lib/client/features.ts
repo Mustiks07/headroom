@@ -5,9 +5,9 @@ import { HeadroomError, PlanIntegrityError } from "./errors";
 import { apiFetch, errorFromResponse, readJson } from "./http";
 import { getStorageMode } from "./repository";
 
-export interface Capabilities { cloudSave: boolean; aiExtraction: boolean; checkoutMode: "demo" | "stripe_test"; localTextImport: boolean }
+export interface Capabilities { cloudSave: boolean; aiExtraction: boolean; aiTextProposals: boolean; aiExplanations: boolean; checkoutMode: "demo" | "stripe_test"; localTextImport: boolean }
 
-const OFFLINE_CAPABILITIES: Capabilities = { cloudSave: false, aiExtraction: false, checkoutMode: "demo", localTextImport: false };
+const OFFLINE_CAPABILITIES: Capabilities = { cloudSave: false, aiExtraction: false, aiTextProposals: false, aiExplanations: false, checkoutMode: "demo", localTextImport: false };
 
 /**
  * What the deployment can actually do in this browser. On failure, everything optional is
@@ -17,7 +17,10 @@ const OFFLINE_CAPABILITIES: Capabilities = { cloudSave: false, aiExtraction: fal
 export async function getCapabilities(): Promise<Capabilities> {
   try {
     const caps = await readJson<Capabilities>(await apiFetch("/api/capabilities", { timeoutMs: 8000 }));
-    return caps.aiExtraction && !(await cloudToken()) ? { ...caps, aiExtraction: false } : caps;
+    const withDefaults: Capabilities = { ...caps, aiTextProposals: caps.aiTextProposals ?? false, aiExplanations: caps.aiExplanations ?? false };
+    const anyAi = withDefaults.aiExtraction || withDefaults.aiTextProposals || withDefaults.aiExplanations;
+    // Every paid AI feature is metered per guest session; without one they are off in this browser.
+    return anyAi && !(await cloudToken()) ? { ...withDefaults, aiExtraction: false, aiTextProposals: false, aiExplanations: false } : withDefaults;
   } catch {
     return OFFLINE_CAPABILITIES;
   }
@@ -139,10 +142,10 @@ export function getLocalEntitlement(): { mode: "demo" | "test"; expiresAt?: stri
   }
 }
 
-/** Fire-and-forget anonymous event. Never throws, never sends amounts or identifiers. */
-export async function trackEvent(event: AnalyticsEvent): Promise<void> {
+/** Fire-and-forget anonymous event. Never throws, never sends amounts, text or identifiers. */
+export async function trackEvent(event: AnalyticsEvent, dims: { dataKind?: import("./analytics-events").AnalyticsDataKind; inputPath?: import("./analytics-events").AnalyticsInputPath } = {}): Promise<void> {
   try {
-    await apiFetch("/api/analytics", { method: "POST", timeoutMs: 4000, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event }) });
+    await apiFetch("/api/analytics", { method: "POST", timeoutMs: 4000, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, ...dims }) });
   } catch { /* analytics must never affect the journey */ }
 }
 
@@ -191,4 +194,20 @@ export function exportCalendarIcs(workspace: import("@/domain/household-workspac
 /** Plain-text download of the client draft (the user sends it themselves). */
 export function clientDraftFile(draft: { subject: string; body: string }): Blob {
   return new Blob([`Subject: ${draft.subject}\n\n${draft.body}\n`], { type: "text/plain;charset=utf-8" });
+}
+
+/**
+ * Ask Headroom to turn the user's words into a typed change proposal (nothing is saved).
+ * `consentToProvider` sends the minimal context + text to the AI provider (only when enabled);
+ * otherwise deterministic patterns are used. Errors return a thrown HeadroomError; the form stays usable.
+ */
+export async function proposeChange(request: import("@/domain/assistance").AssistanceRequest, options: { consentToProvider?: boolean } = {}): Promise<import("@/domain/assistance").ProposeResponse> {
+  return readJson(await apiFetch("/api/assist/propose", { method: "POST", timeoutMs: 35_000, headers: { "Content-Type": "application/json" },
+    token: options.consentToProvider ? await cloudToken() : undefined, body: JSON.stringify({ request, consentToProvider: !!options.consentToProvider }) }));
+}
+
+/** Explain a verified engine packet; deterministic unless the user consents and the provider is enabled. */
+export async function explainResult(packet: import("@/domain/assistance").ExplanationPacket, options: { consentToProvider?: boolean } = {}): Promise<import("@/domain/assistance").ExplainResponse> {
+  return readJson(await apiFetch("/api/assist/explain", { method: "POST", timeoutMs: 25_000, headers: { "Content-Type": "application/json" },
+    token: options.consentToProvider ? await cloudToken() : undefined, body: JSON.stringify({ packet, consentToProvider: !!options.consentToProvider }) }));
 }

@@ -11,7 +11,10 @@ vi.mock("@/lib/server/supabase", () => ({
   dbFailure: () => { throw new Error("db"); },
 }));
 const parse = vi.fn();
-vi.mock("@anthropic-ai/sdk", () => ({ default: class { beta = { messages: { parse } }; } }));
+vi.mock("@anthropic-ai/sdk", () => ({ default: class { messages = { parse }; } }));
+// Round 5: the durable budget replaced the call-count quota. `budget` is the reserve outcome; settle calls are recorded.
+const reserve = (outcome: string) => ({ data: [{ reservation_id: outcome === "ok" ? "res-1" : null, outcome }], error: null });
+const usage = { input_tokens: 2_500, output_tokens: 400, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
 
 const { POST } = await import("@/app/api/documents/extract/route");
 const { GET: capabilities } = await import("@/app/api/capabilities/route");
@@ -32,7 +35,7 @@ beforeEach(() => {
   vi.stubEnv("AI_PROVIDER", "anthropic");
   vi.stubEnv("AI_API_KEY", "sk-ant-test-not-real");
   requireOwner.mockResolvedValue({ userId: "11111111-1111-4111-8111-111111111111", db: {} });
-  rpc.mockResolvedValue({ data: "ok", error: null });
+  rpc.mockImplementation(async (name: string) => name === "headroom_settle_ai_spend" ? { data: null, error: null } : reserve("ok"));
   parse.mockReset();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -51,7 +54,7 @@ describe("paid document-analysis endpoint", () => {
     expect((await pdfUpload({}, false)).status).toBe(400);
     requireOwner.mockRejectedValueOnce(new Error("no session"));
     expect((await pdfUpload()).status).toBe(401);
-    rpc.mockResolvedValueOnce({ data: "user_limit", error: null });
+    rpc.mockResolvedValueOnce(reserve("guest_budget"));
     const limited = await pdfUpload();
     expect(limited.status).toBe(429);
     expect((await limited.json()).error.message).toMatch(/today's limit/);
@@ -68,9 +71,9 @@ describe("paid document-analysis endpoint", () => {
     const failed = await pdfUpload();
     expect(failed.status).toBe(503);
     expect((await failed.json()).warnings[0]).toMatch(/enter the figures manually/i);
-    parse.mockResolvedValueOnce({ stop_reason: "refusal", parsed_output: null });
+    parse.mockResolvedValueOnce({ stop_reason: "refusal", parsed_output: null, usage });
     expect(await (await pdfUpload()).json()).toMatchObject({ status: "unavailable" });
-    parse.mockResolvedValueOnce({ stop_reason: "end_turn", parsed_output: { documentKind: "marketplace_notice", printedTaxYear: 2026, notes: [],
+    parse.mockResolvedValueOnce({ stop_reason: "end_turn", usage, parsed_output: { documentKind: "marketplace_notice", printedTaxYear: 2026, notes: [],
       fields: [{ field: "coverage.enrollmentPremium", valueAsPrinted: "$1,917.75", period: "monthly", page: 1, excerpt: "Monthly premium $1,917.75" },
         { field: "coverage.advancePtc", valueAsPrinted: "$900.00", period: "monthly", page: 1, excerpt: "Your tax credit: $1,117.75" }] } });
     const ok = await (await pdfUpload()).json();
@@ -78,5 +81,11 @@ describe("paid document-analysis endpoint", () => {
     expect(ok.fields).toHaveLength(1); // the value not found in its own quoted line is dropped
     expect(ok.fields[0].proposedValue).toEqual({ kind: "money", amountCents: 191_775, period: "monthly", asPrinted: "$1,917.75" });
     expect(ok.warnings.join(" ")).toMatch(/AI model/);
+    expect(ok.document.kind).toBe("marketplace_statement");
+    expect(ok.facts[0]).toMatchObject({ provenance: "ai_model", personCandidate: null, review: "extracted", field: "coverage.enrollmentPremium" });
+    // Every provider call was settled with its actual usage (2,500 in + 400 out at the configured model's price).
+    const settles = rpc.mock.calls.filter(c => c[0] === "headroom_settle_ai_spend").map(c => c[1]);
+    expect(settles.at(-1)).toMatchObject({ p_input: 2_500, p_output: 400, p_outcome: "end_turn" });
+    expect(settles.find(s => s.p_outcome === "Error")).toMatchObject({ p_actual: 0 }); // timeout before output: reservation released, nothing billed
   });
 });
