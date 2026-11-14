@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import type { ReadinessIntent } from "@/domain/assistance";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { assessInputReadiness } from "@/lib/engine";
-import { humanizeDates } from "@/features/format";
+import { humanizeDates, money } from "@/features/format";
+import { BenchmarkHelp } from "@/features/insurance/BenchmarkHelp";
 import { parseAmount } from "@/features/household-plan/parts";
 import { trackEvent } from "@/lib/client/api";
 import { answerPaths, needsEditor, type ReadinessAnswer } from "./answers";
@@ -44,6 +45,22 @@ export function Readiness({ ws, intent, projectId, onAnswer, onSubmit }: {
         if (ok) void trackEvent("missing_question_resolved", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "manual" });
         return ok;
       }} />
+      {(q.id.startsWith("coverage:benchmarkPremium:") || q.id.startsWith("benchmark:")) && (q.year === 2026 || q.year === 2027) &&
+        <BenchmarkHelp ws={ws} year={q.year} onUse={async (cents, status, label) => {
+          const yi = q.year === 2027 ? 1 : 0;
+          const summary = `Benchmark premium ${q.year}: ${money(cents)} a month (${label})`;
+          let next: HouseholdWorkspace;
+          try { next = answerPaths(ws, [`household.years[${yi}].coverage[*].benchmarkPremium`], { kind: "money", cents }, q.year, summary); }
+          catch { return false; }
+          next.household.years[yi].benchmarkStatus = status;
+          for (const m of next.household.years[yi].coverage) m.benchmarkPremium = { ...m.benchmarkPremium, status: status === "county_candidate" ? "estimated" : "confirmed" };
+          const ok = await onSubmit(next, summary);
+          if (ok) void trackEvent("missing_question_resolved", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "manual" });
+          return ok;
+        }} onSaveCounty={async fips => {
+          try { return await onSubmit(answerPaths(ws, ["household.countyFips"], { kind: "choice", value: fips }, null, "County for the benchmark lookup"), "County saved. Now look up the county estimate."); }
+          catch { return false; }
+        }} />}
       {q.allowUnknown && <button type="button" className="link-btn" onClick={() => setLater([...later, q.id])}>I don&apos;t know yet</button>}
     </li>)}</ul>
     {open.length === 0 && later.length > 0 && <p className="hint">You&apos;ve left {later.length} question{later.length > 1 ? "s" : ""} for later. The result waits for them — nothing unknown is treated as $0.</p>}

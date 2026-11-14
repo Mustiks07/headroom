@@ -968,3 +968,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px
 .review-list li { border-radius: 16px; }
 .review-list blockquote { font-family: var(--sans); }
 @media (max-width: 800px) { .review.with-source { grid-template-columns: 1fr; } .source-card { position: static; } .review-summary .btn { width: 100%; } }
+.mbd { width: 100%; border-collapse: collapse; font-size: 14px; margin: 4px 0; }
+.mbd th, .mbd td { padding: 6px 4px; border-bottom: 1px solid var(--divider); text-align: right; vertical-align: top; }
+.mbd th[scope="row"] { text-align: left; font-weight: 600; display: grid; }
+.mbd thead th { color: var(--muted); font-weight: 600; text-align: right; }
+.mbd thead th:first-child { text-align: left; }
+.mbd-event { font-weight: 400; font-size: 13px; color: var(--muted); }
+.variant.recommended .mbd th, .variant.recommended .mbd td, .variant.recommended .mbd-event { color: #fff; border-color: rgba(255, 255, 255, .3); }
+.county-picker { display: grid; gap: 6px; }
+.bench-help { display: grid; gap: 6px; }
+.bench-body { display: grid; gap: 10px; background: var(--canvas); border: 1px solid var(--divider); border-radius: 12px; padding: 12px; }
+.bench-result { display: grid; gap: 6px; }

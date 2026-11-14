@@ -178,6 +178,10 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
   const goalMet = v.constraints.every(c => c.satisfied) && v.dateTargets.every(t => t.met !== false);
   // Round 5 engine fields (Claude 2): cash vs declining AND vs the offer as it stands; robustness of the pick.
   const byDate = v.dateTargets.find(t => t.achievedCents !== null) ?? null;
+  // Round 5 engine fields (Claude 2 bc99600): who must agree, and money from this project at each date.
+  const agree = (v as { clientAgreement?: { required: boolean; changes: Array<"price" | "dates">; note: string | null } }).clientAgreement;
+  const mbd = (v as { moneyByDate?: Array<{ date: string; receivedCents: number; availableCents: number; event: string }> }).moneyByDate ?? [];
+  const yearEnd = mbd.find(r => r.date === "2026-12-31") ?? null;
   const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null } }).comparisons;
   const rob = (v as { robustness?: { holds: boolean; basis: string; roomCents: number | null } }).robustness;
   return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"}`} aria-labelledby={`v-${v.id}`}>
@@ -186,16 +190,24 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
     {view === "settled" ? <>
       <p className={`tile-big num ${signClass(v.twoYearCashDeltaCents)}`}>{signedMoney(v.twoYearCashDeltaCents)}</p>
       <p className="tile-sub">Extra cash after both tax settlements · {result.baseline.kind === "accept_as_offered" ? "compared with accepting as offered" : "compared with declining this project"} · 2026–2027 tax years, final settlement in {result.horizon.settlementThrough.slice(0, 4)}</p>
-    </> : byDate && byDate.achievedCents !== null ? <>
-      <p className="tile-big num">{money(byDate.achievedCents)}</p>
-      <p className="tile-sub">{humanizeDates(byDate.explanation)}</p>
     </> : <>
-      <p className="tile-big num">—</p>
-      <p className="tile-sub">No “money by a date” goal is set. Add one in your goal to compare this view; project money by date is listed under “Money by date &amp; details”.</p>
+      {byDate && byDate.achievedCents !== null ? <>
+        <p className="tile-big num">{money(byDate.achievedCents)}</p>
+        <p className="tile-sub">{humanizeDates(byDate.explanation)}</p>
+      </> : yearEnd ? <>
+        <p className="tile-big num">{money(yearEnd.availableCents)}</p>
+        <p className="tile-sub">Available from this project by Dec 31, 2026 — after its costs, any extra SEP-IRA and the tax set aside. No date goal is set.</p>
+      </> : <p className="tile-sub">No money-by-date figures for this option.</p>}
+      {mbd.length > 0 && <table className="mbd"><caption className="visually-hidden">Money from this project by date</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col">Received</th><th scope="col">Available</th></tr></thead>
+        <tbody>{mbd.map(r => <tr key={r.date}><th scope="row"><span>{shortDate(r.date)}</span><span className="mbd-event">{humanizeDates(r.event)}</span></th>
+          <td className="num">{money(r.receivedCents)}</td><td className={`num ${r.availableCents < 0 ? "neg" : ""}`}>{money(r.availableCents)}</td></tr>)}</tbody></table>}
+      {mbd.length > 0 && <p className="hint">Received = gross payments. Available = after this project&apos;s costs, extra SEP-IRA and the tax and credit change set aside; the last row matches the result after both returns.</p>}
     </>}
     {v.retirementAddedCents > 0 && <p className="tile-line">+ <strong className="num">{money(v.retirementAddedCents)}</strong> into retirement (not counted as cash)</p>}
     {cmp && cmp.versusOfferedCents !== null && v.purpose !== "as_offered" && <p className="tile-line"><span className={`num ${signClass(cmp.versusOfferedCents)}`}>{signedMoney(cmp.versusOfferedCents)}</span> compared with the offer as it stands</p>}
-    {v.purpose !== "as_offered" && <p className="tile-line small"><span className="client-agreement">Client agreement needed</span> for the changed price or payment dates. Proposed payments, not money received.</p>}
+    {(agree ? agree.required : v.purpose !== "as_offered") && <p className="tile-line small"><span className="client-agreement">Client agreement needed</span>{" "}
+      for the changed {agree && agree.changes.length ? agree.changes.map(c => c === "price" ? "price" : "payment dates").join(" and ") : "price or payment dates"}. Proposed payments, not money received.{agree?.note ? ` ${humanizeDates(agree.note)}` : ""}</p>}
     {rob && !rob.holds && <p className="notice warn small">Little room: {rob.roomCents !== null ? `about ${money(rob.roomCents)} of extra 2026–2027 profit could break this` : "a small change in income could break this"}{rob.basis === "declared_ranges" ? " within the income ranges you entered" : ""}. Check the details before you choose.</p>}
     <dl className="terms">
       <div><dt>Ask for</dt><dd className="num">{money(v.terms.priceCents)}</dd></div>
