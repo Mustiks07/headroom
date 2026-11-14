@@ -24,7 +24,7 @@ const { createLocalWorkspaceRepository, commitWorkspaceChange, newWorkspaceEvent
 const { mergeIntoDraft, applyConfirmedFacts, emptyImportDraft } = await import("@/lib/client/import-draft");
 const { buildAssistanceContext, answerAmbiguity, resolveDate } = await import("@/lib/client/assistance-text");
 const { commitProposal, applyChangeProposal } = await import("@/lib/client/workspace-commands");
-const { buildActionPackage, buildCurrentCalendar } = await import("@/lib/client/deal-exports");
+const { buildActionPackage, buildCurrentCalendar, reminderUid, calendarUid } = await import("@/lib/client/deal-exports");
 const { saveActionPackage, exportCurrentCalendar } = await import("@/lib/client/deal-state");
 const { recordClientAgreement } = await import("@/features/household-plan/ops");
 const { analyzeWorkspaceFile, exportWorkspaceJson } = await import("@/lib/client/workspace-migration");
@@ -226,6 +226,32 @@ describe("decision lifecycle and calendar", () => {
     // Old/new state survives JSON export → restore.
     const restored = analyzeWorkspaceFile(await exportWorkspaceJson(changed).text());
     expect(restored.status === "workspace" && restored.workspace.dealPlanning).toEqual(changed.dealPlanning);
+  });
+});
+
+describe("calendar UIDs for the user's own data", () => {
+  it("stay within the stored limit and stable for long ids; short UIDs are unchanged", async () => {
+    expect(reminderUid("ws-1", "proj-a", "act-1")).toBe("ws-1.proj-a.act-1@headroom.plan"); // issued round 4/5 UIDs keep matching
+    const long = (p: string) => `${p}-${"x".repeat(100 - p.length - 1)}`;
+    const wsId = "dc9f5843-c1b2-4697-affc-23f7cb2b3325";
+    const a = reminderUid(wsId, long("proj"), long("act")), b = reminderUid(wsId, long("proj"), long("act2"));
+    expect(a.length).toBeLessThanOrEqual(200);
+    expect(a).toBe(reminderUid(wsId, long("proj"), long("act")));
+    expect(a).not.toBe(b);
+    expect(calendarUid(wsId, long("proj"), long("line"), "receipt").length).toBeLessThanOrEqual(200);
+
+    // A household with long ids (as created from the user's own entries) exports and saves its calendar twice without growing UIDs.
+    const repo = createLocalWorkspaceRepository({ store: new MemoryStore() });
+    const raw = structuredClone(dealWorkspaceFixture) as HouseholdWorkspace;
+    for (const p of raw.projects) for (const l of p.receipts) l.id = long(`${p.id}-${l.id}`);
+    const ws = await repo.save(raw, null);
+    const first = await exportCurrentCalendar(repo, ws, new Date("2026-11-16T12:00:00Z"));
+    const uids = first.saved.dealPlanning!.calendar!.issued.map(e => e.uid);
+    expect(uids.length).toBeGreaterThan(0);
+    expect(uids.every(u => u.length <= 200)).toBe(true);
+    const second = await exportCurrentCalendar(repo, first.saved, new Date("2026-11-17T12:00:00Z"));
+    expect(second.saved.dealPlanning!.calendar!.issued.map(e => e.uid)).toEqual(uids);
+    expect(second.cancelled).toBe(0);
   });
 });
 
