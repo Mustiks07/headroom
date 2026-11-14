@@ -4,3 +4,4 @@ export * from "./offer";
 export * from "./facts";
 export * from "./changes";
 export * from "./explain";
+export * from "./benchmark";

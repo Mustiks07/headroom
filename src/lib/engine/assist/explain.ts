@@ -182,6 +182,50 @@ function attribution(d: YearResult, c: YearResult) {
   return { cash, se, tax, credit, sep, profit: cash + se + tax + fica - credit + sep };
 }
 
+export interface TermsDecomposition {
+  /** Cash change of the offer as it stands and of the chosen terms, both against the goal's baseline. */
+  offeredCashCents: number;
+  chosenCashCents: number;
+  /** Sequential steps from the offer to the chosen terms; each is a full recalculation, so they add up exactly. */
+  steps: Array<{ id: "dates" | "price" | "retirement"; label: string; cashCents: number; retirementCents: number }>;
+  order: string;
+}
+
+/**
+ * Split the difference between the offer as it stands and the chosen terms into dates → price → SEP-IRA.
+ * Effects interact (moving money between years changes the tax on a price change), so the steps are taken
+ * in this fixed order on one path; their sum equals the full difference exactly. Another order gives other
+ * step sizes with the same total.
+ */
+export function decomposeVersusOffer(ws: HouseholdWorkspace, goal: DealGoal, terms: DealVariant["terms"]): TermsDecomposition | BlockedComparison {
+  const project = ws.projects.find(p => p.id === goal.projectId);
+  if (!project) return { status: "needs_data", code: "CANDIDATE_MISSING", message: "Project not found.", fields: [{ path: "projects", reason: goal.projectId }] };
+  const received = project.receipts.filter(l => l.actual).reduce((a, l) => a + l.actual!.amountCents, 0);
+  const offered = project.receipts.filter(l => !l.actual && !l.cancelledAt && l.expected).map(l => ({ id: l.id, ...l.expected! }));
+  const offeredUnpaid = offered.reduce((a, q) => a + q.amountCents, 0);
+  const unpaid = terms.priceCents - received;
+  const at = (t: DealVariant["terms"]) => evaluateTermsExact(ws, goal, t);
+  // Step 1: the chosen dates and shares at the offered price.
+  let left = offeredUnpaid;
+  const scaled = terms.payments.map((q, i) => {
+    const amt = i === terms.payments.length - 1 ? left : Math.round((offeredUnpaid * q.amountCents) / unpaid);
+    left -= amt;
+    return { ...q, amountCents: amt };
+  }).filter(q => q.amountCents > 0);
+  const points = [at({ priceCents: received + offeredUnpaid, payments: offered, additionalSep: null }),
+    at({ priceCents: received + offeredUnpaid, payments: scaled, additionalSep: null }),
+    at({ ...terms, additionalSep: null }), at(terms)];
+  const bad = points.find((x): x is BlockedComparison => x.status !== "ready");
+  if (bad) return bad;
+  const cash = points.map(x => (x as ExactTerms).cashDeltaCents);
+  return { offeredCashCents: cash[0], chosenCashCents: cash[3], order: "dates first (at the offered price), then the price, then the extra SEP-IRA",
+    steps: [
+      { id: "dates", label: "New payment dates at the offered price", cashCents: cash[1] - cash[0], retirementCents: 0 },
+      { id: "price", label: "The different price, on the new dates", cashCents: cash[2] - cash[1], retirementCents: 0 },
+      { id: "retirement", label: "The extra SEP-IRA contribution", cashCents: cash[3] - cash[2], retirementCents: terms.additionalSep?.amountCents ?? 0 },
+    ].filter(x => x.cashCents !== 0 || x.retirementCents !== 0) as TermsDecomposition["steps"] };
+}
+
 async function dealPacket(ws: HouseholdWorkspace, goal: DealGoal, variant: DealVariant, ex: ExactTerms, fp: string): Promise<EngineExplanationPacket> {
   const p = new Packet();
   const t = variant.terms;
@@ -203,6 +247,10 @@ async function dealPacket(ws: HouseholdWorkspace, goal: DealGoal, variant: DealV
     if (a.tax) parts.push(`income tax ${absWord(p, `tax_${y}`, `Federal income tax change ${y}`, a.tax, "more", "less")}`);
     if (a.credit) parts.push(`premium tax credit ${absWord(p, `credit_change_${y}`, `Premium tax credit change ${y}`, a.credit, "more", "less")}`);
     statements.push(`${y}: ${parts.join(", ")}; net ${absWord(p, `cash_${y}`, `Spendable cash change ${y}`, a.cash, "more", "less")} (settled with the return due ${p.date(`due_${y}`, `Return due date ${y}`, ex.dueDates[yi])}).`);
+  }
+  const dec = decomposeVersusOffer(ws, goal, t);
+  if ("steps" in dec && dec.steps.length && (t.priceCents !== ex.offeredPriceCents || t.additionalSep || JSON.stringify(t.payments.map(q => q.date)) !== JSON.stringify(ws.projects.find(x => x.id === goal.projectId)!.receipts.filter(l => !l.actual && !l.cancelledAt && l.expected).map(l => l.expected!.date)))) {
+    statements.push(`Compared with the offer as it stands (${p.money("offered_vs_base", "Cash change of the offer as it stands", dec.offeredCashCents)}), the difference comes from: ${dec.steps.map((st, i) => `${st.label.toLowerCase()} ${absWord(p, `step_${i + 1}`, st.label, st.cashCents, "more", "less")}`).join("; ")} (in this order; each step is fully recalculated).`);
   }
   const limitations = ["The difference is measured against the baseline named above; it is not savings caused by Headroom.",
     "Asked terms are proposals until the client confirms in writing.", "Planning estimate on your entries; not tax advice or a Marketplace eligibility decision."];

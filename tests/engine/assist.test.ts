@@ -7,9 +7,9 @@ import { remainingSepCash, type HouseholdWorkspace } from "@/domain/household-wo
 import { changeProposalFixture, extractedFactsFixture } from "@/fixtures/assistance";
 import { workspaceFixture } from "@/fixtures/workspace";
 import {
-  assessInputReadiness, buildExplanationPacket, checkExtractedFacts, engineWorkspaceFingerprint, evaluateHouseholdWorkspace, evaluateOfferAsOffered,
-  numbersNotInPacket, previewChange, renderStatements, resolveRelativeDate, searchDealTerms, validateAndApply, verifyDecisionRecord,
-  type EngineChangePreview, type EngineExplanationPacket,
+  assessInputReadiness, buildExplanationPacket, checkExtractedFacts, decomposeVersusOffer, engineWorkspaceFingerprint, evaluateHouseholdWorkspace, evaluateOfferAsOffered,
+  numbersNotInPacket, previewChange, renderStatements, resolveBenchmark, resolveRelativeDate, searchDealTerms, validateAndApply, verifyDecisionRecord,
+  type EngineChangePreview, type EngineDealVariant, type EngineExplanationPacket,
 } from "@/lib/engine";
 import { annual, deal, dealWorkspace, T } from "./deal-fixture";
 import { usd } from "./helpers";
@@ -161,15 +161,22 @@ describe("offers, robustness and explanations", () => {
     expect(cliff.status === "ready" && [cliff.verdict, cliff.cashChangeCents]).toEqual(["review_terms", -usd(3616)]);   // same figure as the round 4 search
   });
 
-  it("a fragile simplest option brings a sturdier one with its price; the fragile simple option is not recommended", async () => {
+  it("fragile options are named; the recommendation holds, or is marked conditional when nothing in the limits holds", async () => {
     const d = deal();
     const r = await searchDealTerms(dealWorkspace(), d.goal, d.space, null);
     if (r.status !== "ready") throw new Error();
     const robust = r.variants.find(v => v.purpose === "lowest_risk")!;
     expect(robust.label).toMatch(/room before a credit is lost: \$3,214/);
-    expect(r.warnings.join(" ")).toMatch(/only \$0 of extra profit to spare/);
-    expect(r.recommendedVariantId).not.toBe("v-simplest");
-    expect(robust.constraints.every(c => c.satisfied)).toBe(true);
+    expect(r.warnings.join(" ")).toMatch(/only \$202 of extra profit to spare/);
+    expect((r.variants.find(v => v.id === r.recommendedVariantId) as EngineDealVariant).robustness.holds).toBe(true);
+    // Declared 2026 range $100,000–$125,000: no option keeps the 2026 credit at the high end → conditional, said so.
+    const ws = dealWorkspace();
+    ws.forecasts[0] = { ...annual("primary", 2026, 112000), annualNetProfit: { valueCents: usd(112000), status: "estimated", sourceId: "demo-input", range: { lowCents: usd(100000), highCents: usd(125000) } } };
+    const wide = await searchDealTerms(ws, d.goal, d.space, null);
+    if (wide.status !== "ready") throw new Error(JSON.stringify(wide).slice(0, 300));
+    const rec = wide.variants.find(v => v.id === wide.recommendedVariantId) as EngineDealVariant;
+    expect(rec.robustness).toMatchObject({ basis: "declared_ranges", holds: false });
+    expect(wide.warnings.join(" ")).toMatch(/meets the goal at your entered values only/);
   });
 
   it("explanations: every figure has a reference; invented numbers are caught; answers come from results", async () => {
@@ -183,6 +190,15 @@ describe("offers, robustness and explanations", () => {
       expect(numbersNotInPacket(k, text)).toEqual([]);
       expect(numbersNotInPacket(k, `${text} You save $5,001.`)).toEqual(["$5,001"]);
       expect(k.answers.map(a => a.question).sort()).toEqual(["client_refuses", "what_changes", "why_january", "why_worse"]);
+    }
+    // Two baselines and a decomposition that adds up: offer as it stands → new dates → new price (each step recalculated).
+    const r = await searchDealTerms(ws, d.goal, d.space, null);
+    if (r.status !== "ready") throw new Error();
+    for (const x of r.variants) {
+      const dec = decomposeVersusOffer(ws, d.goal, x.terms);
+      if (!("steps" in dec)) throw new Error(JSON.stringify(dec));
+      expect(dec.offeredCashCents + dec.steps.reduce((a, st) => a + st.cashCents, 0)).toBe(x.twoYearCashDeltaCents);
+      expect(dec.offeredCashCents).toBe(-usd(3616));
     }
     const k = await buildExplanationPacket(ws, "deal_choice") as EngineExplanationPacket;
     const jan = k.answers.find(a => a.question === "why_january")!;
@@ -201,3 +217,24 @@ describe("offers, robustness and explanations", () => {
     expect(verifyDecisionRecord({ ...record, rulesVersion: "us-federal-aca-2026-2027.r2" })).toMatchObject({ status: "archived_only", recomputed: null });
   });
 });
+
+describe("insurance data", () => {
+  it("county candidate from the CMS extract for the covered ages; never another year, county or untested age", () => {
+    const ws = structuredClone(workspaceFixture);
+    const r26 = resolveBenchmark(ws, 2026), r27 = resolveBenchmark(ws, 2027);
+    // Independent of the fixture's entered values ($1,917.75 and $2,315.78 a month): same plans, per-member rounding.
+    expect(r26).toMatchObject({ status: "county_candidate", monthlyCents: 191776, plansCompared: 24 });
+    expect(r27).toMatchObject({ status: "county_candidate", monthlyCents: 231578, plansCompared: 26 });
+    expect(r26.status === "county_candidate" && r26.notes.join(" ")).toMatch(/not your confirmed benchmark/);
+    const noCounty = structuredClone(ws); noCounty.household.countyFips = null;
+    expect(resolveBenchmark(noCounty, 2026)).toMatchObject({ status: "not_available" });
+    const older = structuredClone(ws); older.household.people[0].ageAt2026Start = 45;
+    expect(resolveBenchmark(older, 2026)).toMatchObject({ status: "not_available" });          // age 45 factor not verified here: asked, not estimated
+    const copied = structuredClone(ws);
+    copied.household.years.forEach(y => { y.benchmarkStatus = "marketplace_confirmed"; });
+    copied.household.years[1].coverage = structuredClone(copied.household.years[0].coverage);
+    const c27 = resolveBenchmark(copied, 2027);
+    expect(c27.status === "confirmed" && c27.notes.join(" ")).toMatch(/equals the 2026 one/);
+  });
+});
+
