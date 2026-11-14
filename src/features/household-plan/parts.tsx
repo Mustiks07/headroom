@@ -33,15 +33,18 @@ const validDate = (d: string, year?: TaxYear) => /^\d{4}-\d{2}-\d{2}$/.test(d) &
 const STATUS_TEXT = { proposed: "Proposal", agreed: "Agreed", cancelled: "Cancelled" } as const;
 const STATUS_TONE = { proposed: "neutral", agreed: "good", cancelled: "bad" } as const;
 
-export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, onStatus, onCompare, comparing }: {
+export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, onStatus, onCompare, comparing, onConditions, editConditions = false }: {
   ws: HouseholdWorkspace; project: Project;
   onRecord: (lineId: string, a: { amountCents: number; date: string; sourceLabel: string }) => void;
   onCorrect: (lineId: string, a: { amountCents: number; date: string; reason: string }) => void;
   onCancelLine: (lineId: string) => void;
   onStatus: (status: Project["status"]) => void;
   onCompare: () => void; comparing: boolean;
+  onConditions: (c: Pick<Project, "cashAccountingConfirmed" | "timingArrangementConfirmed" | "terms">) => void;
+  editConditions?: boolean;
 }) {
   const [open, setOpen] = useState<{ lineId: string; mode: "record" | "correct" } | null>(null);
+  const [conditions, setConditions] = useState(editConditions);
   return <article className={`project-card status-${project.status}`} aria-labelledby={`p-${project.id}`}>
     <header className="project-head">
       <div>
@@ -78,6 +81,10 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
     {open && <LineForm line={[...project.receipts, ...project.expenses].find(l => l.id === open.lineId)!} mode={open.mode}
       onCancel={() => setOpen(null)} onSubmit={v => { if (open.mode === "record") onRecord(open.lineId, v as { amountCents: number; date: string; sourceLabel: string }); else onCorrect(open.lineId, v as { amountCents: number; date: string; reason: string }); setOpen(null); }} />}
 
+    {project.status === "proposed" && (conditions || editConditions
+      ? <ConditionsForm project={project} onCancel={() => setConditions(false)} onSave={c => { onConditions(c); setConditions(false); }} />
+      : <p className="small muted">Cash-basis accounting: {yn(project.cashAccountingConfirmed)} · Payment dates match when money is available: {yn(project.timingArrangementConfirmed)} · Split possible: {project.terms.canSplitPayment ? "yes" : "no"} · Price negotiable: {project.terms.canRenegotiatePrice ? "yes" : "no"}{" "}
+        <button type="button" className="link-btn" onClick={() => setConditions(true)}>Edit</button></p>)}
     <div className="row gap wrap">
       {project.status === "proposed" && <button type="button" className="btn primary small" onClick={onCompare} aria-pressed={comparing}>{comparing ? "Comparing below" : "Compare options for this project"}</button>}
       {project.status === "proposed" && <button type="button" className="btn ghost small" onClick={() => { if (window.confirm(`Agree to “${project.title}” exactly as offered?`)) onStatus("agreed"); }}>Agree as offered</button>}
@@ -85,6 +92,27 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
       {project.status === "cancelled" && <button type="button" className="link-btn" onClick={() => onStatus("agreed")}>Undo cancellation</button>}
     </div>
   </article>;
+}
+
+const yn = (v: boolean | null) => v === null ? "not answered" : v ? "yes" : "no";
+
+function ConditionsForm({ project, onSave, onCancel }: { project: Project; onCancel: () => void;
+  onSave: (c: Pick<Project, "cashAccountingConfirmed" | "timingArrangementConfirmed" | "terms">) => void }) {
+  const [cash, setCash] = useState(project.cashAccountingConfirmed);
+  const [timing, setTiming] = useState(project.timingArrangementConfirmed);
+  const [split, setSplit] = useState(project.terms.canSplitPayment);
+  const [latest, setLatest] = useState(project.terms.nextYearPaymentLatestDate ?? "");
+  const [nego, setNego] = useState(project.terms.canRenegotiatePrice);
+  return <form className="line-form" id={`conditions-${project.id}`} onSubmit={e => { e.preventDefault();
+    onSave({ cashAccountingConfirmed: cash, timingArrangementConfirmed: timing, terms: { canSplitPayment: split, canRenegotiatePrice: nego, nextYearPaymentLatestDate: split && latest ? latest : null } }); }}>
+    <Tri id={`cash-${project.id}`} label="Does your business use cash-basis accounting?" value={cash} onChange={setCash} />
+    <Tri id={`timing-${project.id}`} label="Will the payment dates match when the money is really available to you?" value={timing} onChange={setTiming} />
+    <label className="switch small"><input type="checkbox" checked={split} onChange={e => setSplit(e.target.checked)} /><span>The client could pay part in 2027</span></label>
+    {split && <div className="field"><label className="field-label" htmlFor={`latest-${project.id}`}>Latest date for the 2027 part <span className="optional">optional</span></label>
+      <input id={`latest-${project.id}`} type="date" value={latest} onChange={e => setLatest(e.target.value)} /></div>}
+    <label className="switch small"><input type="checkbox" checked={nego} onChange={e => setNego(e.target.checked)} /><span>I can negotiate the price</span></label>
+    <div className="row gap"><button type="submit" className="btn primary small">Save conditions</button><button type="button" className="btn ghost small" onClick={onCancel}>Cancel</button></div>
+  </form>;
 }
 
 /** Record or correct an actual amount. Shows what it replaces before it is applied. */

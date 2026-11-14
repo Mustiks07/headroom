@@ -23,7 +23,7 @@ import { ComparisonView, DecisionOverview } from "@/features/results/ComparisonV
 import { CalculationDrawer, type DrawerContent } from "@/features/results/CalculationDrawer";
 import { StorageFallback } from "@/features/plan/StorageFallback";
 import { workspaceFromCase } from "@/features/household-plan/ops";
-import { writeDraft } from "@/features/household-plan/draftStore";
+import { workspaceRepo } from "@/features/household-plan/store";
 import {
   DRAFT_KEY, describeStorageError, downloadJson, draftPlan, fileStamp, inputFile, saveNewPlan, takeStashedInput,
 } from "@/features/plan/storage";
@@ -215,14 +215,14 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
   }
 
   /** Turns the checked figures into a household plan draft (forecast + optional proposal), then opens it. */
-  function makeHouseholdPlan() {
+  async function makeHouseholdPlan() {
     const built = buildCaseInput(draftRef.current, "risk");
     if (!built.ok) { setSaveError("Fix the listed figures first, then make the plan."); return; }
     try {
       const ws = workspaceFromCase(built.input, draftRef.current.ui.forecasts ?? [], draftRef.current.ui.projectStarted);
-      writeDraft(ws);
-      router.push(`/household/${encodeURIComponent(ws.id)}`);
-    } catch (e) { setSaveError(`The household plan couldn't be created: ${e instanceof Error ? e.message : String(e)}. Your figures here are kept.`); }
+      const saved = await workspaceRepo().save(ws, null);
+      router.push(`/household/${encodeURIComponent(saved.id)}?saved=1`);
+    } catch (e) { setSaveError(`The household plan couldn't be saved: ${e instanceof Error ? e.message : String(e)}. Your figures here are kept.`); }
   }
 
   function downloadData() {
@@ -284,7 +284,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry }: {
           onCompare={() => { setStep("compare"); window.scrollTo({ top: 0 }); }} onRetry={runRisk} />
         {riskReady && !riskStale && <div className="plan-cta">
           <div><strong>Keep this as your household plan</strong><p className="muted small">Track agreed projects, payments as they arrive and SEP-IRA contributions; check new offers on top of them.</p></div>
-          <button type="button" className="btn secondary" onClick={makeHouseholdPlan}>Make this my household plan <ArrowRight size={16} /></button>
+          <button type="button" className="btn secondary" onClick={() => void makeHouseholdPlan()}>Make this my household plan <ArrowRight size={16} /></button>
         </div>}
         {saveError && step === "household" && <p className="notice warn" role="alert">{saveError}</p>}
       </div>}

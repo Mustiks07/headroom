@@ -4,7 +4,8 @@ import { HouseholdPlanView } from "@/features/household-plan/HouseholdPlanView";
 
 export const metadata: Metadata = { title: "Household plan — Headroom" };
 
-export default async function HouseholdPlanPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HouseholdPlanPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const { id } = await params;
-  return <><SiteHeader current="plans" /><main id="main"><HouseholdPlanView id={decodeURIComponent(id)} /></main><SiteFooter /></>;
+  const { saved } = await searchParams;
+  return <><SiteHeader current="plans" /><main id="main"><HouseholdPlanView id={decodeURIComponent(id)} justSaved={saved === "1"} /></main><SiteFooter /></>;
 }

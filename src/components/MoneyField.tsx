@@ -41,7 +41,7 @@ export function MoneyField({ path, label, hint, fact, evidence, onChange, noneLa
   const [lowText, setLowText] = useState(rangeError?.low ?? centsToInput(fact.range?.lowCents ?? null));
   const [highText, setHighText] = useState(rangeError?.high ?? centsToInput(fact.range?.highCents ?? null));
   const [showRange, setShowRange] = useState(!!fact.range || !!rangeError);
-  const supportsRange = /\.(scheduleCProfit|taxableInterest|taxExemptInterest)$/.test(path);
+  const supportsRange = /\.(scheduleCProfit|taxableInterest|taxExemptInterest|annualNetProfit|ytdNetProfit|remainingReceipts|remainingExpenses)$/.test(path);
   const error = stored?.message ?? localError;
 
   // Follow outside changes (copy buttons, document import, "None") unless the box holds unfixed text.

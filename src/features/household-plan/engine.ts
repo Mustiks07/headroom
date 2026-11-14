@@ -3,7 +3,7 @@
 import * as engine from "@/lib/engine";
 import type { BlockedComparison, ScenarioResult, TaxYear } from "@/domain/contracts";
 import {
-  HouseholdWorkspaceSchema, canonicalWorkspaceContent, effectiveLine, forecastFacts, sepPosition, workspaceToCaseInput,
+  HouseholdWorkspaceSchema, effectiveLine, workspaceFingerprint, forecastFacts, sepPosition, workspaceToCaseInput,
   type HouseholdProjectionResult, type HouseholdWorkspace, type HouseholdWorkspaceEngine, type Project, type ProjectionComponent,
   type ReadyHouseholdProjection, type SepYearStatus, type WorkspaceComparisonResult,
 } from "@/domain/household-workspace";
@@ -41,11 +41,8 @@ function missingFor(w: HouseholdWorkspace, missing: BlockedComparison["fields"],
   });
 }
 
-async function fingerprintOf(w: HouseholdWorkspace): Promise<string> {
-  const text = JSON.stringify({ c: canonicalWorkspaceContent(w), e: engine.ENGINE_VERSION, r: engine.RULES_VERSION });
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, "0")).join("");
-}
+/** The contract's reference fingerprint (same one the export route checks for staleness). */
+const fingerprintOf = (w: HouseholdWorkspace) => workspaceFingerprint(w, engine.ENGINE_VERSION, engine.RULES_VERSION);
 
 /** Composition of each person/year profit, from contract helpers only. */
 function components(w: HouseholdWorkspace, personId: string, year: TaxYear): ProjectionComponent[] {

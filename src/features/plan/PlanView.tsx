@@ -213,7 +213,9 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
                   <button type="button" className="btn small primary" disabled={busy === a.id} onClick={() => toggleAction(a.id, true)}>Yes, it&apos;s done</button>
                   <button type="button" className="btn small ghost" onClick={() => setConfirming(null)}>Cancel</button>
                 </div> : done ? <button type="button" className="link-btn" disabled={busy === a.id} onClick={() => toggleAction(a.id, false)}>Mark as not done</button>
-                  : <button type="button" className="btn small secondary" onClick={() => setConfirming(a.id)}>Mark as done</button>}
+                  : /sep/i.test(a.id) || /SEP-IRA/.test(a.title)
+                    ? <p className="hint">A contribution counts once it&apos;s recorded with its amount, date and tax year. <Link className="text-link" href="/household">Move this plan into a household plan</Link> to record it.</p>
+                    : <button type="button" className="btn small secondary" onClick={() => setConfirming(a.id)}>Mark as done</button>}
               </div>
             </li>;
           })}

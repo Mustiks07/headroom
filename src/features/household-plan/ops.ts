@@ -145,6 +145,14 @@ export function agreeToOption(w0: HouseholdWorkspace, projectId: string, s: Scen
   return log(w, `evt-agree-${projectId}-${fingerprint ?? s.id}`, "project_status_changed", `Agreed to “${p.title}”: ${s.label}.`, { projectId });
 }
 
+export function setProjectConditions(w0: HouseholdWorkspace, projectId: string, c: Pick<Project, "cashAccountingConfirmed" | "timingArrangementConfirmed" | "terms">): HouseholdWorkspace {
+  const w = clone(w0);
+  const p = w.projects.find(x => x.id === projectId);
+  if (!p) throw new Error("This project is no longer in the plan.");
+  p.cashAccountingConfirmed = c.cashAccountingConfirmed; p.timingArrangementConfirmed = c.timingArrangementConfirmed; p.terms = c.terms;
+  return log(w, newId("evt-terms"), "project_updated", `Updated the conditions for “${p.title}”.`, { projectId });
+}
+
 /* ---------- SEP ---------- */
 
 export function recordContribution(w0: HouseholdWorkspace, c: { personId: string; taxYear: TaxYear; amountCents: number; paidDate: string; sourceLabel: string }): HouseholdWorkspace {
