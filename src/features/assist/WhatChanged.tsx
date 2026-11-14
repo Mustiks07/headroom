@@ -103,16 +103,17 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
       {p.proposal.commands.length > 0 && <><h3 className="small-head">Headroom would</h3>
         <ul className="bullets small">{p.proposal.commands.map((c, i) => <li key={i}>{describe(c, ws)}</li>)}</ul></>}
       {p.proposal.resolvedDates.length > 0 && <p className="hint">Dates read as: {p.proposal.resolvedDates.map(d => `“${d.phrase}” = ${shortDate(d.date)}`).join("; ")}.</p>}
-      {p.proposal.ambiguities.length > 0 && <div className="ambiguities">
-        {p.proposal.ambiguities.map(a => <fieldset key={a.id} className="tri"><legend className="field-label">{humanizeDates(a.question)}</legend>
+      {p.proposal.ambiguities.filter(a => !a.options.length).map(a => <p key={a.id} className="notice warn small" role="status">{humanizeDates(a.question)}{a.id !== "unknown" && a.id !== "no_payment" ? " Add it to the sentence, then choose “Show the change” again." : ""}</p>)}
+      {p.proposal.ambiguities.some(a => a.options.length > 0) && <div className="ambiguities">
+        {p.proposal.ambiguities.filter(a => a.options.length > 0).map(a => <fieldset key={a.id} className="tri"><legend className="field-label">{humanizeDates(a.question)}</legend>
           <div className="seg small">{a.options.map(o => <label key={o.id} className={answers[a.id] === o.id ? "on" : ""}>
             <input type="radio" name={`amb-${a.id}`} checked={answers[a.id] === o.id} onChange={() => setAnswers({ ...answers, [a.id]: o.id })} />{humanizeDates(o.label)}</label>)}</div></fieldset>)}
-        <button type="button" className="btn small secondary" disabled={p.proposal.ambiguities.some(a => !answers[a.id])} onClick={() => void resolve()}>Use these answers</button>
+        <button type="button" className="btn small secondary" disabled={p.proposal.ambiguities.some(a => a.options.length > 0 && !answers[a.id])} onClick={() => void resolve()}>Use these answers</button>
       </div>}
       {p.preview && "status" in p.preview && p.preview.status === "blocked" && <p className="notice warn">{p.preview.message}</p>}
       {pv && <PreviewView pv={pv} />}
       <div className="row gap wrap">
-        <button type="button" className="btn primary" disabled={busy || !pv || pv.status !== "ready" || p.proposal.ambiguities.length > 0} onClick={() => void apply()}>{busy ? "Saving…" : "Apply"}</button>
+        {p.proposal.commands.length > 0 && <button type="button" className="btn primary" disabled={busy || !pv || pv.status !== "ready" || p.proposal.ambiguities.length > 0 || pv.changes.length === 0} onClick={() => void apply()}>{busy ? "Saving…" : pv && pv.blockers.length > 0 && pv.changes.length === 0 ? "Can't apply" : pv && pv.changes.length === 0 ? "Nothing to save" : "Apply"}</button>}
         <button type="button" className="btn ghost" onClick={() => setState({ kind: "idle" })}>Edit</button>
         <button type="button" className="btn ghost" onClick={() => { setState({ kind: "idle" }); setText(""); }}>Cancel</button>
       </div>
@@ -125,15 +126,17 @@ function PreviewView({ pv }: { pv: EngineChangePreview }) {
     {pv.changes.length > 0 && <div className="table-wrap"><table className="years-table compact"><caption>What changes</caption>
       <thead><tr><th scope="col">Item</th><th scope="col">Now</th><th scope="col">After</th></tr></thead>
       <tbody>{pv.changes.map((c, i) => <tr key={i}><th scope="row">{humanizeDates(c.label)}</th><td>{c.before ? humanizeDates(c.before) : "—"}</td><td><strong>{humanizeDates(c.after)}</strong></td></tr>)}</tbody></table></div>}
-    {pv.years.some(y => y.before || y.after) && <div className="table-wrap"><table className="years-table compact"><caption>What it does to your plan</caption>
+    {pv.changes.length > 0 && pv.years.some(y => y.before || y.after) && <div className="table-wrap"><table className="years-table compact"><caption>What it does to your plan</caption>
       <thead><tr><th scope="col">Year</th><th scope="col">Subsidy now → after</th><th scope="col">Settled when you file</th><th scope="col">Cash after settlement</th></tr></thead>
       <tbody>{pv.years.map(y => <tr key={y.year}><th scope="row">{y.year}</th>
         <td className="num">{y.before ? money(y.before.subsidyCents) : "—"} → <strong>{y.after ? money(y.after.subsidyCents) : "—"}</strong></td>
         <td className="num">{y.before ? settle(y.before.settlementCents) : "—"} → {y.after ? settle(y.after.settlementCents) : "—"}</td>
         <td className="num">{y.before && y.after ? signedMoney(y.after.spendableCents - y.before.spendableCents) : "—"}</td></tr>)}</tbody></table></div>}
-    {pv.agreedChecks.filter(a => a.after && !a.after.met).map(a => <p key={a.projectId} className="notice warn small">After this change, the terms you agreed for this project no longer meet your goal.</p>)}
+    {pv.changes.length > 0 && pv.agreedChecks.filter(a => a.after && !a.after.met).map(a => <p key={a.projectId} className="notice warn small">After this change, the terms you agreed for this project no longer meet your goal.</p>)}
     {pv.staleDependencies.length > 0 && <ul className="bullets small">{pv.staleDependencies.map(d => <li key={d.kind + d.id}>{humanizeDates(d.reason)}</li>)}</ul>}
-    {pv.noOps.length > 0 && <p className="hint">Already in your plan — nothing is added twice.</p>}
+    {pv.changes.length === 0 && pv.blockers.length > 0 ? <p className="notice warn small" role="status">This can&apos;t be applied as written — see why below. Change the sentence and try again.</p>
+      : pv.changes.length === 0 ? <p className="notice ok small" role="status">This is already in your plan — there is nothing to save.</p>
+      : pv.noOps.length > 0 && <p className="hint">Part of this is already in your plan — it isn&apos;t added twice.</p>}
     {pv.blockers.length > 0 && <ul className="bullets small warn-text">{pv.blockers.map(b => <li key={b.path}>{humanizeDates(b.reason)}</li>)}</ul>}
     {pv.notes.length > 0 && <ul className="bullets small muted">{pv.notes.map(n => <li key={n}>{humanizeDates(n)}</li>)}</ul>}
   </div>;

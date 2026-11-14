@@ -93,6 +93,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .icon-btn { background: none; border: 1px solid transparent; border-radius: 999px; width: 38px; height: 38px; display: inline-grid; place-items: center; cursor: pointer; color: var(--muted); }
 .icon-btn:hover { border-color: var(--line-strong); color: var(--ink); }
 .chip-btn { border: 1px dashed var(--line-strong); background: transparent; border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.examples .chip-btn { white-space: normal; text-align: left; max-width: 100%; }
 .chip-btn:hover { border-style: solid; border-color: var(--ink); }
 .file-btn { position: relative; overflow: hidden; }
 .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
@@ -700,3 +702,16 @@ p.data-notes svg { margin-right: 4px; }
 .import-first { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
 .hero h1 { max-width: 980px; }
 @media (max-width: 760px) { .entry-grid { grid-template-columns: 1fr; } }
+
+/* ---- round 5: readiness, what changed, records ---- */
+.readiness { border: 1px solid var(--line); border-left: 4px solid var(--accent, #2f6f4f); border-radius: 10px; padding: 12px 14px; margin: 12px 0; background: var(--surface, transparent); }
+.question-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 12px; }
+.question-list > li { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.question-list > li:first-child { border-top: 0; padding-top: 0; }
+.answer-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.answer-field { display: grid; gap: 2px; min-width: 0; }
+.answer-field .money-row { max-width: 180px; }
+.what-changed textarea { width: 100%; box-sizing: border-box; }
+.proposal { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.preview { display: grid; gap: 8px; }
+.ambiguities { display: grid; gap: 8px; }

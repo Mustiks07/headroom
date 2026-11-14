@@ -223,7 +223,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
         <ul className="bullets small">{[...ready.assumptions, ...ready.warnings].map(n => <li key={n}>{n}</li>)}</ul></details>}
     </section>
 
-    <Readiness ws={ws} intent="current_year_subsidy" onAnswer={goToPath} />
+    <Readiness ws={ws} intent={agreedProjects.length ? "agreed_plan_review" : "current_year_subsidy"} onAnswer={goToPath} onSubmit={(next, summary) => apply(() => next, `Saved. ${summary}`)} />
     <WhatChanged ws={ws} dataKind={dataKind} onNotice={(tone, text) => setNotice({ tone, text })} onSaved={(saved, summary) => { setWs(saved); setNotice({ tone: "ok", text: summary }); }} />
 
     <DocumentFacts ws={ws} onCommit={async (next, summary) => {
@@ -290,6 +290,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
     </section>
 
     {dealId && ws.projects.some(p => p.id === dealId) && <DealPanel key={dealId} ws={ws} project={ws.projects.find(p => p.id === dealId)!}
+      onSubmitAnswer={(next, summary) => apply(() => next, `Saved. ${summary}`)} onGoToPath={goToPath}
       onClose={() => { setDealId(null); setChosen(null); }} onGoToForecast={() => { setForecastEdit({ personId: owners[0].id, year: 2026 }); setTimeout(() => document.getElementById("forecast-change")?.scrollIntoView({ behavior: "smooth" }), 30); }}
       onSaveGoal={async built => runDeal(async base0 => {
         // Manually entered cash figures cite "manual-entry"; make sure that source exists in the same save.
@@ -480,7 +481,11 @@ function ForecastChange({ ws, target, currentEvaluation, currentProjection, onCa
     </div>
     {review && !reviewCurrent && <p className="stale-banner">You changed the figures again. Check the effect again before keeping them.</p>}
     {reviewCurrent && <div className="change-review">
-      {review.projection.status !== "ready" ? <p className="notice warn">{review.projection.message} {review.projection.fields.map(x => x.reason).join(" ")}</p> : <>
+      {review.projection.status !== "ready" ? <>
+        <p className="notice warn">The plan can&apos;t be recalculated yet: {humanizeDates(review.projection.message)} {review.projection.fields.slice(0, 4).map(x => humanizeDates(x.reason)).join(" ")}</p>
+        {review.projection.status === "needs_data" && <><p className="small">You can still keep this figure — it&apos;s saved as you entered it, and the result appears once the remaining questions are answered.</p>
+          <div className="row gap"><button type="button" className="btn primary" onClick={() => kind === "profit" ? onKeep(f) : onKeepOther(target.year, other!)}>Keep these figures</button></div></>}
+      </> : <>
         <h3 className="small-head">1 · Your plan as agreed, on the new figures</h3>
         <div className="before-after">
           <div><p className="k">Before</p><p className="v num">{before ? money(before.subsidyCents) : "—"}</p><p className="muted small">2026 credit · {before ? RISK_TEXT[before.state] : ""}</p></div>

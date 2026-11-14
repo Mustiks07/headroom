@@ -123,6 +123,8 @@ export function PackageCard({ ws, pkg, onShared, onAgreed, onReminder, onNotice 
       <ClientDraftView draft={pkg.clientDraft} notes={clientDraftNotes(v)} />
       <RemindersView pkg={pkg} onToggle={onReminder} />
     </details>
-    <Explain ws={ws} subject="deal_choice" refId={pkg.id} label="Why this option?" />
+    {pkg.status === "client_agreed"
+      ? <Explain ws={ws} subject="agreed_plan" refId={pkg.projectId} label="How the agreed terms work on today's figures" />
+      : <Explain ws={ws} subject="deal_choice" refId={pkg.id} label="Why this option?" />}
   </article>;
 }

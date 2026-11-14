@@ -24,13 +24,16 @@ type SearchState = { key: string; pending: boolean; result?: DealSearchResult; e
  * Goal-first deal planning for one project: the household says what it needs; Claude 2's engine
  * searches allowed terms; this panel only displays the result and lets the person choose.
  */
-export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, onClose }: {
+export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, onClose, onSubmitAnswer, onGoToPath }: {
   ws: HouseholdWorkspace; project: Project;
   /** Saves goal + allowed terms (+ cash context) as a plan revision; returns the saved workspace or null on failure. */
   onSaveGoal: (built: Extract<ReturnType<typeof buildGoal>, { ok: true }>) => Promise<HouseholdWorkspace | null>;
   onChoose: (variant: DealVariant, result: ReadyDealSearch) => void;
   onGoToForecast: () => void;
   onClose: () => void;
+  onSubmitAnswer: (next: HouseholdWorkspace, summary: string) => Promise<boolean>;
+  /** Opens the plan editor that holds a fact the search still needs. */
+  onGoToPath: (path: string) => void;
 }) {
   const savedGoal = ws.dealPlanning?.goals.find(g => g.projectId === project.id);
   const savedSpace = ws.dealPlanning?.termSpaces.find(t => t.projectId === project.id);
@@ -84,7 +87,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
     </div>
     <p className="muted small">Tell Headroom what your household needs. It searches prices and payment dates you&apos;d be willing to ask for — on top of your agreed projects — and shows only terms it actually calculated.
       {unpaid.length > 0 && <> Still open: {unpaid.map(e => `${money(e.amountCents)} expected ${shortDate(e.date)}`).join(", ")}.</>}</p>
-    <Readiness ws={ws} intent="two_year_terms" projectId={project.id} onAnswer={() => onGoToForecast()} />
+    <Readiness ws={ws} intent="two_year_terms" projectId={project.id} onAnswer={onGoToPath} onSubmit={onSubmitAnswer} />
     <GoalForm ws={ws} project={project} goal={draft} onChange={setDraft} problems={problems} touched={touched} fixedReceived={fixed} />
     {message && <p className="field-error" role="alert">{message}</p>}
     <div className="row gap wrap">

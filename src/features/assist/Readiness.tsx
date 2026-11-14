@@ -5,6 +5,11 @@ import type { ReadinessIntent } from "@/domain/assistance";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { assessInputReadiness } from "@/lib/engine";
 import { humanizeDates } from "@/features/format";
+import { parseAmount } from "@/features/household-plan/parts";
+import { trackEvent } from "@/lib/client/api";
+import { answerPaths, needsEditor, type ReadinessAnswer } from "./answers";
+
+type Q = ReturnType<typeof assessInputReadiness>["questions"][number];
 
 const TASK: Record<ReadinessIntent, string> = {
   current_year_subsidy: "this year's subsidy check", new_offer: "checking this offer", two_year_terms: "finding terms across 2026 and 2027", agreed_plan_review: "checking your agreed plan",
@@ -14,8 +19,10 @@ const TASK: Record<ReadinessIntent, string> = {
  * Only the questions this task needs (Claude 2's assessInputReadiness), 1–3 at a time, each with
  * its reason. "I don't know yet" keeps the fact unknown — it is never filled with $0.
  */
-export function Readiness({ ws, intent, projectId, onAnswer }: {
+export function Readiness({ ws, intent, projectId, onAnswer, onSubmit }: {
   ws: HouseholdWorkspace; intent: ReadinessIntent; projectId?: string; onAnswer: (path: string) => void;
+  /** Saves the answered copy as one revision; resolves false when nothing was saved. */
+  onSubmit: (next: HouseholdWorkspace, summary: string) => Promise<boolean>;
 }) {
   const r = useMemo(() => assessInputReadiness(ws, intent, null, projectId ? { projectId } : {}), [ws, intent, projectId]);
   const [later, setLater] = useState<string[]>([]);
@@ -32,9 +39,53 @@ export function Readiness({ ws, intent, projectId, onAnswer }: {
     <ul className="question-list">{shown.map(q => <li key={q.id}>
       <p className="check-title">{humanizeDates(q.question)}</p>
       <p className="muted small">{humanizeDates(q.reason)}{q.documentHint ? ` Where to find it: ${humanizeDates(q.documentHint)}.` : ""}</p>
-      <div className="row gap"><button type="button" className="btn small secondary" onClick={() => onAnswer(q.path)}>Answer</button>
-        {q.allowUnknown && <button type="button" className="link-btn" onClick={() => setLater([...later, q.id])}>I don&apos;t know yet</button>}</div>
+      <AnswerControl q={q} ws={ws} onEditor={() => onAnswer(q.path)} onSubmit={async (next, label) => {
+        const ok = await onSubmit(next, label);
+        if (ok) void trackEvent("missing_question_resolved", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "manual" });
+        return ok;
+      }} />
+      {q.allowUnknown && <button type="button" className="link-btn" onClick={() => setLater([...later, q.id])}>I don&apos;t know yet</button>}
     </li>)}</ul>
     {open.length === 0 && later.length > 0 && <p className="hint">You&apos;ve left {later.length} question{later.length > 1 ? "s" : ""} for later. The result waits for them — nothing unknown is treated as $0.</p>}
   </div>;
+}
+
+/** One answer control per question kind. Amounts are typed; nothing is pre-filled or defaulted. */
+function AnswerControl({ q, ws, onEditor, onSubmit }: { q: Q; ws: HouseholdWorkspace; onEditor: () => void; onSubmit: (next: HouseholdWorkspace, label: string) => Promise<boolean> }) {
+  const d = q.answerDetail;
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const short = humanizeDates(q.question).replace(/\s*\(Found in[\s\S]*$/, "").slice(0, 160);
+  async function send(answer: ReadinessAnswer, said: string) {
+    setError(null); setBusy(true);
+    try { const next = answerPaths(ws, q.paths, answer, q.year, `${short} — ${said}`); await onSubmit(next, `${short} — ${said}`); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    setBusy(false);
+  }
+  if (needsEditor(q.paths, d.kind) || d.kind === "date" || d.kind === "integer" || d.kind === "range" || d.kind === "review")
+    return <div className="row gap"><button type="button" className="btn small secondary" onClick={onEditor}>Answer</button></div>;
+  if (d.kind === "boolean") return <div className="answer-row">
+    <button type="button" className="btn small secondary" disabled={busy} onClick={() => void send({ kind: "boolean", value: true }, "yes")}>Yes</button>
+    <button type="button" className="btn small secondary" disabled={busy} onClick={() => void send({ kind: "boolean", value: false }, "no")}>No</button>
+    <span className="muted small">Yes means: {humanizeDates(d.yesMeans)}</span>
+    {error && <p className="field-error" role="alert">{error}</p>}</div>;
+  if (d.kind === "choice") return <div className="answer-row">
+    {d.options.map(o => <button key={o.value} type="button" className="btn small secondary" disabled={busy} onClick={() => void send({ kind: "choice", value: o.value }, o.label)}>{o.label}</button>)}
+    {error && <p className="field-error" role="alert">{error}</p>}</div>;
+  const fields = d.kind === "money_fields" ? d.fields : [{ path: q.path, label: d.period === "monthly" ? "Amount per month" : "Amount for the year" }];
+  return <form className="answer-row" onSubmit={e => { e.preventDefault();
+    const parsed: Record<string, number> = {};
+    for (const f of fields) { const t = (vals[f.path] ?? "").trim(); if (!t) continue;
+      const r = parseAmount(t, d.confirmedZeroAllowed); if (r.error || r.cents === null) { setError(`${f.label}: ${r.error ?? "enter an amount"}`); return; } parsed[f.path] = r.cents; }
+    if (!Object.keys(parsed).length) { setError("Enter an amount, or choose “I don't know yet”."); return; }
+    if (d.kind === "money_fields") void send({ kind: "money_fields", values: parsed }, fields.filter(f => f.path in parsed).map(f => `${f.label} $${(parsed[f.path] / 100).toLocaleString("en-US")}`).join(", "));
+    else void send({ kind: "money", cents: parsed[q.path] }, `$${(parsed[q.path] / 100).toLocaleString("en-US")}${d.period === "monthly" ? " a month" : ""}`);
+  }}>
+    {fields.map(f => <label key={f.path} className="answer-field"><span className="small">{f.label}</span>
+      <span className="money-row"><span className="money-prefix" aria-hidden="true">$</span><input inputMode="decimal" value={vals[f.path] ?? ""} onChange={e => setVals({ ...vals, [f.path]: e.target.value })} /></span></label>)}
+    <button type="submit" className="btn small secondary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+    {d.confirmedZeroAllowed && <span className="muted small">If it&apos;s truly none, enter 0.</span>}
+    {error && <p className="field-error" role="alert">{error}</p>}
+  </form>;
 }
