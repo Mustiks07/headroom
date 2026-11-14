@@ -25,14 +25,18 @@ import { evaluateYear, solveCredit, toYearResult } from "../year";
 import { workspaceToEngineInput, type AdaptedWorkspace } from "./adapter";
 import { countedBasis, projectHousehold, projectionTrace, type HouseholdProjection } from "./projection";
 
-/** Version of the household aggregation layer; v1 results keep ENGINE_VERSION unchanged. */
+/** Label of the household aggregation layer (informational; fingerprints use ENGINE_VERSION per the contract). */
 export const HOUSEHOLD_ENGINE_VERSION = "headroom-household-1.0.0";
 const YEARS: TaxYear[] = [2026, 2027];
 
-/** SHA-256 of canonicalWorkspaceContent + engine, household-engine and rules versions (+ what was asked). */
-export async function workspaceFingerprint(ws: HouseholdWorkspace, extra: Record<string, unknown> = {}): Promise<string> {
-  return sha256Hex(JSON.stringify({ content: canonical(canonicalWorkspaceContent(ws)), extra: canonical(extra),
-    engineVersion: ENGINE_VERSION, householdEngineVersion: HOUSEHOLD_ENGINE_VERSION, rulesVersion: RULES_VERSION }));
+/**
+ * Same formula as the contract's reference `workspaceFingerprint(ws, ENGINE_VERSION, RULES_VERSION)`
+ * (Claude 3 follow-up 8ab1984): SHA-256 of key-sorted {content: canonicalWorkspaceContent(ws),
+ * engineVersion, rulesVersion}. Record order, timestamps and history do not change it, so the
+ * export's stale check matches. A change in household results is released with a new ENGINE_VERSION.
+ */
+export async function engineWorkspaceFingerprint(ws: HouseholdWorkspace): Promise<string> {
+  return sha256Hex(JSON.stringify(canonical({ content: canonicalWorkspaceContent(ws), engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION })));
 }
 
 type Prepared = { ws: HouseholdWorkspace; adapted: AdaptedWorkspace };
@@ -104,7 +108,7 @@ export async function buildHouseholdProjection(raw: HouseholdWorkspace): Promise
   const p = projectHousehold(adapted.input, issues, { years: yearsWithForecast(ws, adapted.ownerPersonId) });
   const b = blocked(issues, adapted);
   if (b || !p) return b!;
-  return projectionResult(ws, p, await workspaceFingerprint(ws, { kind: "projection" }));
+  return projectionResult(ws, p, await engineWorkspaceFingerprint(ws));
 }
 
 // ------------------------------------------------------------ fixed plan --
@@ -225,7 +229,7 @@ export async function evaluateHouseholdWorkspace(raw: HouseholdWorkspace): Promi
   const fixed = p ? fixedPlan(p, issues) : null;
   const b = blocked(issues, adapted);
   if (b || !p || !fixed) return b!;
-  const fingerprint = await workspaceFingerprint(ws, { kind: "evaluation" });
+  const fingerprint = await engineWorkspaceFingerprint(ws);
   const projection = await projectionResult(ws, p, fingerprint);
   const agreed = agreedScenario(adapted.input, p, fixed.reasons);
   const warnings = [...modelWarnings(fixed.models, p.derivedInput), ...p.warnings, ...fixed.details.notChecked];
@@ -309,7 +313,7 @@ export async function compareWorkspaceOpportunity(raw: HouseholdWorkspace, candi
   const v1Blocked = blocked(v1Issues, adapted);
   if (v1Blocked || !parsed || !m0 || !m1) return v1Blocked!;
   try {
-    const fingerprint = await workspaceFingerprint(ws, { kind: "candidate", candidateProjectId });
+    const fingerprint = await engineWorkspaceFingerprint(ws);
     let comparison: ReadyComparison;
     if (single) {
       const out = compare(parsed, [m0, m1]);

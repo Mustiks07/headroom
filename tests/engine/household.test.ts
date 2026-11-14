@@ -4,7 +4,7 @@ import type { MoneyFact } from "@/domain/contracts";
 import type { HouseholdWorkspace, Project, ProjectLine } from "@/domain/household-workspace";
 import { familyCase } from "@/fixtures/cases";
 import { workspaceFixture } from "@/fixtures/workspace";
-import { buildHouseholdProjection, calculateComparison, compareWorkspaceOpportunity, evaluateHouseholdWorkspace, workspaceFingerprint } from "@/lib/engine";
+import { buildHouseholdProjection, calculateComparison, compareWorkspaceOpportunity, evaluateHouseholdWorkspace, engineWorkspaceFingerprint } from "@/lib/engine";
 import { fact, usd } from "./helpers";
 
 const T = "2026-11-15T12:00:00.000Z";
@@ -182,8 +182,8 @@ describe("agreed plan after a new income figure", () => {
     a.projects = [project("A", "agreed", [line("a1", 6000, "2026-11-20")]), project("B", "proposed", [line("b1", 3000, "2026-12-28")])];
     const b = structuredClone(a);
     b.projects.reverse();
-    expect(await workspaceFingerprint(b)).toBe(await workspaceFingerprint(a));
+    expect(await engineWorkspaceFingerprint(b)).toBe(await engineWorkspaceFingerprint(a));
     b.projects[0].receipts[0].expected!.amountCents += 100;
-    expect(await workspaceFingerprint(b)).not.toBe(await workspaceFingerprint(a));
+    expect(await engineWorkspaceFingerprint(b)).not.toBe(await engineWorkspaceFingerprint(a));
   });
 });
