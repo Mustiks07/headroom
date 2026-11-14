@@ -1,0 +1,224 @@
+{
+  "year": 2026,
+  "source": "https://data.healthcare.gov/datafile/py2026/individual_market_medical.zip",
+  "sha256": "4ae312a4e2fc9b414b0e4dac52a146d864a2b0d7fa36b25c969a0b55e320668b",
+  "status": "county candidates; exact address and coverage family not verified",
+  "plans": [
+    {
+      "Plan ID (Standard Component)": "23552TN0020052",
+      "Plan Marketing Name": "Silver Classic Standard",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$449.39",
+      "Premium Adult Individual Age 21": "$587.45",
+      "Premium Adult Individual Age 40": "$750.75",
+      "Couple+1 child, Age 40": "$1950.89"
+    },
+    {
+      "Plan ID (Standard Component)": "23552TN0020025",
+      "Plan Marketing Name": "Silver Simple PCP Saver",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$450.43",
+      "Premium Adult Individual Age 21": "$588.81",
+      "Premium Adult Individual Age 40": "$752.48",
+      "Couple+1 child, Age 40": "$1955.39"
+    },
+    {
+      "Plan ID (Standard Component)": "23552TN0020055",
+      "Plan Marketing Name": "Silver Simple Diabetes",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$450.90",
+      "Premium Adult Individual Age 21": "$589.43",
+      "Premium Adult Individual Age 40": "$753.27",
+      "Couple+1 child, Age 40": "$1957.44"
+    },
+    {
+      "Plan ID (Standard Component)": "23552TN0020064",
+      "Plan Marketing Name": "Silver Simple Women's Health with Menopause Benefits",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$451.25",
+      "Premium Adult Individual Age 21": "$589.88",
+      "Premium Adult Individual Age 40": "$753.85",
+      "Couple+1 child, Age 40": "$1958.95"
+    },
+    {
+      "Plan ID (Standard Component)": "23552TN0020063",
+      "Plan Marketing Name": "Silver Simple Chronic Care CKM",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$451.98",
+      "Premium Adult Individual Age 21": "$590.84",
+      "Premium Adult Individual Age 40": "$755.08",
+      "Couple+1 child, Age 40": "$1962.14"
+    },
+    {
+      "Plan ID (Standard Component)": "23552TN0020056",
+      "Plan Marketing Name": "Silver Simple Breathe Easy with Enhanced COPD Benefits",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$452.35",
+      "Premium Adult Individual Age 21": "$591.32",
+      "Premium Adult Individual Age 40": "$755.69",
+      "Couple+1 child, Age 40": "$1963.73"
+    },
+    {
+      "Plan ID (Standard Component)": "23552TN0020006",
+      "Plan Marketing Name": "Silver Classic",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$454.20",
+      "Premium Adult Individual Age 21": "$593.73",
+      "Premium Adult Individual Age 40": "$758.78",
+      "Couple+1 child, Age 40": "$1971.76"
+    },
+    {
+      "Plan ID (Standard Component)": "70111TN0110034",
+      "Plan Marketing Name": "Standard Silver",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$466.98",
+      "Premium Adult Individual Age 21": "$610.44",
+      "Premium Adult Individual Age 40": "$780.13",
+      "Couple+1 child, Age 40": "$2027.24"
+    },
+    {
+      "Plan ID (Standard Component)": "70111TN0110018",
+      "Plan Marketing Name": "Enhanced Diabetes Care Silver with $0 Drug Options",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$479.15",
+      "Premium Adult Individual Age 21": "$626.35",
+      "Premium Adult Individual Age 40": "$800.47",
+      "Couple+1 child, Age 40": "$2080.09"
+    },
+    {
+      "Plan ID (Standard Component)": "70111TN0120036",
+      "Plan Marketing Name": "Standard Silver + Vision + Adult Dental",
+      "EHB Percent of Total Premium": "97.32%",
+      "Premium Child Age 0-14": "$479.83",
+      "Premium Adult Individual Age 21": "$627.24",
+      "Premium Adult Individual Age 40": "$801.60",
+      "Couple+1 child, Age 40": "$2083.03"
+    },
+    {
+      "Plan ID (Standard Component)": "14002TN0400444",
+      "Plan Marketing Name": "BlueCross S34E $45 PCP Copay + $0 virtual care from Teladoc Health\u00ae",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$489.69",
+      "Premium Adult Individual Age 21": "$640.12",
+      "Premium Adult Individual Age 40": "$818.07",
+      "Couple+1 child, Age 40": "$2125.83"
+    },
+    {
+      "Plan ID (Standard Component)": "70111TN0120001",
+      "Plan Marketing Name": "Enhanced Diabetes Care Silver with $0 Drug Options + Vision + Adult Dental",
+      "EHB Percent of Total Premium": "97.32%",
+      "Premium Child Age 0-14": "$492.34",
+      "Premium Adult Individual Age 21": "$643.59",
+      "Premium Adult Individual Age 40": "$822.49",
+      "Couple+1 child, Age 40": "$2137.32"
+    },
+    {
+      "Plan ID (Standard Component)": "69443TN0140021",
+      "Plan Marketing Name": "UHC Silver Standard (No Referrals)",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$496.26",
+      "Premium Adult Individual Age 21": "$648.70",
+      "Premium Adult Individual Age 40": "$829.04",
+      "Couple+1 child, Age 40": "$2154.34"
+    },
+    {
+      "Plan ID (Standard Component)": "14002TN0400269",
+      "Plan Marketing Name": "BlueCross S26E $40 PCP Copay + $0 virtual care from Teladoc Health\u00ae",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$500.67",
+      "Premium Adult Individual Age 21": "$654.47",
+      "Premium Adult Individual Age 40": "$836.41",
+      "Couple+1 child, Age 40": "$2173.49"
+    },
+    {
+      "Plan ID (Standard Component)": "69443TN0140029",
+      "Plan Marketing Name": "UHC Silver Advantage (Virtual Urgent Care, No Referrals)",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$501.80",
+      "Premium Adult Individual Age 21": "$655.95",
+      "Premium Adult Individual Age 40": "$838.30",
+      "Couple+1 child, Age 40": "$2178.40"
+    },
+    {
+      "Plan ID (Standard Component)": "14002TN0400428",
+      "Plan Marketing Name": "BlueCross S27E $60 PCP Copay + $0 virtual care from Teladoc Health\u00ae",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$502.10",
+      "Premium Adult Individual Age 21": "$656.34",
+      "Premium Adult Individual Age 40": "$838.80",
+      "Couple+1 child, Age 40": "$2179.70"
+    },
+    {
+      "Plan ID (Standard Component)": "69443TN0140020",
+      "Plan Marketing Name": "UHC Silver Copay Focus (Virtual Urgent Care, No Referrals)",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$503.92",
+      "Premium Adult Individual Age 21": "$658.72",
+      "Premium Adult Individual Age 40": "$841.84",
+      "Couple+1 child, Age 40": "$2187.60"
+    },
+    {
+      "Plan ID (Standard Component)": "99248TN0060005",
+      "Plan Marketing Name": "Connect Silver 4500 Indiv Med Deductible",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$505.32",
+      "Premium Adult Individual Age 21": "$660.55",
+      "Premium Adult Individual Age 40": "$844.18",
+      "Couple+1 child, Age 40": "$2193.68"
+    },
+    {
+      "Plan ID (Standard Component)": "99248TN0060111",
+      "Plan Marketing Name": "Connect Silver CMS Standard",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$506.67",
+      "Premium Adult Individual Age 21": "$662.31",
+      "Premium Adult Individual Age 40": "$846.43",
+      "Couple+1 child, Age 40": "$2199.53"
+    },
+    {
+      "Plan ID (Standard Component)": "99248TN0060044",
+      "Plan Marketing Name": "Connect Silver 3000 Indiv Med Deductible",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$507.72",
+      "Premium Adult Individual Age 21": "$663.68",
+      "Premium Adult Individual Age 40": "$848.18",
+      "Couple+1 child, Age 40": "$2204.08"
+    },
+    {
+      "Plan ID (Standard Component)": "99248TN0060093",
+      "Plan Marketing Name": "Connect myDiabetesCare Silver",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$509.83",
+      "Premium Adult Individual Age 21": "$666.44",
+      "Premium Adult Individual Age 40": "$851.71",
+      "Couple+1 child, Age 40": "$2213.25"
+    },
+    {
+      "Plan ID (Standard Component)": "69443TN0180001",
+      "Plan Marketing Name": "UHC Silver Advantage + (Virtual Urgent Care, Dental + Vision, No Referrals)",
+      "EHB Percent of Total Premium": "97.40%",
+      "Premium Child Age 0-14": "$514.06",
+      "Premium Adult Individual Age 21": "$671.97",
+      "Premium Adult Individual Age 40": "$858.78",
+      "Couple+1 child, Age 40": "$2231.62"
+    },
+    {
+      "Plan ID (Standard Component)": "14002TN0400438",
+      "Plan Marketing Name": "BlueCross S29E $60 PCP Copay + $0 virtual care from Teladoc Health\u00ae + Adult Dental",
+      "EHB Percent of Total Premium": "96.60%",
+      "Premium Child Age 0-14": "$517.94",
+      "Premium Adult Individual Age 21": "$677.05",
+      "Premium Adult Individual Age 40": "$865.27",
+      "Couple+1 child, Age 40": "$2248.48"
+    },
+    {
+      "Plan ID (Standard Component)": "14002TN0400260",
+      "Plan Marketing Name": "BlueCross S26S $40 PCP Copay + $0 virtual care from Teladoc Health\u00ae",
+      "EHB Percent of Total Premium": "100.00%",
+      "Premium Child Age 0-14": "$599.28",
+      "Premium Adult Individual Age 21": "$783.37",
+      "Premium Adult Individual Age 40": "$1001.15",
+      "Couple+1 child, Age 40": "$2601.58"
+    }
+  ]
+}

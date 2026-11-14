@@ -1,0 +1,356 @@
+{
+  "reference_file": "reference/legacy/engine.py",
+  "reference_sha256": "21f1c03543dbf3c1cbb00af2d30a091dffa03e23c050b324c88770ded1601c9c",
+  "status": "Synthetic family, county-candidate rates, limited independent arithmetic check. Not an independently validated personal tax return or savings claim.",
+  "assumptions": [
+    "TN MFJ, one eligible child; adults 38 in 2026 and 39 in 2027",
+    "No wages, other income, employer coverage, government coverage, or coverage changes",
+    "All three people eligible for full-year PTC; address availability not independently confirmed",
+    "Selected plan ID stays the same in the modeled 2027 choice; this is not a claim about automatic renewal",
+    "No extra project costs or labor/opportunity costs",
+    "APTC 13413 is an illustrative input, not an actual Marketplace record",
+    "Cash figures are after eventual settlement of both tax years, not bank balances on December 31",
+    "Retirement principal is reported separately, before future withdrawal taxes"
+  ],
+  "table_2026": {
+    "source_status": "IRS draft 8962 instructions",
+    "checked": 301,
+    "mismatches": [
+      {
+        "fpl_percent": 175,
+        "official": 0.054,
+        "engine": 0.0539
+      }
+    ]
+  },
+  "spouse_wages_error": {
+    "profit": 150000,
+    "spouse_wages": 80000,
+    "engine_SE_tax": 16975.225,
+    "correct_SE_tax_with_zero_own_wages": 21194.325
+  },
+  "verified_2027_constants": {
+    "ss_wage_base": 192300,
+    "defined_contribution_cap": 75000,
+    "source_ssa": "https://www.ssa.gov/cola/factsheets/2027.html",
+    "source_irs": "https://www.irs.gov/pub/irs-drop/n-26-66.pdf"
+  },
+  "scenarios": [
+    {
+      "scenario": "decline",
+      "cash_delta_two_tax_years": 0.0,
+      "gross_retirement_contribution": 0,
+      "years": [
+        {
+          "year": 2026,
+          "premium": 23013.0,
+          "benchmark": 23013.0,
+          "reference": {
+            "sehi": 9933.0,
+            "magi": 99730.5655,
+            "ptc": 13080.0,
+            "income_tax": 3786.9342879999986,
+            "se_tax": 16672.869,
+            "fica": 0.0,
+            "taxes": 20459.803287999996,
+            "cash": 87607.196712,
+            "label": "",
+            "year": 2026,
+            "sep": 0,
+            "fpl_pct": 374,
+            "cliff": 106600,
+            "owe_april": 333.0
+          },
+          "independent": {
+            "deduction": 9933,
+            "magi": 99730.5655,
+            "ptc": 13080.0,
+            "cash": 87607.19671199999
+          },
+          "cash_difference": 1.4551915228366852e-11
+        },
+        {
+          "year": 2027,
+          "premium": 28122.84,
+          "benchmark": 27789.36,
+          "reference": {
+            "sehi": 10470.0,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "income_tax": 3523.382287999999,
+            "se_tax": 16672.869,
+            "fica": 0.0,
+            "taxes": 20196.251288,
+            "cash": 87332.268712,
+            "label": "",
+            "year": 2027,
+            "sep": 0,
+            "fpl_pct": 363,
+            "cliff": 109280,
+            "owe_april": -17651.36
+          },
+          "independent": {
+            "deduction": 10470,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "cash": 87332.268712
+          },
+          "cash_difference": 0.0
+        }
+      ]
+    },
+    {
+      "scenario": "accept December",
+      "cash_delta_two_tax_years": -3435.0877919999766,
+      "gross_retirement_contribution": 0,
+      "years": [
+        {
+          "year": 2026,
+          "premium": 23013.0,
+          "benchmark": 23013.0,
+          "reference": {
+            "sehi": 14215.0,
+            "magi": 106600.7925,
+            "ptc": 0.0,
+            "income_tax": 4446.4760799999995,
+            "se_tax": 18368.415,
+            "fica": 0.0,
+            "taxes": 22814.89108,
+            "cash": 84172.10892,
+            "label": "",
+            "year": 2026,
+            "sep": 0,
+            "fpl_pct": 401,
+            "cliff": 106600,
+            "owe_april": 13413.0
+          },
+          "independent": {
+            "deduction": 14215,
+            "magi": 106600.7925,
+            "ptc": 0,
+            "cash": 84172.10892
+          },
+          "cash_difference": 0.0
+        },
+        {
+          "year": 2027,
+          "premium": 28122.84,
+          "benchmark": 27789.36,
+          "reference": {
+            "sehi": 10470.0,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "income_tax": 3523.382287999999,
+            "se_tax": 16672.869,
+            "fica": 0.0,
+            "taxes": 20196.251288,
+            "cash": 87332.268712,
+            "label": "",
+            "year": 2027,
+            "sep": 0,
+            "fpl_pct": 363,
+            "cliff": 109280,
+            "owe_april": -17651.36
+          },
+          "independent": {
+            "deduction": 10470,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "cash": 87332.268712
+          },
+          "cash_difference": 0.0
+        }
+      ]
+    },
+    {
+      "scenario": "accept SEP 3600",
+      "cash_delta_two_tax_years": 5361.104208000004,
+      "gross_retirement_contribution": 3600,
+      "years": [
+        {
+          "year": 2026,
+          "premium": 23013.0,
+          "benchmark": 23013.0,
+          "reference": {
+            "sehi": 10617.0,
+            "magi": 106598.7925,
+            "ptc": 12396.0,
+            "income_tax": 4446.284079999999,
+            "se_tax": 18368.415,
+            "fica": 0.0,
+            "taxes": 22814.69908,
+            "cash": 92968.30092000001,
+            "label": "",
+            "year": 2026,
+            "sep": 3600,
+            "fpl_pct": 399,
+            "cliff": 106600,
+            "owe_april": 1017.0
+          },
+          "independent": {
+            "deduction": 10617,
+            "magi": 106598.7925,
+            "ptc": 12396.0,
+            "cash": 92968.30092
+          },
+          "cash_difference": 1.4551915228366852e-11
+        },
+        {
+          "year": 2027,
+          "premium": 28122.84,
+          "benchmark": 27789.36,
+          "reference": {
+            "sehi": 10470.0,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "income_tax": 3523.382287999999,
+            "se_tax": 16672.869,
+            "fica": 0.0,
+            "taxes": 20196.251288,
+            "cash": 87332.268712,
+            "label": "",
+            "year": 2027,
+            "sep": 0,
+            "fpl_pct": 363,
+            "cliff": 109280,
+            "owe_april": -17651.36
+          },
+          "independent": {
+            "deduction": 10470,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "cash": 87332.268712
+          },
+          "cash_difference": 0.0
+        }
+      ]
+    },
+    {
+      "scenario": "accept SEP 5500",
+      "cash_delta_two_tax_years": 3798.9922080000106,
+      "gross_retirement_contribution": 5500,
+      "years": [
+        {
+          "year": 2026,
+          "premium": 23013.0,
+          "benchmark": 23013.0,
+          "reference": {
+            "sehi": 10445.0,
+            "magi": 104870.7925,
+            "ptc": 12568.0,
+            "income_tax": 4280.3960799999995,
+            "se_tax": 18368.415,
+            "fica": 0.0,
+            "taxes": 22648.81108,
+            "cash": 91406.18892,
+            "label": "",
+            "year": 2026,
+            "sep": 5500,
+            "fpl_pct": 393,
+            "cliff": 106600,
+            "owe_april": 845.0
+          },
+          "independent": {
+            "deduction": 10445,
+            "magi": 104870.7925,
+            "ptc": 12568.0,
+            "cash": 91406.18891999999
+          },
+          "cash_difference": 1.4551915228366852e-11
+        },
+        {
+          "year": 2027,
+          "premium": 28122.84,
+          "benchmark": 27789.36,
+          "reference": {
+            "sehi": 10470.0,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "income_tax": 3523.382287999999,
+            "se_tax": 16672.869,
+            "fica": 0.0,
+            "taxes": 20196.251288,
+            "cash": 87332.268712,
+            "label": "",
+            "year": 2027,
+            "sep": 0,
+            "fpl_pct": 363,
+            "cliff": 109280,
+            "owe_april": -17651.36
+          },
+          "independent": {
+            "deduction": 10470,
+            "magi": 99193.5655,
+            "ptc": 17651.36,
+            "cash": 87332.268712
+          },
+          "cash_difference": 0.0
+        }
+      ]
+    },
+    {
+      "scenario": "4000 December / 8000 January",
+      "cash_delta_two_tax_years": 8306.432208000013,
+      "gross_retirement_contribution": 0,
+      "years": [
+        {
+          "year": 2026,
+          "premium": 23013.0,
+          "benchmark": 23013.0,
+          "reference": {
+            "sehi": 10270.0,
+            "magi": 103110.9745,
+            "ptc": 12743.0,
+            "income_tax": 4111.453551999999,
+            "se_tax": 17238.051,
+            "fica": 0.0,
+            "taxes": 21349.504552,
+            "cash": 90380.495448,
+            "label": "",
+            "year": 2026,
+            "sep": 0,
+            "fpl_pct": 386,
+            "cliff": 106600,
+            "owe_april": 670.0
+          },
+          "independent": {
+            "deduction": 10270,
+            "magi": 103110.9745,
+            "ptc": 12743.0,
+            "cash": 90380.49544799999
+          },
+          "cash_difference": 1.4551915228366852e-11
+        },
+        {
+          "year": 2027,
+          "premium": 28122.84,
+          "benchmark": 27789.36,
+          "reference": {
+            "sehi": 11160.0,
+            "magi": 105938.3835,
+            "ptc": 16962.36,
+            "income_tax": 4170.884816,
+            "se_tax": 17803.233,
+            "fica": 0.0,
+            "taxes": 21974.117815999998,
+            "cash": 92865.402184,
+            "label": "",
+            "year": 2027,
+            "sep": 0,
+            "fpl_pct": 387,
+            "cliff": 109280,
+            "owe_april": -16962.36
+          },
+          "independent": {
+            "deduction": 11160,
+            "magi": 105938.3835,
+            "ptc": 16962.36,
+            "cash": 92865.40218399999
+          },
+          "cash_difference": 1.4551915228366852e-11
+        }
+      ]
+    }
+  ],
+  "note": "Historical limited audit of the legacy prototype, not production golden outputs or a validated personal tax return."
+}
