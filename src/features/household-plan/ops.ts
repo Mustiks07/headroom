@@ -1,4 +1,6 @@
 import type { CaseInput, MoneyFact, ScenarioResult, TaxYear } from "@/domain/contracts";
+import { dealSearchFingerprint } from "@/domain/deal-planning";
+import { engineWorkspaceFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
 import {
   HouseholdWorkspaceSchema, WORKSPACE_VERSION, captureSepBudgetContributions, sepPosition, withEvent,
   type HouseholdWorkspace, type ProfitForecast, type Project, type ProjectLine, type WorkspaceEvent, type WorkspaceEventKind,
@@ -175,14 +177,26 @@ export function setProjectConditions(w0: HouseholdWorkspace, projectId: string, 
  * SEP-IRA in the terms raises that year's goal from max(goal, paid) by the engine's amount.
  * Headroom never does this on its own; the caller asks the user to confirm first.
  */
-export function recordClientAgreement(w0: HouseholdWorkspace, packageId: string): { workspace: HouseholdWorkspace; event: WorkspaceEvent } {
+export async function recordClientAgreement(w0: HouseholdWorkspace, packageId: string): Promise<{ workspace: HouseholdWorkspace; event: WorkspaceEvent }> {
   const w = clone(w0);
   const pkg = w.dealPlanning?.packages.find(p => p.id === packageId);
   if (!pkg) throw new Error("These terms are no longer in the plan.");
   if (pkg.status === "superseded") throw new Error("These terms were replaced by a newer choice.");
+  const eventId = `evt-agreed-${pkg.id}`.slice(0, 100);
+  const previousEvent = w0.events.find(e => e.id === eventId);
+  if (previousEvent) return { workspace: w0, event: previousEvent };
+  if (pkg.status === "client_agreed") throw new Error("This agreement is already recorded. Review the existing project instead of applying it again.");
+  const dp = w0.dealPlanning!;
+  const goal = dp.goals.find(g => g.id === pkg.goalId);
+  const space = dp.termSpaces.find(s => s.projectId === pkg.projectId);
+  if (!goal || !space || pkg.searchFingerprint !== await dealSearchFingerprint(await engineWorkspaceFingerprint(w0), goal, space, dp.cashContext, ENGINE_VERSION, RULES_VERSION))
+    throw new Error("Your plan changed since these terms were calculated. Search again before recording an agreement.");
   const p = w.projects.find(x => x.id === pkg.projectId);
   if (!p) throw new Error("This project is no longer in the plan.");
   const v = pkg.variant;
+  const received = p.receipts.reduce((sum, line) => sum + (line.actual?.amountCents ?? 0), 0);
+  if (received + v.terms.payments.reduce((sum, pay) => sum + pay.amountCents, 0) !== v.terms.priceCents)
+    throw new Error("These payments no longer add up to the project price. Search again before recording an agreement.");
   const sourceId = p.receipts[0]?.sourceId ?? ensureManualEvidence(w);
   const n = v.terms.payments.length;
   p.receipts = [...p.receipts.filter(l => l.actual), ...v.terms.payments.map((pay, i) => ({ id: `line-${pay.id}-${pkg.id}`.slice(0, 100),
@@ -201,7 +215,7 @@ export function recordClientAgreement(w0: HouseholdWorkspace, packageId: string)
   }
   pkg.status = "client_agreed";
   const at = now();
-  const event: WorkspaceEvent = { id: `evt-agreed-${pkg.id}`.slice(0, 100), at, kind: "deal_status_changed",
+  const event: WorkspaceEvent = { id: eventId, at, kind: "deal_status_changed",
     description: `You recorded that the client agreed to “${p.title}”: ${v.label}.`, refs: { projectId: p.id }, previousFingerprint: w0.calculation?.fingerprint ?? null, nextFingerprint: null };
   return { workspace: { ...withEvent(w, event), updatedAt: at }, event };
 }

@@ -32,9 +32,10 @@ export function buildGoal(ws: HouseholdWorkspace, project: Project, d: GoalDraft
   // Payment windows: from today (or Jan 1, 2026) to the latest acceptable date; one window holds 100%.
   const earliest = maxDate(new Date().toISOString().slice(0, 10), "2026-01-01");
   const latest = d.windows.latestDate || lastUnpaidDate(project) || "2026-12-31";
-  const windows = latest.slice(0, 4) === earliest.slice(0, 4) || latest < "2027-01-01"
-    ? [{ id: "w-all", earliest: minDate(earliest, latest), latest, maxShareBps: 10_000 }]
-    : [{ id: "w-2026", earliest, latest: "2026-12-31", maxShareBps: 10_000 }, { id: "w-2027", earliest: "2027-01-01", latest, maxShareBps: 10_000 }];
+  if (d.clientOpen === true && latest < earliest) return { ok: false, message: "The latest payment date has passed. Choose a future date before searching new terms." };
+  const start = minDate(earliest, latest); // fixed offered terms may have an overdue payment
+  const windows = [2026, 2027].map(year => ({ id: `w-${year}`, earliest: maxDate(start, `${year}-01-01`),
+    latest: minDate(latest, `${year}-12-31`), maxShareBps: 10_000 })).filter(w => w.earliest <= w.latest);
   const space = DealTermsSpaceSchema.safeParse({
     projectId: project.id,
     price: { minCents: cents(d.price.min), maxCents: cents(d.price.max), stepCents: 25_000 },

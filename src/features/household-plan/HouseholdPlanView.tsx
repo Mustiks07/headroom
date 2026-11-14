@@ -100,11 +100,11 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
     } finally { setBusy(null); }
   }, []);
 
-  const apply = useCallback(async (fn: (w: HouseholdWorkspace) => HouseholdWorkspace, okText: string) => {
+  const apply = useCallback(async (fn: (w: HouseholdWorkspace) => HouseholdWorkspace | Promise<HouseholdWorkspace>, okText: string) => {
     if (!ws) return false;
     if (pending) { setNotice({ tone: "warn", text: "Save or discard the change that didn't go through first." }); return false; }
     let next: HouseholdWorkspace;
-    try { next = fn(ws); } catch (e) { setNotice({ tone: "warn", text: `That change wasn't made: ${e instanceof Error ? e.message : String(e)}` }); return false; }
+    try { next = await fn(ws); } catch (e) { setNotice({ tone: "warn", text: `That change wasn't made: ${e instanceof Error ? e.message : String(e)}` }); return false; }
     return save(ws, next, okText);
   }, [ws, pending, save]);
 
@@ -280,7 +280,7 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
       {packages.map(pkg => <PackageCard key={pkg.id} ws={ws} pkg={pkg} onNotice={(tone, text) => setNotice({ tone, text })}
         onShared={() => void runDeal(base => setPackageStatus(workspaceRepo(), base, pkg.id, "terms_shared_by_user").then(o => o.saved), "Recorded that you shared the terms.")}
         onReminder={(uid, done) => void runDeal(base => setReminderStatus(workspaceRepo(), base, pkg.id, uid, done ? "done" : "open").then(o => o.saved), done ? "Marked as done." : "Marked as not done.")}
-        onAgreed={() => { void apply(w => recordClientAgreement(w, pkg.id).workspace, "Recorded the client's agreement. The project's open payments now follow these terms."); }} />)}
+        onAgreed={() => { void apply(async w => (await recordClientAgreement(w, pkg.id)).workspace, "Recorded the client's agreement. The project's open payments now follow these terms."); }} />)}
     </section>}
 
     {compareId && <ComparePanel ws={ws} projectId={compareId} state={compare}

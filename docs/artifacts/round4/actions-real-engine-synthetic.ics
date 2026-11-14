@@ -1,0 +1,89 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Headroom//Plan actions 1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Headroom – December design project
+BEGIN:VEVENT
+UID:a7491d90-4d14-470d-af98-c845ee82c9d6.proj-b.receive-pay-w-2026@headroom
+ .plan
+DTSTAMP:20261114T213341Z
+DTSTART;VALUE=DATE:20261114
+DTEND;VALUE=DATE:20261115
+SEQUENCE:0
+SUMMARY:Receive $5\,925 for "December design project" and record the actual
+  payment
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation 1225f33a4e85). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Receive $5\,925 for "December design project" and record the ac
+ tual payment
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:a7491d90-4d14-470d-af98-c845ee82c9d6.proj-b.receive-pay-w-2027@headroom
+ .plan
+DTSTAMP:20261114T213341Z
+DTSTART;VALUE=DATE:20270104
+DTEND;VALUE=DATE:20270105
+SEQUENCE:0
+SUMMARY:Receive $8\,075 for "December design project" and record the actual
+  payment
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation 1225f33a4e85). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Receive $8\,075 for "December design project" and record the ac
+ tual payment
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:a7491d90-4d14-470d-af98-c845ee82c9d6.proj-b.settle-2026@headroom.plan
+DTSTAMP:20261114T213341Z
+DTSTART;VALUE=DATE:20270415
+DTEND;VALUE=DATE:20270416
+SEQUENCE:0
+SUMMARY:Keep about $1\,815 for this project's extra 2026 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation 1225f33a4e85). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $1\,815 for this project's extra 2026 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:a7491d90-4d14-470d-af98-c845ee82c9d6.proj-b.settle-2027@headroom.plan
+DTSTAMP:20261114T213341Z
+DTSTART;VALUE=DATE:20280418
+DTEND;VALUE=DATE:20280419
+SEQUENCE:0
+SUMMARY:Keep about $2\,490 for this project's extra 2027 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Project: December design project. From your Headroom plan (calc
+ ulation 1225f33a4e85). Planning reminder\, not an official deadline notice
+ .
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $2\,490 for this project's extra 2027 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+END:VCALENDAR

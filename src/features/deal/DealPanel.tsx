@@ -124,7 +124,7 @@ function NoTerms({ result, onApply }: { result: NoFeasibleTerms; onApply: (rx: N
       <p>Headroom searched {searchedText(result)} and none met every limit. Nothing is recommended.</p></div></div>
     <ul className="missing-list">{result.violated.map(v => <li key={v.id + v.detail}><div><strong>{CONSTRAINT_TEXT[v.id] ?? v.id}</strong><span>{humanizeDates(v.detail)}</span></div></li>)}</ul>
     {result.relaxations.length > 0 ? <div className="relax">
-      <p className="small"><strong>Smallest change to one limit that would work</strong> (calculated, other limits unchanged):</p>
+      <p className="small"><strong>Calculated changes to one limit</strong> (within the search checked, other limits unchanged):</p>
       <ul className="relax-list">{result.relaxations.map((rx, i) => { const usable = rx.requiredCents !== null || rx.requiredDate !== null;
         return <li key={i}>
           <span>{usable ? <>{RELAX_TEXT[rx.constraint]} {rx.requiredCents !== null ? <strong className="num">{money(rx.requiredCents)}</strong> : null}{rx.requiredDate ? <strong> {shortDate(rx.requiredDate)}</strong> : null}

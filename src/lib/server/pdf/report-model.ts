@@ -4,7 +4,7 @@ import { resolveSource } from "@/domain/sources";
 /** Renderer-independent report content, built only from the input and a fresh ReadyComparison. */
 export type Block =
   | { type: "heading"; text: string }
-  | { type: "paragraph"; text: string; tone?: "normal" | "muted" | "notice" }
+  | { type: "paragraph"; text: string; tone?: "normal" | "muted" | "notice"; compact?: boolean }
   | { type: "keyValues"; rows: Array<[string, string]> }
   | { type: "table"; columns: Array<{ title: string; width: number; align?: "left" | "right" }>; rows: string[][] }
   | { type: "bullets"; items: string[] };

@@ -1,6 +1,6 @@
 # Next round candidates — reduce manual work
 
-Planning brief, not an active replacement for round 4. Final assignments follow the combined round 4 review. The public release now uses Vercel and real Supabase guest sessions; preserve its no-registration path and environment configuration.
+Historical planning note. The active assignments are now [ROUND5_SHARED.md](ROUND5_SHARED.md) and `CLAUDE<N>_ROUND5.md`, issued after the combined round 4 review. The public release uses Vercel and real Supabase guest sessions; preserve its no-registration path and environment configuration.
 
 ## First priority: documents → confirmed facts → useful answer
 

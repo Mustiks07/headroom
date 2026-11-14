@@ -121,12 +121,16 @@ async function startServer() {
     const beforeProfit = await profit();
     await page.getByRole("button", { name: "Record received" }).first().click();
     await page.locator('input[id^="amt-"]').fill("3200"); await page.locator('input[id^="date-"]').fill("2026-12-16");
-    await page.getByRole("button", { name: "Save this payment" }).click(); await settled();
+    await page.getByRole("button", { name: "Save this payment" }).click();
+    await page.waitForFunction(() => /Revision 2\b/.test(document.querySelector(".save-status")?.textContent ?? ""), null, { timeout: 20000 });
+    await settled();
     const afterProfit = await profit();
     check(beforeProfit === "$125,000" && afterProfit === "$125,200", `actual $3,200 replaces expected $3,000 (profit ${beforeProfit} → ${afterProfit})`);
     await page.getByRole("button", { name: "Record a contribution you made" }).click();
     await page.locator("#c-amount").fill("1500"); await page.locator("#c-date").fill("2026-11-10");
-    await page.getByRole("button", { name: "Save contribution" }).click(); await settled();
+    await page.getByRole("button", { name: "Save contribution" }).click();
+    await page.waitForFunction(() => /Revision 3\b/.test(document.querySelector(".save-status")?.textContent ?? ""), null, { timeout: 20000 });
+    await settled();
     const sepText = (await page.locator(".sep-row .sep-figures").innerText()).replace(/\s+/g, " ");
     check(/Yearly goal \$5,000 Already contributed \$3,500 Left to contribute \$1,500/.test(sepText), `SEP goal / paid / left: ${sepText}`);
     await page.reload(); await settled();

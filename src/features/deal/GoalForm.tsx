@@ -19,12 +19,12 @@ export interface GoalDraft {
 }
 
 export function defaultGoal(project: Project): GoalDraft {
-  const unpaid = project.receipts.map(effectiveLine).filter(e => e.basis === "expected").reduce((s, e) => s + e.amountCents, 0);
+  const total = project.receipts.map(effectiveLine).reduce((s, e) => s + e.amountCents, 0);
   const firstDate = project.receipts.map(effectiveLine).filter(e => e.basis === "expected" && e.date).map(e => e.date!).sort()[0] ?? "";
   return {
     keepAtLeast: "", sepMax: "0",
     byDate: { on: false, date: firstDate, amount: "", kind: "project_receipts" },
-    price: { min: centsToInput(unpaid || null), max: centsToInput(unpaid || null) },
+    price: { min: centsToInput(total || null), max: centsToInput(total || null) },
     windows: { latestDate: project.terms.nextYearPaymentLatestDate ?? "", maxParts: project.terms.canSplitPayment ? 2 : 1 },
     clientOpen: project.terms.canSplitPayment || project.terms.canRenegotiatePrice ? true : null,
     cash: { balance: "", asOf: new Date().toISOString().slice(0, 10), reserve: "0", complete: false },
@@ -109,8 +109,8 @@ export function GoalForm({ ws, project, goal, onChange, problems, touched, fixed
     <button type="button" className="link-btn" aria-expanded={more} onClick={() => setMore(m => !m)}><ChevronDown size={14} /> {more ? "Fewer limits" : "Price and payment limits"}</button>
     {more && <div className="stack">
       <div className="grid-2">
-        <AmountInput id="goal-price-min" label="Lowest price I'd ask for the unpaid part" value={goal.price.min} onChange={v => set({ price: { ...goal.price, min: v } })} error={show("priceMin")} />
-        <AmountInput id="goal-price-max" label="Highest price I'd realistically ask" value={goal.price.max} onChange={v => set({ price: { ...goal.price, max: v } })} error={show("priceMax")} />
+        <AmountInput id="goal-price-min" label="Lowest total project price I'd ask" value={goal.price.min} onChange={v => set({ price: { ...goal.price, min: v } })} error={show("priceMin")} />
+        <AmountInput id="goal-price-max" label="Highest total project price I'd ask" value={goal.price.max} onChange={v => set({ price: { ...goal.price, max: v } })} error={show("priceMax")} />
       </div>
       <div className="grid-2">
         <div className={`field ${show("latest") ? "has-problem" : ""}`}><label className="field-label" htmlFor="goal-latest">Latest acceptable payment date</label>
@@ -123,7 +123,7 @@ export function GoalForm({ ws, project, goal, onChange, problems, touched, fixed
         <div className="seg small">{([[true, "Yes"], [false, "No — only as offered"], [null, "Not asked yet"]] as const).map(([v, t]) =>
           <label key={String(v)} className={goal.clientOpen === v ? "on" : ""}><input type="radio" name="goal-open" checked={goal.clientOpen === v} onChange={() => set({ clientOpen: v })} />{t}</label>)}</div>
         <p className="hint">Headroom only suggests terms; nothing counts as agreed until the client says yes.</p></fieldset>
-      <p className="muted small">{project.title}: price and payment limits apply only to payments that haven&apos;t happened yet.</p>
+      <p className="muted small">{project.title}: total price includes money already received. Only the unpaid remainder can be rescheduled.</p>
     </div>}
   </div>;
 }

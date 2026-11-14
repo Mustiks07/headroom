@@ -116,7 +116,7 @@ export function buildDecisionModel({ ws, pkg, goal, cash, result, variant, gener
   if (pkg.clientDraft) {
     blocks.push({ type: "heading", text: "Draft message to your client (not sent)" });
     blocks.push({ type: "paragraph", text: `Subject: ${pkg.clientDraft.subject}` });
-    for (const para of pkg.clientDraft.body.split("\n")) if (para.trim()) blocks.push({ type: "paragraph", text: para });
+    for (const para of pkg.clientDraft.body.split("\n")) if (para.trim()) blocks.push({ type: "paragraph", text: para, compact: true });
   }
 
   const ids = [...new Set(variant.actions.flatMap(a => a.sourceIds))];

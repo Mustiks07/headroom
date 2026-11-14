@@ -58,7 +58,7 @@ Official implementation references: [Next.js installation](https://nextjs.org/do
 
 ## Release checklist (exact steps; round 4)
 
-Status at the time of writing: **none of the external steps below has been performed or verified by Claude 3** (no Vercel, Supabase, Anthropic or Stripe access in the development sessions). Everything else was checked on a local production build (`next build && next start`).
+Claude 3 originally supplied this checklist without external service access. Codex subsequently configured and verified the existing Vercel/Supabase project; see the live handoffs above. Steps 1–4 below describe a NEW deployment only. Do not recreate the project, overwrite production env, rerun migrations 001–004 or weaken preview protection on the existing deployment. AI and live billing remain off.
 
 1. **Vercel project** — Import `Mustiks07/headroom` → Framework preset *Next.js*, root `./`, install `npm ci`, build `npm run build`, output default, Node.js **22.x** (Project Settings → General). Production branch: `main` (only after Codex's combined review).
 2. **Environment (Production)** — guest path needs nothing. Set `NEXT_PUBLIC_APP_URL=https://<your-production-domain>`. Optional, per feature:

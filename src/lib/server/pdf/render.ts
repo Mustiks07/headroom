@@ -88,7 +88,7 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
           y -= 12;
         } else {
           for (const l of lines) { ensure(13); text(l, MARGIN, size, regular, block.tone === "muted" ? MUTED : INK); y -= 13; }
-          y -= 5;
+          y -= block.compact ? 0 : 5;
         }
         break;
       }
