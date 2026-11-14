@@ -89,7 +89,7 @@ export function buildCaseInput(draft: Draft, purpose: "risk" | "comparison"): Bu
   if (!draft.state) problems.push({ path: "state", reason: "Choose the state you live in." });
   if (!draft.filingStatus) problems.push({ path: "filingStatus", reason: "Choose how you file your tax return." });
   draft.people.forEach((p, i) => {
-    if (p.ageAt2026Start === null) problems.push({ path: `people.${i}.ageAt2026Start`, reason: `Enter ${personName(draft, p.id)}'s age on January 1, 2026.` });
+    if (p.ageAt2026Start === null) problems.push({ path: `people.${i}.ageAt2026Start`, reason: `Enter ${possessive(personName(draft, p.id))} age on January 1, 2026.` });
   });
   if (purpose === "comparison") {
     const o = draft.opportunity;
@@ -118,6 +118,11 @@ export function personName(draft: Pick<Draft, "people"> | Pick<CaseInput, "peopl
   if (person.role === "spouse") return "Your spouse";
   const children = people.filter(p => p.role === "dependent");
   return children.length > 1 ? `Dependent ${children.indexOf(person) + 1}` : "Your dependent";
+}
+
+/** "You" → "your", "Your spouse" → "your spouse's". */
+export function possessive(name: string): string {
+  return name === "You" ? "your" : `${name.charAt(0).toLowerCase()}${name.slice(1)}'s`;
 }
 
 export function adults(draft: Pick<Draft, "people">): DraftPerson[] {

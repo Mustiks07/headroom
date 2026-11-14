@@ -10,7 +10,7 @@ import { dateTime, signClass, signedMoney } from "@/features/format";
 import { deltaVs } from "@/features/results/ComparisonView";
 import {
   clearBrowserDrafts, describeStorageError, detectStorageMode, planRepository, readHeadroomFile, saveNewPlan, stashInputForCalculator,
-  storageText, type StorageMode,
+  type StorageMode,
 } from "./storage";
 
 type Load = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; plans: SavedPlan[] };
@@ -70,7 +70,7 @@ export function PlansList({ deleted }: { deleted: boolean }) {
   return <div className="shell page-pad">
     <p className="eyebrow">My plans</p>
     <h1 className="page-title">Your saved plans</h1>
-    <p className="muted">{mode === "cloud" ? "Plans are kept in a private guest session for this browser. They aren't synced to other devices." : "Plans are kept in this browser. They aren't synced to other devices — download the JSON file to move one."}</p>
+    <p className="muted">{mode === "cloud" ? "Plans are kept in a private guest session for this browser." : mode === "local" ? "Plans are kept in this browser." : "Plans are saved for this browser."} They aren&apos;t synced to other devices — download a plan&apos;s JSON file to move it.</p>
     {notice && <p className="notice" role="status">{notice}</p>}
 
     {load.kind === "loading" && <p className="loading-line" role="status"><span className="spinner" aria-hidden="true" /> Loading…</p>}
@@ -97,7 +97,7 @@ export function PlansList({ deleted }: { deleted: boolean }) {
         </li>;
       })}
     </ul>}
-    <p className="save-status small"><span className="dot" aria-hidden="true" />{storageText(mode)}</p>
+    {mode !== "unknown" && load.kind === "ready" && <p className="save-status small"><span className="dot" aria-hidden="true" />{mode === "cloud" ? "Cloud guest session active." : "Browser storage active."}</p>}
 
     <section className="plan-section" aria-labelledby="restore-title">
       <h2 id="restore-title" className="section-title small">Restore from a JSON file</h2>
