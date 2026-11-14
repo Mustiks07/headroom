@@ -1,0 +1,83 @@
+import "server-only";
+import { PDFDocument } from "pdf-lib";
+import type { ExtractionResult } from "@/domain/contracts";
+import { serverConfig } from "../env";
+import { HttpError } from "../http";
+import { extractWithAnthropic, type ProviderMedia } from "./anthropic";
+import { extractFromText } from "./text";
+
+export const MAX_DOCUMENT_BYTES = 3 * 1024 * 1024;
+export const MAX_PDF_PAGES = 10;
+export const UNAVAILABLE_MESSAGE = "Document analysis is unavailable. Enter the figures manually.";
+
+type Detected = { kind: "text"; text: string; label: string } | { kind: "pdf" } | { kind: "image"; mediaType: "image/png" | "image/jpeg" | "image/webp" };
+
+function detect(bytes: Uint8Array, mime: string, name: string): Detected | null {
+  const head = (n: number) => Array.from(bytes.subarray(0, n));
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  if (head(5).map(b => String.fromCharCode(b)).join("") === "%PDF-") return { kind: "pdf" };
+  if (head(8).join(",") === "137,80,78,71,13,10,26,10") return { kind: "image", mediaType: "image/png" };
+  if (head(3).join(",") === "255,216,255") return { kind: "image", mediaType: "image/jpeg" };
+  if (String.fromCharCode(...head(4)) === "RIFF" && String.fromCharCode(...Array.from(bytes.subarray(8, 12))) === "WEBP") {
+    return { kind: "image", mediaType: "image/webp" };
+  }
+  const textual = ["csv", "txt", "tsv"].includes(ext) || /^text\/(plain|csv|tab-separated-values)$/.test(mime);
+  if (!textual || bytes.includes(0)) return null;
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return { kind: "text", text, label: ext === "csv" || mime === "text/csv" ? "Uploaded CSV file" : "Uploaded text file" };
+  } catch {
+    return null;
+  }
+}
+
+export interface ExtractRequest { bytes: Uint8Array; mime: string; name: string; consentToProvider: boolean }
+
+/**
+ * Validate and read one uploaded document. CSV/TXT are parsed locally. PDF/images go to the
+ * configured AI provider only after explicit consent. Nothing is stored; nothing is auto-applied.
+ */
+export async function extractDocumentServer(req: ExtractRequest): Promise<{ status: number; result: ExtractionResult }> {
+  if (req.bytes.byteLength === 0) throw new HttpError(400, "EMPTY_FILE", "The file is empty.");
+  if (req.bytes.byteLength > MAX_DOCUMENT_BYTES) throw new HttpError(413, "FILE_TOO_LARGE", "The file is larger than 3 MB. Upload a smaller file or enter the figures manually.");
+  const detected = detect(req.bytes, req.mime, req.name);
+  const documentId = crypto.randomUUID();
+  if (!detected) {
+    return { status: 415, result: { status: "unavailable", fields: [],
+      warnings: ["This file type is not supported. Upload a PDF, PNG, JPEG, CSV or TXT file, or enter the figures manually."] } };
+  }
+  if (detected.kind === "text") return { status: 200, result: extractFromText(detected.text, documentId, detected.label) };
+
+  let media: ProviderMedia;
+  if (detected.kind === "pdf") {
+    let pageCount: number;
+    try {
+      const pdf = await PDFDocument.load(req.bytes, { ignoreEncryption: false, updateMetadata: false });
+      pageCount = pdf.getPageCount();
+    } catch {
+      return { status: 415, result: { status: "unavailable", fields: [],
+        warnings: ["This PDF could not be opened (it may be damaged or password-protected). Enter the figures manually."] } };
+    }
+    if (pageCount > MAX_PDF_PAGES) {
+      return { status: 413, result: { status: "unavailable", fields: [],
+        warnings: [`This PDF has ${pageCount} pages. Upload only the relevant pages (up to ${MAX_PDF_PAGES}) or enter the figures manually.`] } };
+    }
+    media = { kind: "pdf", data: Buffer.from(req.bytes), pageCount };
+  } else {
+    media = { kind: "image", data: Buffer.from(req.bytes), mediaType: detected.mediaType };
+  }
+
+  const ai = serverConfig().ai;
+  if (!ai) return { status: 200, result: { status: "unavailable", fields: [], warnings: [UNAVAILABLE_MESSAGE] } };
+  if (!req.consentToProvider) {
+    throw new HttpError(400, "CONSENT_REQUIRED", "Confirm that this document may be sent to the document-analysis provider before it is read.");
+  }
+  try {
+    const label = detected.kind === "pdf" ? "Uploaded PDF" : "Uploaded image";
+    return { status: 200, result: await extractWithAnthropic(media, documentId, label, ai) };
+  } catch (error) {
+    console.error("[headroom] document provider failed", error instanceof Error ? error.name : "unknown");
+    return { status: 503, result: { status: "unavailable", fields: [],
+      warnings: ["Document analysis did not respond in time. Try again or enter the figures manually."] } };
+  }
+}
