@@ -1,6 +1,6 @@
 # Deployment and configuration
 
-Owner: Claude 3. The integrated app builds and runs without external keys. Public deployment and optional provider connections still require configuration and verification. See [the integration review](handoffs/integration-review.md) for the checked local scope.
+Owner: Claude 3. The integrated app builds and runs without external keys. Supabase was configured and checked against the real service on November 15, 2026: see [the live setup handoff](handoffs/supabase-live-setup.md). Public Vercel deployment, AI and payment-provider connections still require their own configuration and verification.
 
 ## Local
 
@@ -14,6 +14,8 @@ Node 22 baseline. Copy `.env.example` to `.env.local` for service configuration.
 The financial engine, browser-local storage and PDF export are implemented. Missing optional cloud/AI configuration must preserve the guest path and return truthful service states.
 
 ## Supabase (optional cloud save)
+
+**Existing Headroom project:** migrations 001–004 are already applied, their versions are recorded in `supabase_migrations.schema_migrations`, and anonymous sign-ins are enabled. Do not rerun the initial schema against that project. The instructions below are for a fresh project; future changes should use new migrations. Credentials are in ignored local environment files, never in this repository. A different clone or Vercel environment needs its own private environment configuration.
 
 1. Create a project. **Authentication → Sign In / Providers → Anonymous sign-ins: on.** Keep email/OAuth UI unused; the app has none. Optionally enable CAPTCHA / the anonymous sign-in rate limit.
 2. Apply, in order (SQL editor or `supabase db push`): `202611140001_foundation.sql`, `202611140002_hardening.sql`, `202611150003_round2.sql` (revision history, `rules_updated` events, AI quota table/function), `202611160004_workspaces.sql` (household workspaces v2: `workspaces` + `workspace_snapshots` for revisions and the original v1 plan).
