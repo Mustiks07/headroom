@@ -148,6 +148,18 @@ export const ChangeCommandSchema = z.discriminatedUnion("type", [
       kind: z.enum(["project_receipts", "project_available_cash", "household_balance"]) }).nullable() }),
   z.object({ type: z.literal("change_terms"), projectId: IdSchema, priceMinCents: CentsSchema.nonnegative().nullable(), priceMaxCents: CentsSchema.nonnegative().nullable(),
     latestPaymentDate: PlanDate.nullable(), maxPayments: z.number().int().min(1).max(4).nullable(), newTermsConfirmed: z.boolean().nullable() }),
+  /* Round 6 (additive): payment and negotiation lifecycle. */
+  /** Part of an expected payment arrived: the received part is recorded on the line, the remainder stays expected on `remainderDate`. */
+  z.object({ type: z.literal("record_partial_receipt"), projectId: IdSchema, lineId: IdSchema, amountCents: CentsSchema.positive(), date: PlanDate, remainderDate: PlanDate }),
+  /** The client paid LESS and the project is settled: an explicit choice, never inferred from a smaller receipt. */
+  z.object({ type: z.literal("settle_lower_total"), projectId: IdSchema, lineId: IdSchema, amountCents: CentsSchema.positive(), date: PlanDate, reason: z.string().min(1).max(300) }),
+  /**
+   * The client's answer. accepted → project agreed; rejected → unpaid expected payments cancelled, received money kept;
+   * countered → a new offer version replaces the UNPAID terms (received money kept, original offer unchanged).
+   */
+  z.object({ type: z.literal("record_client_response"), projectId: IdSchema, response: z.enum(["accepted", "rejected", "countered"]), respondedOn: PlanDate,
+    packageId: IdSchema.nullable(),
+    counter: z.object({ totalPriceCents: CentsSchema.positive().nullable(), unpaid: z.array(PaymentSchema).min(1).max(6), note: z.string().max(300).nullable() }).nullable() }),
 ]);
 
 export const ChangeProposalSchema = z.object({
