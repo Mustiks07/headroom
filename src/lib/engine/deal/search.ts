@@ -19,7 +19,7 @@
 import type { BlockedComparison, CaseInput, ScenarioKind, ScenarioResult, TaxYear, YearResult } from "@/domain/contracts";
 import {
   CashContextSchema, cashCompletenessFor, dealSearchFingerprint, DealGoalSchema, DealTermsSpaceSchema,
-  type CashContext, type DatedFlow, type DateTarget, type DealGoal, type DealSearchMeta, type DealSearchResult, type DealTermsSpace,
+  type CashContext, type DatedFlow, type DateTarget, type DealGoal, type DealSearchMeta, type DealSearchResult, type DealTermsSpace, type ReadyDealSearch,
   type DealVariant, type DecisionSensitivityResult, type NoFeasibleTerms, type SensitivityItem,
 } from "@/domain/deal-planning";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
@@ -32,11 +32,11 @@ import { EngineStop, type YearModel } from "../model";
 import { ENGINE_VERSION, RULES_VERSION } from "../rules";
 import { profitHeadroomDollars } from "../search";
 import { evaluateYear, solveCredit, toYearResult } from "../year";
-import { hasRanges, modelAt, UNCERTAINTY_SCALE } from "../uncertainty";
+import { hasRanges, modelAt, modelAtPositions, rangeDims, UNCERTAINTY_SCALE } from "../uncertainty";
 import { money, type MoneyResult } from "../descriptors";
 
 /** Label of the search layer (documentation; fingerprints use ENGINE_VERSION per the contract). */
-export const DEAL_SEARCH_VERSION = "headroom-deal-1.1.0";
+export const DEAL_SEARCH_VERSION = "headroom-deal-1.2.0";
 const MAX_PRICE_POINTS = 60, MAX_SPLIT_POINTS = 60;
 /** An option whose credit survives less than this much extra other profit (dollars) is called fragile. */
 export const FRAGILE_ROOM_DOLLARS = 1_000;
@@ -49,6 +49,16 @@ interface Payment { id: string; windowId: string; date: string; amountCents: num
 interface YearEval { spendable: number; ptc: number; magi: number; room: number }
 interface Candidate { price: number; remainder: number; x: number; payments: Payment[]; sepYear: YI | null; sep: number; cashDelta: number; years: [YearEval, YearEval] }
 /** Engine variant: the contract shape plus the exact v1 scenario (dropped by schema parsing when stored). */
+/** Ready search + the facts that would settle a conditional recommendation (round 6). */
+export type EngineReadyDealSearch = ReadyDealSearch & {
+  decisionFacts: Array<{ path: string; label: string; effect: string; alternativeVariantId: string | null }>;
+};
+/** No feasible terms + the closest valid options (short only of the goal) and the limits whose single relaxation reaches it. */
+export type EngineNoFeasibleTerms = NoFeasibleTerms & {
+  nearest: Array<{ variant: EngineDealVariant; shortfallCents: number; unmet: string[] }>;
+  /** Constraints each of which, relaxed alone (others unchanged, within the checked range), reaches the goal; empty = none found. */
+  binding: string[];
+};
 export type EngineDealVariant = DealVariant & {
   scenario: ScenarioResult;
   /** The same option against BOTH baselines: declining the unpaid terms, and accepting the offer as it stands (null if not calculable). */
@@ -396,14 +406,8 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
   if (agreedProject) warnings.push(goal.baseline === "decline_unpaid_terms"
     ? `"${p.cc.candidate.title}" is already agreed: declining its unpaid part is not a free choice (a deposit refund, costs or obligations may apply and are not known here, so they are not counted as $0). Compare options with the agreed terms first; the comparison with declining is for reference only.`
     : `"${p.cc.candidate.title}" is already agreed: options are compared with the agreed terms. Changing them needs the client's agreement.`);
-  for (const { purpose, c } of picks) {
-    let refined = fixedTerms ? c : purpose === "most_cash" ? refineSplit(c, re) : purpose === "simplest" ? refinePrice(c, re) : c;
-    if (purpose === "simplest" && !conditional && !holds(refined)) refined = c;                // refinement never trades away the margin
-    const key = JSON.stringify([refined.price, refined.payments.map(q => [q.date, q.amountCents]), refined.sepYear, refined.sep]);
-    if (keys.has(key)) continue;
-    keys.add(key);
-    const v = exactVariant(refined, purpose, { p, env, decl, goal, space, slots, sepCap, shift, warnings });
-    if (!v) continue;
+  /** Comparisons, robustness and labels of one exact option (shared by shown options and nearest alternatives). */
+  const decorate = (v: EngineDealVariant, refined: Candidate, purpose: DealVariant["purpose"]) => {
     const vsDecline = v.twoYearCashDeltaCents + shift;
     const room = Math.min(...roomsOf(refined));
     v.comparisons = { versusDeclineCents: vsDecline, versusOfferedCents: offeredCash === null ? null : vsDecline - offeredCash,
@@ -414,6 +418,16 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     const changesTerms = refined.price !== p.offeredPrice || scheduleChanged(refined);
     if (purpose === "most_cash" && changesTerms) v.label = clip(v.label.replace(PURPOSE_LABEL.most_cash, "More cash, if the client agrees"), 200);
     if (purpose === "as_offered" && agreedProject) v.label = clip(v.label.replace(PURPOSE_LABEL.as_offered, "Keep the agreed terms"), 200);
+  };
+  for (const { purpose, c } of picks) {
+    let refined = fixedTerms ? c : purpose === "most_cash" ? refineSplit(c, re) : purpose === "simplest" ? refinePrice(c, re) : c;
+    if (purpose === "simplest" && !conditional && !holds(refined)) refined = c;                // refinement never trades away the margin
+    const key = JSON.stringify([refined.price, refined.payments.map(q => [q.date, q.amountCents]), refined.sepYear, refined.sep]);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    const v = exactVariant(refined, purpose, { p, env, decl, goal, space, slots, sepCap, shift, warnings });
+    if (!v) continue;
+    decorate(v, refined, purpose);
     variants.push(v);
   }
   // Cosmetic duplicates: same price, same SEP, the same money per tax year within $100 and cash within the materiality
@@ -464,9 +478,52 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     simplerVariantThresholdCents: materiality,
     warnings: [...new Set([...modelWarnings(models, p.parsed), ...warnings])],
   };
-  if (variants.length) return { status: "ready", ...meta, variants, recommendedVariantId: recommended?.id ?? null };
-  const nf: NoFeasibleTerms = { status: "no_feasible_terms", ...meta, violated: [], relaxations: [] };
+  if (variants.length) {
+    // Facts that settle a conditional recommendation: each declared range that, alone at its high end, loses a credit the
+    // recommended option keeps — and which shown option still holds there (credit loss is monotone in income).
+    const decisionFacts: EngineReadyDealSearch["decisionFacts"] = [];
+    if (highModels && recommended && !recommended.robustness.holds) {
+      const recC = { payments: recommended.terms.payments.map(q => ({ ...q, yi: yearOf(q.date) })), sepYear: recommended.terms.additionalSep ? (recommended.terms.additionalSep.year === 2026 ? 0 : 1) : null,
+        sep: recommended.terms.additionalSep?.amountCents ?? 0, ptc: recommended.aca.map(a => a.ptcCents) } as const;
+      const keepsAt = (terms: typeof recC, yi: YI, key: string) => {
+        if (terms.ptc[yi] === 0) return true;
+        const v = { profitDelta: terms.payments.filter(q => q.yi === yi).reduce((a, q) => a + q.amountCents, 0) - p.openExpenses[yi], additionalSep: terms.sepYear === yi ? terms.sep : 0 };
+        try { return solveCredit(modelAtPositions(models[yi], k => (k === key ? UNCERTAINTY_SCALE : 0)), v, false).ptc.ptc > 0; } catch { return false; }
+      };
+      for (const yi of [0, 1] as const) for (const d of rangeDims(models[yi])) {
+        if (keepsAt(recC, yi, d.key)) continue;
+        const alt = variants.find(o => o !== recommended && keepsAt({ payments: o.terms.payments.map(q => ({ ...q, yi: yearOf(q.date) })), sepYear: o.terms.additionalSep ? (o.terms.additionalSep.year === 2026 ? 0 : 1) : null,
+          sep: o.terms.additionalSep?.amountCents ?? 0, ptc: o.aca.map(a => a.ptcCents) } as never, yi, d.key));
+        const fi = p.cc.ws.forecasts.findIndex(f => f.personId === d.personId && f.year === YEARS[yi]);
+        decisionFacts.push({ path: fi >= 0 ? `forecasts[${fi}]` : `household.years[${yi}].otherIncomes`, label: `${d.label} (${YEARS[yi]})`,
+          effect: clip(`At the high end of this range the recommended option loses the ${YEARS[yi]} premium tax credit${alt ? `; "${alt.label.split(":")[0]}" still keeps it` : "; no shown option keeps it"}. Narrowing this figure settles the choice.`, 300),
+          alternativeVariantId: alt?.id ?? null });
+      }
+    }
+    const ready: EngineReadyDealSearch = { status: "ready", ...meta, variants, recommendedVariantId: recommended?.id ?? null, decisionFacts };
+    return ready;
+  }
+  const nf: EngineNoFeasibleTerms = { status: "no_feasible_terms", ...meta, violated: [], relaxations: [], nearest: [], binding: [] };
   explainInfeasible(nf, { all, goal, env, decl, p, space, slots, sepCap, ev, shift, fixedTerms, priceStep });
+  // Nearest valid alternatives: inside every hard limit (price, windows, payments, SEP, timing), short only of the goal.
+  // Each is exact-checked; the shortfall is against the cash goal.
+  const target = goal.dateTargets.find(t => t.kind !== "household_balance");
+  const pickNear = [[...all].sort((x, y) => y.cashDelta - x.cashDelta)[0],
+    ...(target ? [[...all].sort((x, y) => (dateTarget(env, y, decl, target).achievedCents ?? -Infinity) - (dateTarget(env, x, decl, target).achievedCents ?? -Infinity))[0]] : [])].filter(Boolean);
+  const nearKeys = new Set<string>();
+  for (const [i, c] of pickNear.entries()) {
+    const key = JSON.stringify([c.price, c.payments.map(q => [q.date, q.amountCents]), c.sepYear, c.sep]);
+    if (nearKeys.has(key)) continue;
+    nearKeys.add(key);
+    const v = exactVariant(c, i === 0 ? "most_cash" : "earliest_money", { p, env, decl, goal, space, slots, sepCap, shift, warnings, allowGoalUnmet: true });
+    if (!v) continue;
+    decorate(v, c, v.purpose);
+    v.label = clip(`Closest within your limits (does not meet the goal): ${v.label.split(": ").slice(1).join(": ")}`, 200);
+    v.results = variantResults(v, { agreedProject, title: p.cc.candidate.title, original, inputsEstimated, declinePtc: [decl[0].ptc, decl[1].ptc] });
+    nf.nearest.push({ variant: v, shortfallCents: Math.max(0, goal.minimumTwoYearCashDeltaCents - v.twoYearCashDeltaCents),
+      unmet: v.constraints.filter(k => !k.satisfied).map(k => k.id) });
+  }
+  nf.binding = [...new Set(nf.relaxations.filter(r => r.constraint !== "minimum_cash" && (r.requiredCents !== null || r.requiredDate !== null)).map(r => r.constraint))];
   return nf;
 }
 
@@ -515,7 +572,7 @@ function refinePrice(c: Candidate, e: RefineEnv): Candidate {
 }
 
 // =====================================================================================================
-interface ExactEnv { p: Prepared; env: DateEnv; decl: [YearEval, YearEval]; goal: DealGoal; space: DealTermsSpace; slots: Slot[]; sepCap: number; shift: number; warnings: string[] }
+interface ExactEnv { p: Prepared; env: DateEnv; decl: [YearEval, YearEval]; goal: DealGoal; space: DealTermsSpace; slots: Slot[]; sepCap: number; shift: number; warnings: string[]; allowGoalUnmet?: boolean }
 function kindOf(c: Candidate, p: Prepared): ScenarioKind {
   const offeredYear = yearOf([...p.offered].sort((a, b) => a.date.localeCompare(b.date))[0].date);
   if (c.price !== p.offeredPrice) return "renegotiate";
@@ -562,7 +619,8 @@ function exactVariant(c: Candidate, purpose: DealVariant["purpose"], x: ExactEnv
     { id: "fixed_facts", satisfied: c.payments.reduce((a, q) => a + q.amountCents, 0) === c.price - p.received,
       detail: `${formatUsd(p.received)} already received stays as recorded; payments cover only the remaining ${formatUsd(c.price - p.received)}.` },
   ];
-  if (constraints.some(k => !k.satisfied)) { x.warnings.push(`An option failed its exact re-check and is not shown (${constraints.filter(k => !k.satisfied).map(k => k.id).join(", ")}).`); return null; }
+  const GOAL_IDS = new Set(["minimum_cash", "date_target"]);
+  if (constraints.some(k => !k.satisfied && (!x.allowGoalUnmet || !GOAL_IDS.has(k.id)))) { x.warnings.push(`An option failed its exact re-check and is not shown (${constraints.filter(k => !k.satisfied).map(k => k.id).join(", ")}).`); return null; }
   const scenario = scenarioFromPlan(p.ctx, plan, ycs, `deal-${purpose}`);
   const sepYear = c.sepYear === null ? null : YEARS[c.sepYear];
   const datedFlows: DatedFlow[] = [
