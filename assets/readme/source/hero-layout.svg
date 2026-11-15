@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Headroom — Before you say yes.</title>
+  <desc id="desc">A client offer passes through the Headroom chrome H. See what the offer leaves your household after taxes and health insurance.</desc>
+  <rect width="1200" height="430" rx="24" fill="#2545F5"/>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#FFFFFF">
+    <text x="54" y="62" font-size="38" font-weight="700" letter-spacing="-1.4">headroom</text>
+    <text x="52" y="166" font-size="82" font-weight="700" letter-spacing="-3.6">Before you</text>
+    <text x="52" y="252" font-size="82" font-weight="700" letter-spacing="-3.6">say yes.</text>
+    <text x="55" y="309" font-size="25">See what a client offer leaves you</text>
+    <text x="55" y="344" font-size="25">after taxes and health insurance.</text>
+  </g>
+  <g id="brand-sculpture"><image x="668" y="1" width="510" height="420" preserveAspectRatio="xMidYMid meet" xlink:href="hero-subject.png"/></g>
+  <path d="M55 383H581" stroke="#DFFF38" stroke-width="2"/>
+  <text x="55" y="411" fill="#DFFF38" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" letter-spacing="1.5">OFFER → TERMS → NEXT MOVE</text>
+</svg>

@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "label": "production-document-smoke",
+    "base": "https://<host>",
+    "corpusVersion": "round6-1.0",
+    "ranAt": "2026-11-15T01:42:44.885Z",
+    "consent": true,
+    "modes": [
+      "provider"
+    ],
+    "cases": 1,
+    "correct": 3,
+    "incorrect": 0,
+    "missing": 0,
+    "extra": 1,
+    "expectedChecks": 3,
+    "accuracy": 100,
+    "latencyMs": {
+      "median": 6547,
+      "max": 6547
+    }
+  },
+  "results": [
+    {
+      "id": "d2-w2",
+      "type": "document",
+      "format": "text_pdf",
+      "httpStatus": 200,
+      "ms": 6547,
+      "mode": "provider",
+      "status": "review_required",
+      "notes": [
+        "1 extra field(s): income.payrollPretaxDeductions"
+      ],
+      "score": {
+        "correct": 3,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 1
+      }
+    }
+  ]
+}

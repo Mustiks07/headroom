@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="235" viewBox="0 0 1200 235" role="img" aria-labelledby="title desc">
+ <title id="title">From offer to a decision that stays current</title>
+ <desc id="desc">Input an offer or document, confirm facts, calculate with the deterministic engine, and produce terms, a reply and actions. Changed facts return to review.</desc>
+ <rect width="1200" height="235" rx="20" fill="#F4F6FC"/>
+ <g font-family="Arial, Helvetica, sans-serif" fill="#10141F">
+  <g transform="translate(45 45)"><text y="0" font-size="18" font-weight="700" fill="#2545F5">01 / INPUT</text><text y="48" font-size="28" font-weight="700">Offer or document</text><text y="80" font-size="20">Text · PDF · figures</text></g>
+  <g transform="translate(350 45)"><text y="0" font-size="18" font-weight="700" fill="#2545F5">02 / REVIEW</text><text y="48" font-size="28" font-weight="700">Confirmed facts</text><text y="80" font-size="20">Sources · missing data</text></g>
+  <g transform="translate(655 45)"><text y="0" font-size="18" font-weight="700" fill="#2545F5">03 / CALCULATE</text><text y="48" font-size="28" font-weight="700">Versioned engine</text><text y="80" font-size="20">Taxes · insurance · cash</text></g>
+  <g transform="translate(960 45)"><text y="0" font-size="18" font-weight="700" fill="#2545F5">04 / ACT</text><text y="48" font-size="28" font-weight="700">Your next move</text><text y="80" font-size="20">Terms · reply · plan</text></g>
+ </g>
+ <path d="M294 80H324M318 74L324 80L318 86M599 80H629M623 74L629 80L623 86M904 80H934M928 74L934 80L928 86" fill="none" stroke="#2545F5" stroke-width="3"/>
+ <path d="M1090 151V184H400V160M393 168L400 160L407 168" fill="none" stroke="#2545F5" stroke-width="2"/>
+ <rect x="542" y="166" width="405" height="36" rx="18" fill="#DFFF38"/>
+ <text x="745" y="190" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#10141F">Real changes → reviewed updates</text>
+</svg>

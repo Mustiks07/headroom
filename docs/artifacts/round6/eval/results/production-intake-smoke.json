@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "label": "production-intake-smoke",
+    "base": "https://<host>",
+    "corpusVersion": "round6-1.0",
+    "ranAt": "2026-11-15T01:42:43.921Z",
+    "consent": true,
+    "modes": [
+      "provider"
+    ],
+    "cases": 1,
+    "correct": 10,
+    "incorrect": 0,
+    "missing": 0,
+    "extra": 0,
+    "expectedChecks": 10,
+    "accuracy": 100,
+    "latencyMs": {
+      "median": 6152,
+      "max": 6152
+    }
+  },
+  "results": [
+    {
+      "id": "m1-offer-email",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 6152,
+      "mode": "provider",
+      "providerStatus": "used",
+      "notes": [],
+      "score": {
+        "correct": 10,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    }
+  ]
+}

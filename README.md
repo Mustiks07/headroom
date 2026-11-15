@@ -1,38 +1,94 @@
-# Headroom
+<p align="center">
+  <a href="https://headroom-amber.vercel.app"><img src="assets/readme/hero.png" width="100%" alt="Headroom. Before you say yes. See what a client offer leaves your household after taxes and health insurance."></a>
+</p>
 
-**Before you say yes.**
+<p align="center">
+  <strong><a href="https://headroom-amber.vercel.app">Open Headroom ↗</a> &nbsp; · &nbsp; <a href="docs/presentation/headroom-business-cup.pdf">10-slide pitch</a> &nbsp; · &nbsp; <a href="docs/demo/round6-judge-script.md">Live walkthrough</a> &nbsp; · &nbsp; <a href="docs/presentation/README.md">Evidence & business model</a></strong>
+</p>
 
-Headroom helps independent professionals with Marketplace health insurance see what a client offer leaves their household after taxes and insurance, choose feasible terms, and keep the decision current when the client or the payments change.
+**Understand a client offer before you agree.** Headroom shows independent professionals what remains for their household after project costs, taxes and Marketplace health insurance. Set your cash needs and payment limits, compare workable terms, prepare a client reply, and keep the decision current as the deal changes.
 
-**[Open Headroom](https://headroom-amber.vercel.app) · [Try the family example](https://headroom-amber.vercel.app/demo?case=family-cliff) · [Use your own figures](https://headroom-amber.vercel.app/check)**
+**Open immediately. No signup, email, password or payment gate.** Built for US adults aged 25–45 who work for themselves and buy Marketplace coverage. English, browser-only, B2C.
 
-**No signup, email, password or card is required.** The combined round 6 release connects offer-first intake, a short missing-fact flow, confirmed document imports, goal-based terms, client counteroffers, partial payments, decision PDFs and calendar actions. Text PDFs can be read without AI; photos and scanned PDFs need pasted or manual figures. Optional AI reads and explains; the versioned engine calculates. Guest cloud save uses Supabase. See the [round 6 integration record](docs/handoffs/integration-round6.md) and [actual browser artifacts](docs/artifacts/round6/ui/).
+## Same fee. Better terms.
 
-Current calculation versions: `headroom-engine-1.3.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`, deal search `headroom-deal-1.2.0`. Earlier reviews remain available as history, including [round 4](docs/handoffs/integration-round4.md).
+An illustrative Tennessee family receives a **$12,000 offer**. The payment schedule changes its household outcome:
 
-## Try it locally
+| The client pays | Extra household cash after tax settlements |
+|---|---:|
+| $12,000 on December 20, 2026 | **−$3,616** |
+| $5,400 on December 15, 2026 + $6,600 on January 4, 2027 | **+$8,310** |
 
-- Open `/check?start=project`: paste or enter an offer, confirm its terms, answer the necessary household questions and open the offer-as-written result.
-- Open `/demo?case=family-cliff`: edit a project offer, constrain retirement contributions, compare payment schedules and save a plan.
-- Open `/demo?case=ordinary-gig`: see a profitable project where no special intervention is needed.
-- Open `/demo?case=missing-spouse-income`: confirm the missing facts before a result is shown.
-- Open `/check` for your own current-year subsidy check. Comparing a project across years requires the second-year forecast.
-- Open `/household` for a persistent household plan: an annual or year-to-date forecast, multiple client projects, actual payments, yearly SEP goals and recorded contributions. A sample household is available immediately.
+**$11,926 better than the original terms. Same project fee. No additional retirement contribution.**
 
-Saved plans reopen in the same browser. “Something changed” first checks the amounts and dates already agreed, then shows new proposals for explicit review. An accepted update records a revision and preserves history. Old rule versions have a separate review/upgrade path. PDF and restorable JSON exports include inputs, assumptions and calculation versions. CSV/TXT imports propose figures for confirmation; PDF/image analysis is optional.
+<a href="docs/artifacts/round6/ui/case1-terms-desktop.png"><img src="docs/artifacts/round6/ui/case1-terms-desktop.png" width="100%" alt="Actual Headroom result: the same $12,000 fee split into $5,400 in December and $6,600 in January leaves $8,310 extra cash versus declining, an $11,926 improvement over the original terms."></a>
 
-The household workspace separates expected money from payments already received. A new offer is compared on top of existing agreements; changing unpaid terms preserves deposits. Recording a SEP contribution reduces both the unpaid goal and the cash still available. “My income changed” checks the existing plan before suggesting changes. Download the [synthetic annual forecast example](docs/artifacts/round3/annual-income-forecast-explanation-synthetic.pdf) to inspect the exported facts, estimates and calculation trace.
+*Actual application output for a documented illustrative household. Both outcomes are compared with declining the unpaid project, after the relevant tax settlements. County benchmark assumptions apply; the client must agree and payment timing must be eligible. These are calculated case results, not customer savings.* [Inspect the inputs and independent check →](docs/artifacts/round6/scenarios/decision-cases.md)
 
-**Find terms for your goal:** enter how much more cash you want to keep, your retirement-contribution limit and an optional date target. Headroom searches allowed prices and payment schedules and shows up to three distinct calculated choices. Choose terms to create a client-message draft, decision PDF and calendar. Record agreement and actual payments to update the plan. No message is sent automatically. The search does not claim a global optimum. Historical decision records retain their original context after later updates; current-plan exports require current calculations. Calendar downloads are snapshots, not a live subscription.
+**Reproduce it:** download [the case 1 plan](https://raw.githubusercontent.com/Mustiks07/headroom/main/docs/artifacts/round6/ui/case-1-importable.json), open [Your plans](https://headroom-amber.vercel.app/household), choose **Restore from a file**, then **Find workable terms → Find terms**. The app recalculates from inputs. Or [start with your own offer](https://headroom-amber.vercel.app/check?start=project).
 
-## Development
+## A complete decision, from offer to payment
+
+| When something happens | What Headroom does |
+|---|---|
+| **A new offer arrives** | Reads text or a document, asks for missing facts, and shows the offer as written before suggesting changes. |
+| **You need different terms** | Searches allowed prices and payment dates against cash needs and retirement limits, with existing agreements included. |
+| **The client counters** | Previews the household effect, records the revised terms after confirmation, and preserves the original offer. |
+| **Only part of a payment arrives** | Records the actual receipt and keeps the dated remainder separate. |
+| **Income or documents change** | Reviews the affected facts, recalculates the plan, and updates the next actions. |
+| **You are ready to act** | Produces an editable client reply, a decision PDF, restorable plan data and calendar actions. |
+
+No client message is sent automatically. A proposed term, an agreement and money actually received remain distinct throughout the product.
+
+## The difference is the workflow
+
+Free ACA calculators and broad financial planners already serve useful jobs. Headroom focuses on **one real client decision and its consequences**: the offer, household facts, feasible terms, reply, agreement and payment changes stay connected.
+
+- **Constraints come from the person.** How much cash is needed, by when, what dates the client can accept and how much can go into retirement.
+- **The result has a usable next step.** A proposal to discuss, an editable message and dated actions, rather than a warning alone.
+- **The next visit starts from the existing plan.** A counteroffer or partial receipt updates the same decision and retains its history.
+
+[Read the scenario-based competitor research →](docs/research/round6-competition-pitch.md)
+
+## AI reads. Code calculates.
+
+<img src="assets/readme/workflow.svg" width="100%" alt="Offer or document → review confirmed facts → deterministic financial engine → terms, reply and dated plan. Real changes return to the review step.">
+
+**Next.js + TypeScript** power the browser and APIs on Vercel. A **deterministic, versioned engine** calculates tax, premium credits and household cash with decimal arithmetic and documented rounding. Optional **AI** reads messages and documents; users review proposed facts. **Supabase** provides private anonymous guest persistence without an account screen.
+
+- Unknown facts remain unknown. A missing spouse income or unsupported situation blocks the affected answer.
+- Source, year and person travel with imported figures. Conflicting document changes are reviewed together before they are applied.
+- Text PDFs work without AI. Scanned PDFs and photos use pasted or manual figures.
+- Cash, retirement principal and credit settlement are shown separately. Historical decisions retain their original inputs; stale results cannot become a current export.
+
+[Architecture](docs/ARCHITECTURE.md) · [Financial engine](docs/ENGINE_SPEC.md) · [Source registry](docs/SOURCES.md) · [Privacy](https://headroom-amber.vercel.app/privacy)
+
+## Built, integrated and exercised
+
+The combined release was checked through real browser journeys: family, ordinary profitable offer, missing facts, document review, client counteroffer, partial payment, save/reopen and downloaded PDF/calendar outputs. The core journey was also repeated on the public deployment. Mobile was inspected at 360px.
+
+Production build and TypeScript checks passed. Supabase passed **28 isolation checks**, including cross-guest access and server-only AI counters. Live provider smoke checks exercised an offer email and a text W-2 PDF. These are bounded engineering checks, not a claim of general AI accuracy or professional tax certification.
+
+[Release record](docs/handoffs/integration-round6.md) · [Actual screenshots and exports](docs/artifacts/round6/ui/) · [Technical proof](docs/demo/round6-technical-proof.md)
+
+## A business built around the decision
+
+Our proposed launch package is **$29 for one offer decision, including 30 days of revisions**. Ongoing project work is the basis for a **$99 annual plan**, to validate after repeat demand. The current app is free to use.
+
+The research connects official Marketplace data, paid-category alternatives, competitor workflows, acquisition channels and a reproducible financial model. The first channel tests focus on broker referrals and independent-worker communities. The household pays: this remains B2C.
+
+[Market and launch decisions](docs/research/round6-launch-decisions.md) · [Pricing research](docs/research/round6-monetization-review.md) · [Unit economics and sensitivities](docs/research/round6-economics.md) · [97 participant repositories reviewed](docs/research/COMPETITOR_REPOS_ROUND5.md)
+
+## Run it yourself
+
+Use Node 22.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Node 22 is the development baseline. Copy `.env.example` to `.env.local` when connecting optional services. Calculation and browser-local plan storage need no credentials.
+Open `http://localhost:3000`. Calculations and browser-local storage work without credentials. For optional cloud save and AI, copy `.env.example` to `.env.local` and follow [deployment configuration](docs/DEPLOYMENT.md). Never commit credentials.
 
 ```sh
 npm run typecheck
@@ -40,55 +96,32 @@ npm test
 npm run build
 ```
 
-For the bounded browser check, install Chromium once with `npx playwright install chromium`, build the app, then run `npm run check:ui`. It starts a production server on a free port; set `BASE_URL` to use an already running server instead. The script uses an isolated browser context and synthetic households.
+For the current browser walkthrough use [the round 6 script](docs/demo/round6-judge-script.md). The legacy `check:ui` script targets older screens.
 
-## Team handoff
+<details>
+<summary><strong>Supported calculations and review boundaries</strong></summary>
 
-| Branch | Responsibility | Assignment |
-| --- | --- | --- |
-| [`claude1`](https://github.com/Mustiks07/headroom/tree/claude1) | English interface and complete user journey | [Claude 1](docs/tasks/CLAUDE1.md) |
-| [`claude2`](https://github.com/Mustiks07/headroom/tree/claude2) | Financial engine, scenarios and verification | [Claude 2](docs/tasks/CLAUDE2.md) |
-| [`claude3`](https://github.com/Mustiks07/headroom/tree/claude3) | Supabase, APIs, documents and integration | [Claude 3](docs/tasks/CLAUDE3.md) |
+The current scope is federal planning for Texas, Florida and Tennessee; single or married filing jointly; one sole-proprietor business; supported W-2 wages and interest; full-year Marketplace eligibility in 2026–2027; and an owner-only SEP-IRA. It is a planning tool, not tax filing or an official Marketplace eligibility decision.
 
-Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+The search evaluates permitted candidates and rechecks displayed options with the full engine. It does not claim a global optimum between search points. Calendar files are downloadable snapshots, not a live subscription. Some illustrative insurance inputs use CMS county plan candidates with address availability and eligibility assumed.
 
-**Round 6 assignments and delivery:** [shared brief](docs/tasks/ROUND6_SHARED.md), [Claude 1 handoff](docs/handoffs/claude1-round6.md), [Claude 2 handoff](docs/handoffs/claude2-round6.md), [Claude 3 handoff](docs/handoffs/claude3-round6.md). The combined release record above identifies what was checked together.
+Current versions: `headroom-engine-1.3.0`, `headroom-household-1.0.1`, `headroom-deal-1.2.0`, `us-federal-aca-2026-2027.r3`.
 
-## Data and AI path
+[Engine scope](docs/ENGINE_SPEC.md) · [Finite acceptance checks](docs/ACCEPTANCE.md) · [Integrated handoff](docs/handoffs/integration-round6.md)
 
-- **First offer from an ordinary email** (`POST /api/assist/intake`): amounts and dates as written, costs unknown unless stated, no inferred tax year, invoices stay "expected", separate projects stay separate, typed questions for what is missing. Works without AI (built-in reading) and, with consent, through the configured provider with every value checked against the text.
-- **One document import path** for new and saved plans: the user chooses whose figure, which year, which months and which payment; the engine's semantic check runs on the whole group; one revision or nothing; repeat imports add nothing. A PDF's embedded text is read on the server without AI when AI is off or not allowed; scans and photos are not read.
-- **Negotiation and payments**: client accepted / declined / countered (original offer kept, versions recorded), partial receipts with a dated remainder, explicit lower settlement. Manual forms and confirmed AI proposals share one command path, and saving re-runs the engine's business checks.
-- **Exports and actions**: current actions from saved facts, calendar updates with stable IDs ("Done" for received payments, "Cancelled" for dropped ones), historical decision PDFs that list what was recorded since.
-- Evidence: [AI/extraction evaluation](docs/artifacts/round6/ai-evaluation.md) (fixed synthetic corpus; built-in reading measured, provider run pending a configured key in this branch), [technical proof](docs/demo/round6-technical-proof.md), [handoff](docs/handoffs/claude3-round6.md).
+</details>
 
-## Specification
+<details>
+<summary><strong>Specification, collaboration and research archive</strong></summary>
 
-- [Product and implementation specification / ТЗ](docs/TZ.md)
-- [Architecture and interface agreements](docs/ARCHITECTURE.md)
-- [Financial engine requirements](docs/ENGINE_SPEC.md)
-- [Design and English copy](docs/DESIGN.md)
-- [Finite acceptance and release checks](docs/ACCEPTANCE.md)
-- [Deployment and service configuration](docs/DEPLOYMENT.md)
-- [Business assumptions and pitch evidence](docs/BUSINESS.md)
-- [Demand, alternatives, first-Cup evidence and modeled unit economics](docs/research/round5-business-research.md)
-- [Participant repository comparison and paid-value research](docs/research/README.md)
-- [Selected C design — implemented visual system and reference images](docs/design/c-open/README.md)
-- [C continuation — proposed lower landing and working-screen compositions](docs/design/c-round6/README.md)
-- [Paid demand, pricing experiments and economics assumptions](docs/research/round6-paid-demand.md)
-- [Current competitors and the ten-slide evidence plan](docs/research/round6-competition-pitch.md)
-- [Code-backed product gap audit](docs/research/round6-product-gap-audit.md)
-- [Archived visual exploration — rejected](docs/design/round5/design-direction.md)
-- [Official sources and research boundaries](docs/SOURCES.md)
+[Product specification](docs/TZ.md) · [Design system C](docs/design/c-open/README.md) · [Round 6 shared brief](docs/tasks/ROUND6_SHARED.md) · [Claude 1 delivery](docs/handoffs/claude1-round6.md) · [Claude 2 delivery](docs/handoffs/claude2-round6.md) · [Claude 3 delivery](docs/handoffs/claude3-round6.md) · [Research index](docs/research/README.md)
 
-## Calculation boundaries
+Contributors start with [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md), using separate branches/worktrees and the shared domain contracts. Public-facing figures must match the current engine and documented source.
 
-Financial outcomes come from a deterministic, versioned engine. AI may extract document facts; it does not calculate taxes. Unknown household facts block the affected calculation. Retirement principal, available cash and advance-credit settlement are shown separately.
+</details>
 
-The initial scope covers federal planning for Texas, Florida and Tennessee, single or married filing jointly, one sole-proprietor business, supported W-2 wages and interest, and full-year Marketplace eligibility in 2026–2027. Unsupported situations return an explanation. The [round 4 engine handoff](docs/handoffs/claude2-round4.md) and [integration review](docs/handoffs/integration-round4.md) list limits and corrections. Supported business-profit and interest ranges are independent: validity and loss of credit use the engine's monotone bounds; spendable-cash stress uses finite checks and is not a proven global minimum. Payroll, retirement and insurance ranges remain blocked. The standard comparison has limited multi-payment alternatives; the goal-based search adds permitted price and timing choices for one project's unpaid terms, holding other commitments fixed.
+---
 
-The included households are synthetic. Some insurance inputs are derived from published CMS county plan candidates, with address availability and personal eligibility assumed. Reference examples are not actual customer savings or independently reviewed tax returns. See [the audit notes](docs/ENGINE_SPEC.md) before reusing the legacy Python prototype.
+**Business Cup · Money · B2C · Web**
 
-## Contest delivery
-
-The contest submission needs a public guest URL, English UI, an English PDF deck of at most 10 slides, and this public repository. The verified guest URL is [headroom-amber.vercel.app](https://headroom-amber.vercel.app). The deck will be linked after its final artifact is ready and checked. The $99/year price is a business hypothesis. Checkout is explicitly demo/test mode; no real customer payments or independent professional tax review are claimed.
+**[Try Headroom ↗](https://headroom-amber.vercel.app) · [Open the pitch](docs/presentation/headroom-business-cup.pdf) · [Submission materials](docs/presentation/README.md)**

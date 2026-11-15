@@ -14,8 +14,23 @@ Integrated UI: `75de104`, canonical engine merge `0efa51f`, backend merge `c1d18
 
 ## Public release verification
 
-Production deployment and a bounded live-provider/cloud smoke check are recorded below after deployment. No new environment variables are needed for this round. The intake route uses the existing proposal feature and quotas.
+Application commit `aaef913` was deployed successfully to [headroom-amber.vercel.app](https://headroom-amber.vercel.app); [Vercel deployment](https://vercel.com/mustiks07s-projects/headroom/FbkehuEqcQomQ4gHiHdiAEfyNDyr). No new environment variables were required. The intake route uses the existing proposal feature and quotas.
+
+The public browser restored case 1, calculated the original -$3,616, searched the saved constraints, returned the same $5,400/$6,600 schedule and +$8,310 result, saved the chosen terms, downloaded a four-page decision PDF and reopened revision 3. The plan list confirmed guest-cloud storage. Actual production artifacts: `production-as-written.jpg`, `production-saved-terms.jpg`, `production-decision.pdf` in the UI artifact directory.
+
+Two bounded live BasisWeb smoke requests (not a general accuracy benchmark):
+
+- Offer email `m1`: HTTP 200, response provenance provider, all 10 expected checks matched, 6.152 seconds.
+- Text W-2 PDF `d2`: HTTP 200, provider provenance, all 3 required checks matched, 6.547 seconds. One additional `income.payrollPretaxDeductions` field was reported; the input contains a Box 12 code D retirement deferral, and the response remains `review_required`. The scorer does not store the extra value, so this is recorded as an extra field rather than an independently validated extraction. No 100% general accuracy claim is made.
+
+Reports: `docs/artifacts/round6/eval/results/production-intake-smoke.json` and `production-document-smoke.json`. No credentials, raw personal documents or user-supplied financial data were published. The checks use the repository's synthetic corpus.
 
 ## Presentation evidence
 
 Use the current case 1 above, not earlier prototype amounts. New CMS state/county analysis: `docs/research/round6-launch-decisions.md`. Economics: `docs/research/round6-economics.md`. Competitors and first-Cup evidence: `docs/research/round6-competition-pitch.md`. Proposed launch price is $29 per decision including 30 days of revisions; annual $99 is the repeat-use model to validate. The contest app remains free.
+
+## Submission artifacts and README
+
+`docs/presentation/headroom-business-cup.pdf` contains exactly ten English 16:9 slides, individually generated in the selected C style, with working app/repository links and source links. Every page was rendered with Poppler and visually inspected after PDF assembly. The five-minute speaker outline, evidence index, model assumptions and submission description are in `docs/presentation/README.md`. These files are a prepared package, not an organizer submission receipt.
+
+The redesigned README uses an ImageGen chrome subject with deterministic SVG typography, an unaltered actual result screenshot, and a compact workflow SVG. Editable composition sources are retained under `assets/readme/source/`. The complete local Markdown preview was reviewed at GitHub content width and 360px; images loaded and there was no page overflow. All local links and the skill's image/SVG audit passed. Application code was unchanged during presentation/README packaging.
