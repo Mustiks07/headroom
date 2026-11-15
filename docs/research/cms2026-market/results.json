@@ -1,0 +1,276 @@
+{
+  "retrieved_on": "2026-11-15",
+  "source_page": "https://www.cms.gov/data-research/statistics-trends-reports/marketplace-products/2026-marketplace-open-enrollment-period-public-use-files",
+  "definitions_url": "https://www.cms.gov/files/document/2026-public-use-files-definitions.pdf",
+  "sources": {
+    "state": {
+      "url": "https://www.cms.gov/files/zip/2026-oep-state-level-public-use-file.zip",
+      "archive_sha256": "11555f328f4df04f52b9c2c833bfb5710d50d48bbf45ef6c09d10274ef5cfefe",
+      "csv_member": "2026 OEP State-Level PUF/2026 OEP State-Level Public Use File.csv"
+    },
+    "county": {
+      "url": "https://www.cms.gov/files/zip/2026-oep-county-level-public-use-file.zip",
+      "archive_sha256": "020e6531b06497f0d6abe9d107f1eca810a434b98da694bf26f6e734d85f81e9",
+      "csv_member": "2026 OEP County-Level PUF/2026 OEP County-Level Public Use File.csv"
+    }
+  },
+  "unit": "Unique people with 2026 OEP medical plan selections, not households or effectuated enrollment",
+  "age": "Sum of published Age_26_34 and Age_35_44 bands; not a direct count of current-age 25-45 people",
+  "income_band": "Published household income >300% and <=400% FPL; not profit, not necessarily near an imminent cliff",
+  "joint_segments": "Not available: age, self-employment, income, household, negotiable contracts, willingness to pay cannot be joined from marginal counts",
+  "states": {
+    "TX": {
+      "Cnsmr": 4172233,
+      "AB_Cnsmr": 3457403,
+      "APTC_Cnsmr": 3877775,
+      "Age_26_34": 637307,
+      "Age_35_44": 853029,
+      "FPL_300_400": 171791,
+      "published_age_26_44": 1490336,
+      "broker_assisted_share": 0.82866968359629,
+      "published_fpl_300_400_share": 0.04117483371614193
+    },
+    "FL": {
+      "Cnsmr": 4538772,
+      "AB_Cnsmr": 3916082,
+      "APTC_Cnsmr": 4295772,
+      "Age_26_34": 719675,
+      "Age_35_44": 919788,
+      "FPL_300_400": 187383,
+      "published_age_26_44": 1639463,
+      "broker_assisted_share": 0.8628065036093463,
+      "published_fpl_300_400_share": 0.04128495549016342
+    },
+    "TN": {
+      "Cnsmr": 569310,
+      "AB_Cnsmr": 406807,
+      "APTC_Cnsmr": 514288,
+      "Age_26_34": 94914,
+      "Age_35_44": 116826,
+      "FPL_300_400": 35017,
+      "published_age_26_44": 211740,
+      "broker_assisted_share": 0.7145614867119847,
+      "published_fpl_300_400_share": 0.06150779013191407
+    }
+  },
+  "three_state_total": {
+    "Cnsmr": 9280315,
+    "AB_Cnsmr": 7780292,
+    "APTC_Cnsmr": 8687835,
+    "Age_26_34": 1451896,
+    "Age_35_44": 1889643,
+    "FPL_300_400": 394191,
+    "published_age_26_44": 3341539,
+    "broker_assisted_share": 0.8383650770474924,
+    "published_fpl_300_400_share": 0.04247603664315274
+  },
+  "national_controlled_total": {
+    "Cnsmr": 23130860,
+    "Age_26_34": 3710206,
+    "Age_35_44": 4463729,
+    "FPL_300_400": 1907986,
+    "published_age_26_44": 8173935
+  },
+  "county_controls": {
+    "TX": {
+      "Cnsmr": {
+        "known_county_sum": 4172233,
+        "suppressed_or_missing_county_cells": 0,
+        "state_count": 4172233,
+        "state_minus_known_counties": 0
+      },
+      "FPL_300_400": {
+        "known_county_sum": 171735,
+        "suppressed_or_missing_county_cells": 12,
+        "state_count": 171791,
+        "state_minus_known_counties": 56
+      }
+    },
+    "FL": {
+      "Cnsmr": {
+        "known_county_sum": 4538772,
+        "suppressed_or_missing_county_cells": 0,
+        "state_count": 4538772,
+        "state_minus_known_counties": 0
+      },
+      "FPL_300_400": {
+        "known_county_sum": 187383,
+        "suppressed_or_missing_county_cells": 0,
+        "state_count": 187383,
+        "state_minus_known_counties": 0
+      }
+    },
+    "TN": {
+      "Cnsmr": {
+        "known_county_sum": 569310,
+        "suppressed_or_missing_county_cells": 0,
+        "state_count": 569310,
+        "state_minus_known_counties": 0
+      },
+      "FPL_300_400": {
+        "known_county_sum": 34991,
+        "suppressed_or_missing_county_cells": 2,
+        "state_count": 35017,
+        "state_minus_known_counties": 26
+      }
+    }
+  },
+  "top_counties_by_published_fpl_300_400_count": [
+    {
+      "state": "FL",
+      "county_fips": "12086",
+      "Cnsmr": 1031630,
+      "AB_Cnsmr": 981197,
+      "APTC_Cnsmr": 1001621,
+      "Age_26_34": 161905,
+      "Age_35_44": 206952,
+      "FPL_300_400": 26822,
+      "published_age_26_44": 368857,
+      "broker_assisted_share": 0.9511132867404011,
+      "published_fpl_300_400_share": 0.025999631650882583
+    },
+    {
+      "state": "TX",
+      "county_fips": "48201",
+      "Cnsmr": 731300,
+      "AB_Cnsmr": 623051,
+      "APTC_Cnsmr": 681933,
+      "Age_26_34": 117370,
+      "Age_35_44": 146179,
+      "FPL_300_400": 22741,
+      "published_age_26_44": 263549,
+      "broker_assisted_share": 0.8519773006973882,
+      "published_fpl_300_400_share": 0.031096677150280323
+    },
+    {
+      "state": "FL",
+      "county_fips": "12011",
+      "Cnsmr": 544502,
+      "AB_Cnsmr": 487834,
+      "APTC_Cnsmr": 519222,
+      "Age_26_34": 84593,
+      "Age_35_44": 109992,
+      "FPL_300_400": 20291,
+      "published_age_26_44": 194585,
+      "broker_assisted_share": 0.8959269203786212,
+      "published_fpl_300_400_share": 0.03726524420479631
+    },
+    {
+      "state": "FL",
+      "county_fips": "12099",
+      "Cnsmr": 332402,
+      "AB_Cnsmr": 287318,
+      "APTC_Cnsmr": 312352,
+      "Age_26_34": 51079,
+      "Age_35_44": 68379,
+      "FPL_300_400": 14890,
+      "published_age_26_44": 119458,
+      "broker_assisted_share": 0.8643690471176467,
+      "published_fpl_300_400_share": 0.044795157670531466
+    },
+    {
+      "state": "FL",
+      "county_fips": "12095",
+      "Cnsmr": 399974,
+      "AB_Cnsmr": 356120,
+      "APTC_Cnsmr": 380663,
+      "Age_26_34": 69057,
+      "Age_35_44": 83800,
+      "FPL_300_400": 12747,
+      "published_age_26_44": 152857,
+      "broker_assisted_share": 0.890357873261762,
+      "published_fpl_300_400_share": 0.03186957152214894
+    },
+    {
+      "state": "TX",
+      "county_fips": "48113",
+      "Cnsmr": 452075,
+      "AB_Cnsmr": 395858,
+      "APTC_Cnsmr": 427314,
+      "Age_26_34": 68211,
+      "Age_35_44": 108301,
+      "FPL_300_400": 11721,
+      "published_age_26_44": 176512,
+      "broker_assisted_share": 0.8756467400320743,
+      "published_fpl_300_400_share": 0.025927113863850024
+    },
+    {
+      "state": "TX",
+      "county_fips": "48085",
+      "Cnsmr": 168207,
+      "AB_Cnsmr": 129719,
+      "APTC_Cnsmr": 154489,
+      "Age_26_34": 23227,
+      "Age_35_44": 30181,
+      "FPL_300_400": 10736,
+      "published_age_26_44": 53408,
+      "broker_assisted_share": 0.7711866925871099,
+      "published_fpl_300_400_share": 0.06382611900812689
+    },
+    {
+      "state": "TX",
+      "county_fips": "48453",
+      "Cnsmr": 184355,
+      "AB_Cnsmr": 136988,
+      "APTC_Cnsmr": 162349,
+      "Age_26_34": 30070,
+      "Age_35_44": 47455,
+      "FPL_300_400": 9645,
+      "published_age_26_44": 77525,
+      "broker_assisted_share": 0.7430663665211141,
+      "published_fpl_300_400_share": 0.052317539529711694
+    },
+    {
+      "state": "TX",
+      "county_fips": "48439",
+      "Cnsmr": 236647,
+      "AB_Cnsmr": 196159,
+      "APTC_Cnsmr": 220600,
+      "Age_26_34": 40514,
+      "Age_35_44": 49975,
+      "FPL_300_400": 9308,
+      "published_age_26_44": 90489,
+      "broker_assisted_share": 0.8289097263011996,
+      "published_fpl_300_400_share": 0.039332845968890376
+    },
+    {
+      "state": "TX",
+      "county_fips": "48029",
+      "Cnsmr": 299950,
+      "AB_Cnsmr": 253928,
+      "APTC_Cnsmr": 272310,
+      "Age_26_34": 50790,
+      "Age_35_44": 71580,
+      "FPL_300_400": 8984,
+      "published_age_26_44": 122370,
+      "broker_assisted_share": 0.8465677612935489,
+      "published_fpl_300_400_share": 0.029951658609768294
+    },
+    {
+      "state": "FL",
+      "county_fips": "12057",
+      "Cnsmr": 260235,
+      "AB_Cnsmr": 223966,
+      "APTC_Cnsmr": 245341,
+      "Age_26_34": 46753,
+      "Age_35_44": 54970,
+      "FPL_300_400": 8900,
+      "published_age_26_44": 101723,
+      "broker_assisted_share": 0.8606298153591946,
+      "published_fpl_300_400_share": 0.034199857820815804
+    },
+    {
+      "state": "TX",
+      "county_fips": "48157",
+      "Cnsmr": 147504,
+      "AB_Cnsmr": 119036,
+      "APTC_Cnsmr": 137183,
+      "Age_26_34": 19034,
+      "Age_35_44": 26494,
+      "FPL_300_400": 8292,
+      "published_age_26_44": 45528,
+      "broker_assisted_share": 0.8070018440177893,
+      "published_fpl_300_400_share": 0.05621542466644972
+    }
+  ]
+}
