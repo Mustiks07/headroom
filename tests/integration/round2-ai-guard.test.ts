@@ -48,6 +48,7 @@ describe("paid document-analysis endpoint", () => {
     vi.stubEnv("AI_MODEL", "claude-opus-5.5");
     rpc.mockClear();
     rpc.mockImplementation(async (name: string) => {
+      if (name === "headroom_count_ai_call") return { data: null, error: null }; // anonymous ops counter (migration 006)
       if (name !== "headroom_consume_ai_quota") throw new Error("Unexpected USD budget call for gateway");
       return { data: "ok", error: null };
     });
@@ -56,8 +57,9 @@ describe("paid document-analysis endpoint", () => {
       documentKind: "other", printedTaxYear: 2026, fields: [], notes: [],
     } });
     expect((await pdfUpload()).status).toBe(200);
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls.map(c => c[0])).toEqual(["headroom_consume_ai_quota", "headroom_count_ai_call"]);
     expect(rpc.mock.calls[0]).toMatchObject(["headroom_consume_ai_quota", { p_global_limit: 100, p_user_limit: 10, p_ip_limit: 20 }]);
+    expect(rpc.mock.calls[1]).toMatchObject(["headroom_count_ai_call", { p_feature: "extraction", p_provider: "basisweb", p_outcome: "end_turn" }]);
     rpc.mockResolvedValueOnce({ data: "global_limit", error: null });
     expect((await pdfUpload()).status).toBe(429);
     expect(parse).toHaveBeenCalledTimes(1);

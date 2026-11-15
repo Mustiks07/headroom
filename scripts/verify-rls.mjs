@@ -50,6 +50,8 @@ check("Guests cannot read AI reservations", ((await b.c.from("ai_reservations").
 check("Guests cannot read analytics counters", ((await b.c.from("analytics_daily").select("day")).data ?? []).length === 0);
 check("Guests cannot reserve AI spend", !!(await b.c.rpc("headroom_reserve_ai_spend", { p_guest: "x", p_ip: "x", p_feature: "proposal", p_model: "m", p_reserve: 1, p_global_limit: 9, p_guest_limit: 9, p_ip_limit: 9 })).error);
 check("Guests cannot write analytics counters", !!(await b.c.rpc("headroom_count_event", { p_event: "start", p_data_kind: "own", p_input_path: "manual" })).error);
+check("Guests cannot read AI call counters", ((await b.c.from("ai_calls_daily").select("day")).data ?? []).length === 0);
+check("Guests cannot write AI call counters", !!(await b.c.rpc("headroom_count_ai_call", { p_feature: "proposal", p_provider: "basisweb", p_outcome: "end_turn", p_latency_ms: 1, p_input: 1, p_output: 1 })).error);
 check("B cannot write entitlements", !!(await b.c.from("entitlements").insert({ owner_id: b.id, mode: "live", expires_at: new Date().toISOString() })).error);
 check("A still sees own plan", ((await a.c.from("plans").select("id").eq("id", planId)).data ?? []).length === 1);
 await a.c.from("plans").delete().eq("id", planId);
