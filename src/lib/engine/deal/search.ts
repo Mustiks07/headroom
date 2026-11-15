@@ -520,8 +520,10 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     decorate(v, c, v.purpose);
     v.label = clip(`Closest within your limits (does not meet the goal): ${v.label.split(": ").slice(1).join(": ")}`, 200);
     v.results = variantResults(v, { agreedProject, title: p.cc.candidate.title, original, inputsEstimated, declinePtc: [decl[0].ptc, decl[1].ptc] });
-    nf.nearest.push({ variant: v, shortfallCents: Math.max(0, goal.minimumTwoYearCashDeltaCents - v.twoYearCashDeltaCents),
-      unmet: v.constraints.filter(k => !k.satisfied).map(k => k.id) });
+    // Shortfall = the largest gap among the goals it misses: the two-year cash goal and each date target.
+    const gaps = [goal.minimumTwoYearCashDeltaCents - v.twoYearCashDeltaCents,
+      ...goal.dateTargets.map(t => { const r = v.dateTargets.find(x => x.targetId === t.id); return r && r.achievedCents !== null ? t.minimumCents - r.achievedCents : 0; })];
+    nf.nearest.push({ variant: v, shortfallCents: Math.max(0, ...gaps), unmet: v.constraints.filter(k => !k.satisfied).map(k => k.id) });
   }
   nf.binding = [...new Set(nf.relaxations.filter(r => r.constraint !== "minimum_cash" && (r.requiredCents !== null || r.requiredDate !== null)).map(r => r.constraint))];
   return nf;

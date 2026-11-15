@@ -1,0 +1,900 @@
+{
+  "workspace": {
+    "workspaceVersion": "2.0",
+    "id": "ws-family-demo",
+    "revision": 0,
+    "createdAt": "2026-10-01T12:00:00.000Z",
+    "updatedAt": "2026-10-20T15:00:00.000Z",
+    "household": {
+      "caseId": "family-cliff-ws",
+      "title": "Our 2026-2027 household plan",
+      "isSynthetic": true,
+      "state": "CA",
+      "countyFips": "47037",
+      "filingStatus": "mfj",
+      "people": [
+        {
+          "id": "primary",
+          "role": "primary",
+          "ageAt2026Start": 38,
+          "qualifyingChildForCtc": false
+        },
+        {
+          "id": "spouse",
+          "role": "spouse",
+          "ageAt2026Start": 38,
+          "qualifyingChildForCtc": false
+        },
+        {
+          "id": "child",
+          "role": "dependent",
+          "ageAt2026Start": 5,
+          "qualifyingChildForCtc": true
+        }
+      ],
+      "years": [
+        {
+          "year": 2026,
+          "taxFamilySize": 3,
+          "coveredPersonIds": [
+            "primary",
+            "spouse",
+            "child"
+          ],
+          "otherIncomes": [
+            {
+              "personId": "primary",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            },
+            {
+              "personId": "spouse",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            }
+          ],
+          "coverage": [
+            {
+              "month": 1,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 2,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 3,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 4,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 5,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 6,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 7,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 8,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 9,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 10,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 11,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 12,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            }
+          ],
+          "benchmarkStatus": "county_candidate",
+          "unsupportedFacts": [],
+          "scopeConfirmed": true
+        },
+        {
+          "year": 2027,
+          "taxFamilySize": 3,
+          "coveredPersonIds": [
+            "primary",
+            "spouse",
+            "child"
+          ],
+          "otherIncomes": [
+            {
+              "personId": "primary",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            },
+            {
+              "personId": "spouse",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            }
+          ],
+          "coverage": [
+            {
+              "month": 1,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 2,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 3,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 4,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 5,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 6,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 7,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 8,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 9,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 10,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 11,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 12,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            }
+          ],
+          "benchmarkStatus": "county_candidate",
+          "unsupportedFacts": [],
+          "scopeConfirmed": true
+        }
+      ]
+    },
+    "forecasts": [
+      {
+        "method": "annual_total",
+        "personId": "primary",
+        "year": 2026,
+        "excludesManagedProjects": true,
+        "annualNetProfit": {
+          "valueCents": 11200000,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      },
+      {
+        "method": "annual_total",
+        "personId": "spouse",
+        "year": 2026,
+        "excludesManagedProjects": true,
+        "annualNetProfit": {
+          "valueCents": 0,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      },
+      {
+        "method": "annual_total",
+        "personId": "primary",
+        "year": 2027,
+        "excludesManagedProjects": true,
+        "annualNetProfit": {
+          "valueCents": 11800000,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      },
+      {
+        "method": "annual_total",
+        "personId": "spouse",
+        "year": 2027,
+        "excludesManagedProjects": true,
+        "annualNetProfit": {
+          "valueCents": 0,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      }
+    ],
+    "projects": [
+      {
+        "id": "A",
+        "title": "Project A",
+        "ownerPersonId": "primary",
+        "status": "agreed",
+        "createdAt": "2026-11-15T12:00:00.000Z",
+        "statusChangedAt": "2026-11-15T12:00:00.000Z",
+        "cashAccountingConfirmed": true,
+        "timingArrangementConfirmed": true,
+        "terms": {
+          "canSplitPayment": true,
+          "canRenegotiatePrice": true,
+          "nextYearPaymentLatestDate": "2027-01-31"
+        },
+        "receipts": [
+          {
+            "id": "a1",
+            "expected": {
+              "amountCents": 300000,
+              "date": "2026-10-01"
+            },
+            "actual": {
+              "amountCents": 300000,
+              "date": "2026-10-02",
+              "recordedAt": "2026-11-15T12:00:00.000Z",
+              "sourceId": "demo-input"
+            },
+            "cancelledAt": null,
+            "sourceId": "demo-input",
+            "corrections": []
+          },
+          {
+            "id": "a2",
+            "expected": {
+              "amountCents": 300000,
+              "date": "2026-12-01"
+            },
+            "actual": null,
+            "cancelledAt": null,
+            "sourceId": "demo-input",
+            "corrections": []
+          }
+        ],
+        "expenses": [],
+        "agreedDecision": null
+      },
+      {
+        "id": "B",
+        "title": "Project B",
+        "ownerPersonId": "primary",
+        "status": "proposed",
+        "createdAt": "2026-11-15T12:00:00.000Z",
+        "statusChangedAt": "2026-11-15T12:00:00.000Z",
+        "cashAccountingConfirmed": true,
+        "timingArrangementConfirmed": true,
+        "terms": {
+          "canSplitPayment": true,
+          "canRenegotiatePrice": true,
+          "nextYearPaymentLatestDate": "2027-01-31"
+        },
+        "receipts": [
+          {
+            "id": "b1",
+            "expected": {
+              "amountCents": 1200000,
+              "date": "2026-12-20"
+            },
+            "actual": null,
+            "cancelledAt": null,
+            "sourceId": "demo-input",
+            "corrections": []
+          }
+        ],
+        "expenses": [],
+        "agreedDecision": null
+      }
+    ],
+    "retirement": {
+      "targets": [
+        {
+          "id": "t26",
+          "personId": "primary",
+          "year": 2026,
+          "targetCents": 100000,
+          "acceptedAt": "2026-11-15T12:00:00.000Z",
+          "origin": {
+            "projectId": null,
+            "scenarioKind": null,
+            "fingerprint": null
+          }
+        }
+      ],
+      "contributions": [],
+      "futureContributionBudget": {
+        "amountCents": 250000,
+        "asOfDate": "2026-11-15",
+        "sourceId": "demo-input",
+        "includedContributionIds": []
+      }
+    },
+    "planning": {
+      "objective": "spendable_cash",
+      "minimumDesiredCashGainCents": 0
+    },
+    "evidence": [
+      {
+        "id": "demo-input",
+        "kind": "synthetic",
+        "label": "Illustrative household. County plan candidates; address and eligibility assumed."
+      },
+      {
+        "id": "doc-ytd-pl",
+        "kind": "document",
+        "label": "Profit and loss statement through Sep 30, 2026 (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "doc-offer-a",
+        "kind": "document",
+        "label": "Signed offer for project A (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "doc-bank-deposit",
+        "kind": "document",
+        "label": "Bank deposit confirmation for the project A deposit (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "doc-sep-receipt",
+        "kind": "document",
+        "label": "SEP-IRA contribution confirmation (synthetic)",
+        "taxYear": 2026
+      }
+    ],
+    "events": [
+      {
+        "id": "evt-created",
+        "at": "2026-10-01T12:00:00.000Z",
+        "kind": "workspace_created",
+        "description": "Created the household plan.",
+        "refs": {},
+        "previousFingerprint": null,
+        "nextFingerprint": null
+      }
+    ],
+    "calculation": null,
+    "origin": {
+      "kind": "new"
+    }
+  }
+}
