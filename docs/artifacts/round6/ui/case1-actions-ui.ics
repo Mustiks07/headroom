@@ -1,0 +1,79 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Headroom//Plan actions 1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Headroom – Project B
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.receive-pay-dec@headroom.plan
+DTSTAMP:20261115T013459Z
+DTSTART;VALUE=DATE:20261215
+DTEND;VALUE=DATE:20261216
+SEQUENCE:0
+SUMMARY:Receive $5\,400 for "Project B" and record the actual payment
+DESCRIPTION:Project: Project B. From your Headroom plan (calculation 212530
+ 88c4b2). Planning reminder\, not an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Receive $5\,400 for "Project B" and record the actual payment
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.receive-pay-jan@headroom.plan
+DTSTAMP:20261115T013459Z
+DTSTART;VALUE=DATE:20270104
+DTEND;VALUE=DATE:20270105
+SEQUENCE:0
+SUMMARY:Receive $6\,600 for "Project B" and record the actual payment
+DESCRIPTION:Project: Project B. From your Headroom plan (calculation 212530
+ 88c4b2). Planning reminder\, not an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Receive $6\,600 for "Project B" and record the actual payment
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.settle-2026@headroom.plan
+DTSTAMP:20261115T013459Z
+DTSTART;VALUE=DATE:20270415
+DTEND;VALUE=DATE:20270416
+SEQUENCE:0
+SUMMARY:Keep about $1\,655 for this project's extra 2026 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Project: Project B. From your Headroom plan (calculation 212530
+ 88c4b2). Planning reminder\, not an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $1\,655 for this project's extra 2026 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.settle-2027@headroom.plan
+DTSTAMP:20261115T013459Z
+DTSTART;VALUE=DATE:20280418
+DTEND;VALUE=DATE:20280419
+SEQUENCE:0
+SUMMARY:Keep about $2\,035 for this project's extra 2027 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Project: Project B. From your Headroom plan (calculation 212530
+ 88c4b2). Planning reminder\, not an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $2\,035 for this project's extra 2027 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+END:VCALENDAR

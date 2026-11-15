@@ -237,7 +237,8 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
     {cmp && cmp.versusOfferedCents !== null && v.purpose !== "as_offered" && <p className="tile-line"><span className={`num ${signClass(cmp.versusOfferedCents)}`}>{signedMoney(cmp.versusOfferedCents)}</span> compared with the offer as it stands</p>}
     {cmp?.versusOriginalOfferCents !== null && cmp?.versusOriginalOfferCents !== undefined && <p className="tile-line"><span className={`num ${signClass(cmp.versusOriginalOfferCents)}`}>{signedMoney(cmp.versusOriginalOfferCents)}</span> compared with the original client offer · cash after both tax settlements</p>}
     {(agree ? agree.required : v.purpose !== "as_offered") && <p className="tile-line small"><span className="client-agreement">Client agreement needed</span>{" "}
-      for the changed {agree && agree.changes.length ? agree.changes.map(c => c === "price" ? "price" : "payment dates").join(" and ") : "price or payment dates"}. Proposed payments, not money received.{agree?.note ? ` ${humanizeDates(agree.note)}` : ""}</p>}
+      for the changed {agree && agree.changes.length ? agree.changes.map(c => c === "price" ? "price" : "payment dates").join(" and ") : "price or payment dates"}. Proposed payments, not money received.</p>}
+    {agree?.note && <details className="explain"><summary>Payment timing conditions</summary><p className="small">{humanizeDates(agree.note)}</p></details>}
     {rob && !rob.holds && <p className="notice warn small">Little room: {rob.roomCents !== null ? `about ${money(rob.roomCents)} of extra 2026–2027 profit could break this` : "a small change in income could break this"}{rob.basis === "declared_ranges" ? " within the income ranges you entered" : ""}. Check the details before you choose.</p>}
     <dl className="terms">
       <div><dt>Ask for</dt><dd className="num">{money(v.terms.priceCents)}</dd></div>

@@ -1,0 +1,116 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Headroom//Current plan 1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Headroom plan
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.A.a2.receipt@headroom.plan
+DTSTAMP:20261115T013719Z
+DTSTART;VALUE=DATE:20261201
+DTEND;VALUE=DATE:20261202
+SEQUENCE:0
+SUMMARY:Expect $3\,000.00 from “Project A”
+DESCRIPTION:Agreed payment date. When it arrives\, record the actual amount
+  and date in Headroom.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Expect $3\,000.00 from “Project A”
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.line-pay-dec-pkg-B-21253088c4b2-
+ v-simplest-rest.receipt@headroom.plan
+DTSTAMP:20261115T013719Z
+DTSTART;VALUE=DATE:20261215
+DTEND;VALUE=DATE:20261216
+SEQUENCE:0
+SUMMARY:Expect $4\,400.00 from “Project B”
+DESCRIPTION:Agreed payment date. When it arrives\, record the actual amount
+  and date in Headroom.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Expect $4\,400.00 from “Project B”
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.line-pay-jan-pkg-B-21253088c4b2-
+ v-simplest.receipt@headroom.plan
+DTSTAMP:20261115T013719Z
+DTSTART;VALUE=DATE:20270104
+DTEND;VALUE=DATE:20270105
+SEQUENCE:0
+SUMMARY:Expect $6\,600.00 from “Project B”
+DESCRIPTION:Agreed payment date. When it arrives\, record the actual amount
+  and date in Headroom.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Expect $6\,600.00 from “Project B”
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.settle-2026@headroom.plan
+DTSTAMP:20261115T013719Z
+DTSTART;VALUE=DATE:20270415
+DTEND;VALUE=DATE:20270416
+SEQUENCE:0
+SUMMARY:Keep about $1\,655 for this project's extra 2026 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Action from your saved terms in Headroom. Planning reminder\, n
+ ot an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $1\,655 for this project's extra 2026 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.sep.primary.2026@headroom.plan
+DTSTAMP:20261115T013719Z
+DTSTART;VALUE=DATE:20270415
+DTEND;VALUE=DATE:20270416
+SEQUENCE:0
+SUMMARY:SEP-IRA: $1\,000.00 of your 2026 goal still to contribute
+DESCRIPTION:2026 SEP-IRA contributions are due by the due date of your 2026
+  return\; a later date applies only if you file an extension (IRS Publicat
+ ion 560). Record the contribution in Headroom when you make it.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:SEP-IRA: $1\,000.00 of your 2026 goal still to contribute
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.settle-2027@headroom.plan
+DTSTAMP:20261115T013719Z
+DTSTART;VALUE=DATE:20280418
+DTEND;VALUE=DATE:20280419
+SEQUENCE:0
+SUMMARY:Keep about $2\,035 for this project's extra 2027 tax and credit rep
+ ayment (an estimate\, not a quarterly payment calculation)
+DESCRIPTION:Action from your saved terms in Headroom. Planning reminder\, n
+ ot an official deadline notice.
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Keep about $2\,035 for this project's extra 2027 tax and credit
+  repayment (an estimate\, not a quarterly payment calculation)
+TRIGGER:-P1D
+END:VALARM
+END:VEVENT
+END:VCALENDAR

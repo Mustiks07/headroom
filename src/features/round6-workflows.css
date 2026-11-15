@@ -28,7 +28,12 @@
 .joined-variant .variant-outcome .tile-k, .joined-variant .variant-outcome .tile-sub, .joined-variant .variant-outcome .tile-big, .joined-variant .variant-outcome .variant-title, .joined-variant .variant-outcome .hint { color: white; }
 .joined-variant .variant-outcome .tile-big { font-size: clamp(44px, 5vw, 68px); overflow-wrap: anywhere; }
 .joined-variant .variant-outcome .mbd { color: white; }
-.joined-variant .variant-actionable { padding: 30px; }
+.joined-variant .variant-actionable { padding: 30px; background: #fff; color: var(--ink); }
+.joined-variant .variant.recommended .variant-actionable :is(.tile-k, .tile-sub, .tile-line, .hint, .muted, .target, dt, dd, p, h3, strong) { color: var(--ink); }
+.joined-variant .variant.recommended .variant-actionable .pos { color: var(--success); }
+.joined-variant .variant.recommended .variant-actionable .neg { color: var(--red); }
+.joined-variant .variant.recommended .variant-actionable .btn.ghost { color: var(--ink); border-color: var(--line); }
+.joined-variant .variant.recommended .variant-actionable :focus-visible { outline-color: var(--cobalt); }
 .joined-variant .variant-details { grid-column: 1/-1; padding: 24px 30px; }
 .deal-result .choice-rows { display: block; margin-top: 24px; border: 0; padding: 0; }
 .deal-result .choice-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 14px; min-height: 72px; padding: 16px 20px; border-radius: 8px; border-bottom: 1px solid #d8def0; align-items: center; }
@@ -57,6 +62,7 @@
 .offer-entry .payment-edit label { font-size: 14px; }
 .offer-entry .field-help { font-size: 14px; color: #53617d; margin: 8px 0; }
 @media (max-width: 700px) {
+  .household-plan [id] { scroll-margin-top: 128px; }
   .offer-entry { padding: 28px 20px 48px; }
   .offer-entry-grid, .joined-result, .joined-variant .variant { grid-template-columns: 1fr; }
   .offer-source { padding: 18px; }

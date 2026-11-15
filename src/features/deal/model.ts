@@ -29,16 +29,19 @@ export function buildGoal(ws: HouseholdWorkspace, project: Project, d: GoalDraft
   });
   if (!goal.success) return { ok: false, message: goal.error.issues[0]?.message ?? "The goal isn't complete." };
 
-  // Payment windows: from today (or Jan 1, 2026) to the latest acceptable date; one window holds 100%.
+  // New limits allow dates from today; restored limits retain their exact windows and share caps.
   const earliest = maxDate(localCalendarDate(), "2026-01-01");
   const latest = d.windows.latestDate || lastUnpaidDate(project) || "2026-12-31";
   if (d.clientOpen === true && latest < earliest) return { ok: false, message: "The latest payment date has passed. Choose a future date before searching new terms." };
   const start = minDate(earliest, latest); // fixed offered terms may have an overdue payment
-  const windows = [2026, 2027].map(year => ({ id: `w-${year}`, earliest: maxDate(start, `${year}-01-01`),
-    latest: minDate(latest, `${year}-12-31`), maxShareBps: 10_000 })).filter(w => w.earliest <= w.latest);
+  const savedWindows = d.windows.saved ? [...d.windows.saved].sort((a, b) => a.latest.localeCompare(b.latest)) : null;
+  const windows = savedWindows?.length
+    ? savedWindows.map((w, index) => ({ ...w, latest: index === savedWindows.length - 1 ? latest : minDate(w.latest, latest) })).filter(w => w.earliest <= w.latest)
+    : [2026, 2027].map(year => ({ id: `w-${year}`, earliest: maxDate(start, `${year}-01-01`),
+      latest: minDate(latest, `${year}-12-31`), maxShareBps: 10_000 })).filter(w => w.earliest <= w.latest);
   const space = DealTermsSpaceSchema.safeParse({
     projectId: project.id,
-    price: { minCents: cents(d.price.min), maxCents: cents(d.price.max), stepCents: 25_000 },
+    price: { minCents: cents(d.price.min), maxCents: cents(d.price.max), stepCents: d.price.stepCents ?? 25_000 },
     paymentWindows: windows, maxPayments: d.windows.maxParts, newTermsConfirmed: d.clientOpen,
     allowAdditionalSep: cents(d.sepMax) > 0,
   });
@@ -71,8 +74,8 @@ export function draftFromSaved(base: GoalDraft, goal: DealGoal | undefined, spac
     keepAtLeast: goal.minimumTwoYearCashDeltaCents ? centsToInput(goal.minimumTwoYearCashDeltaCents) : "",
     sepMax: centsToInput(goal.maxAdditionalSepCents ?? 0),
     byDate: t ? { on: true, date: t.byDate, amount: centsToInput(t.minimumCents), kind: t.kind } : base.byDate,
-    price: space ? { min: centsToInput(space.price.minCents), max: centsToInput(space.price.maxCents) } : base.price,
-    windows: space ? { latestDate: space.paymentWindows.map(w => w.latest).sort().at(-1) ?? "", maxParts: space.maxPayments } : base.windows,
+    price: space ? { min: centsToInput(space.price.minCents), max: centsToInput(space.price.maxCents), stepCents: space.price.stepCents } : base.price,
+    windows: space ? { latestDate: space.paymentWindows.map(w => w.latest).sort().at(-1) ?? "", maxParts: space.maxPayments, saved: structuredClone(space.paymentWindows) } : base.windows,
     clientOpen: space ? space.newTermsConfirmed : base.clientOpen,
     cash: cash?.snapshot ? { balance: centsToInput(cash.snapshot.balanceCents), asOf: cash.snapshot.date, reserve: centsToInput(cash.reserveCents), complete: cash.completeness.confirmed } : base.cash,
   };

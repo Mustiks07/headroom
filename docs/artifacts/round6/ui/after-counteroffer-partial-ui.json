@@ -1,0 +1,1511 @@
+{
+  "kind": "headroom.workspace",
+  "workspaceVersion": "2.0",
+  "exportedAt": "2026-11-15T01:36:28.462Z",
+  "workspace": {
+    "workspaceVersion": "2.0",
+    "id": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c",
+    "revision": 5,
+    "createdAt": "2026-11-15T01:34:54.496Z",
+    "updatedAt": "2026-11-15T01:36:28.066Z",
+    "household": {
+      "caseId": "family-cliff-ws",
+      "title": "Our 2026-2027 household plan",
+      "isSynthetic": true,
+      "state": "TN",
+      "countyFips": "47037",
+      "filingStatus": "mfj",
+      "people": [
+        {
+          "id": "primary",
+          "role": "primary",
+          "ageAt2026Start": 38,
+          "qualifyingChildForCtc": false
+        },
+        {
+          "id": "spouse",
+          "role": "spouse",
+          "ageAt2026Start": 38,
+          "qualifyingChildForCtc": false
+        },
+        {
+          "id": "child",
+          "role": "dependent",
+          "ageAt2026Start": 5,
+          "qualifyingChildForCtc": true
+        }
+      ],
+      "years": [
+        {
+          "year": 2026,
+          "taxFamilySize": 3,
+          "coveredPersonIds": [
+            "primary",
+            "spouse",
+            "child"
+          ],
+          "otherIncomes": [
+            {
+              "personId": "primary",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            },
+            {
+              "personId": "spouse",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            }
+          ],
+          "coverage": [
+            {
+              "month": 1,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 2,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 3,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 4,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 5,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 6,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 7,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 8,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 9,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 10,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 11,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 12,
+              "enrollmentPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 191775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 111775,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            }
+          ],
+          "benchmarkStatus": "county_candidate",
+          "unsupportedFacts": [],
+          "scopeConfirmed": true
+        },
+        {
+          "year": 2027,
+          "taxFamilySize": 3,
+          "coveredPersonIds": [
+            "primary",
+            "spouse",
+            "child"
+          ],
+          "otherIncomes": [
+            {
+              "personId": "primary",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            },
+            {
+              "personId": "spouse",
+              "w2Box1": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "socialSecurityWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "medicareWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "grossWages": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "payrollPretaxDeductions": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxableInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "taxExemptInterest": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              }
+            }
+          ],
+          "coverage": [
+            {
+              "month": 1,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 2,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 3,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 4,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 5,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 6,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 7,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 8,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 9,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 10,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 11,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            },
+            {
+              "month": 12,
+              "enrollmentPremium": {
+                "valueCents": 234357,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "benchmarkPremium": {
+                "valueCents": 231578,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "advancePtc": {
+                "valueCents": 0,
+                "status": "confirmed",
+                "sourceId": "demo-input"
+              },
+              "ptcEligibilityConfirmed": true,
+              "sehiEligibilityConfirmed": true
+            }
+          ],
+          "benchmarkStatus": "county_candidate",
+          "unsupportedFacts": [],
+          "scopeConfirmed": true
+        }
+      ]
+    },
+    "forecasts": [
+      {
+        "personId": "primary",
+        "year": 2026,
+        "excludesManagedProjects": true,
+        "method": "annual_total",
+        "annualNetProfit": {
+          "valueCents": 11200000,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      },
+      {
+        "personId": "spouse",
+        "year": 2026,
+        "excludesManagedProjects": true,
+        "method": "annual_total",
+        "annualNetProfit": {
+          "valueCents": 0,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      },
+      {
+        "personId": "primary",
+        "year": 2027,
+        "excludesManagedProjects": true,
+        "method": "annual_total",
+        "annualNetProfit": {
+          "valueCents": 11800000,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      },
+      {
+        "personId": "spouse",
+        "year": 2027,
+        "excludesManagedProjects": true,
+        "method": "annual_total",
+        "annualNetProfit": {
+          "valueCents": 0,
+          "status": "confirmed",
+          "sourceId": "demo-input"
+        }
+      }
+    ],
+    "projects": [
+      {
+        "id": "A",
+        "title": "Project A",
+        "ownerPersonId": "primary",
+        "status": "agreed",
+        "createdAt": "2026-11-15T12:00:00.000Z",
+        "statusChangedAt": "2026-11-15T12:00:00.000Z",
+        "cashAccountingConfirmed": true,
+        "timingArrangementConfirmed": true,
+        "terms": {
+          "canSplitPayment": true,
+          "canRenegotiatePrice": true,
+          "nextYearPaymentLatestDate": "2027-01-31"
+        },
+        "receipts": [
+          {
+            "id": "a1",
+            "expected": {
+              "amountCents": 300000,
+              "date": "2026-10-01"
+            },
+            "actual": {
+              "amountCents": 300000,
+              "date": "2026-10-02",
+              "recordedAt": "2026-11-15T12:00:00.000Z",
+              "sourceId": "demo-input"
+            },
+            "cancelledAt": null,
+            "sourceId": "demo-input",
+            "corrections": []
+          },
+          {
+            "id": "a2",
+            "expected": {
+              "amountCents": 300000,
+              "date": "2026-12-01"
+            },
+            "actual": null,
+            "cancelledAt": null,
+            "sourceId": "demo-input",
+            "corrections": []
+          }
+        ],
+        "expenses": [],
+        "agreedDecision": null
+      },
+      {
+        "id": "B",
+        "title": "Project B",
+        "ownerPersonId": "primary",
+        "status": "proposed",
+        "createdAt": "2026-11-15T12:00:00.000Z",
+        "statusChangedAt": "2026-11-15T01:36:26.823Z",
+        "cashAccountingConfirmed": true,
+        "timingArrangementConfirmed": true,
+        "terms": {
+          "canSplitPayment": true,
+          "canRenegotiatePrice": true,
+          "nextYearPaymentLatestDate": "2027-01-31"
+        },
+        "receipts": [
+          {
+            "id": "b1",
+            "expected": {
+              "amountCents": 1200000,
+              "date": "2026-12-20"
+            },
+            "actual": null,
+            "cancelledAt": "2026-11-15T01:36:26.823Z",
+            "sourceId": "demo-input",
+            "corrections": []
+          },
+          {
+            "id": "B-v2-p1",
+            "label": "Counteroffer payment 1",
+            "expected": {
+              "amountCents": 1250000,
+              "date": "2026-12-28"
+            },
+            "actual": {
+              "amountCents": 100000,
+              "date": "2026-11-15",
+              "recordedAt": "2026-11-15T01:36:28.060Z",
+              "sourceId": "assist-lifecycle-f9e9e4fd-d1f8-4dc0-8d34-385ba4a094cd"
+            },
+            "cancelledAt": null,
+            "sourceId": "assist-lifecycle-6e1e1acc-9ccb-4646-ba7e-da7b4e810a6f",
+            "corrections": []
+          },
+          {
+            "id": "B-v2-p1-rest",
+            "label": "Rest of Counteroffer payment 1",
+            "expected": {
+              "amountCents": 1150000,
+              "date": "2027-01-08"
+            },
+            "actual": null,
+            "cancelledAt": null,
+            "sourceId": "assist-lifecycle-f9e9e4fd-d1f8-4dc0-8d34-385ba4a094cd",
+            "corrections": []
+          }
+        ],
+        "expenses": [],
+        "agreedDecision": null,
+        "originalOffer": {
+          "priceCents": 1200000,
+          "payments": [
+            {
+              "amountCents": 1200000,
+              "date": "2026-12-20"
+            }
+          ],
+          "source": {
+            "kind": "existing_project",
+            "sourceId": null
+          },
+          "confirmation": "captured",
+          "recordedAt": "2026-11-15T01:36:26.823Z"
+        },
+        "offerVersions": [
+          {
+            "version": 1,
+            "kind": "original",
+            "recordedAt": "2026-11-15T01:36:26.823Z",
+            "priceCents": 1200000,
+            "payments": [
+              {
+                "amountCents": 1200000,
+                "date": "2026-12-20",
+                "received": false
+              }
+            ],
+            "status": "superseded",
+            "source": {
+              "kind": "existing_project",
+              "sourceId": null
+            },
+            "note": null
+          },
+          {
+            "version": 2,
+            "kind": "client_counteroffer",
+            "recordedAt": "2026-11-15T01:36:26.823Z",
+            "priceCents": 1250000,
+            "payments": [
+              {
+                "amountCents": 1250000,
+                "date": "2026-12-28",
+                "received": false
+              }
+            ],
+            "status": "open",
+            "source": {
+              "kind": "user_entered",
+              "sourceId": "assist-lifecycle-6e1e1acc-9ccb-4646-ba7e-da7b4e810a6f"
+            },
+            "note": null
+          }
+        ]
+      }
+    ],
+    "retirement": {
+      "targets": [
+        {
+          "id": "t26",
+          "personId": "primary",
+          "year": 2026,
+          "targetCents": 100000,
+          "acceptedAt": "2026-11-15T12:00:00.000Z",
+          "origin": {
+            "projectId": null,
+            "scenarioKind": null,
+            "fingerprint": null
+          }
+        }
+      ],
+      "contributions": [],
+      "futureContributionBudget": {
+        "amountCents": 250000,
+        "asOfDate": "2026-11-15",
+        "sourceId": "demo-input",
+        "includedContributionIds": []
+      }
+    },
+    "planning": {
+      "objective": "spendable_cash",
+      "minimumDesiredCashGainCents": 0
+    },
+    "evidence": [
+      {
+        "id": "demo-input",
+        "kind": "synthetic",
+        "label": "Illustrative household. County plan candidates; address and eligibility assumed."
+      },
+      {
+        "id": "doc-ytd-pl",
+        "kind": "document",
+        "label": "Profit and loss statement through Sep 30, 2026 (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "doc-offer-a",
+        "kind": "document",
+        "label": "Signed offer for project A (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "doc-bank-deposit",
+        "kind": "document",
+        "label": "Bank deposit confirmation for the project A deposit (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "doc-sep-receipt",
+        "kind": "document",
+        "label": "SEP-IRA contribution confirmation (synthetic)",
+        "taxYear": 2026
+      },
+      {
+        "id": "manual-entry",
+        "kind": "manual",
+        "label": "Entered by you in Headroom"
+      },
+      {
+        "id": "assist-lifecycle-6e1e1acc-9ccb-4646-ba7e-da7b4e810a6f",
+        "kind": "manual",
+        "label": "From your message (confirmed 2026-11-15)"
+      },
+      {
+        "id": "assist-lifecycle-f9e9e4fd-d1f8-4dc0-8d34-385ba4a094cd",
+        "kind": "manual",
+        "label": "From your message: “Payment confirmed manually” (confirmed 2026-11-15)"
+      }
+    ],
+    "events": [
+      {
+        "id": "evt-created",
+        "at": "2026-10-01T12:00:00.000Z",
+        "kind": "workspace_created",
+        "description": "Created the household plan.",
+        "refs": {},
+        "previousFingerprint": null,
+        "nextFingerprint": null
+      },
+      {
+        "id": "e29a7b3c-1c9d-44c1-b845-e9fe8685102e",
+        "at": "2026-11-15T01:34:56.653Z",
+        "kind": "deal_planning_updated",
+        "description": "Updated the goal and allowed terms for a project.",
+        "refs": {
+          "projectId": "B"
+        },
+        "previousFingerprint": null,
+        "nextFingerprint": null
+      },
+      {
+        "id": "5d426396-f662-4920-bb89-3fd87558f1e4",
+        "at": "2026-11-15T01:34:57.898Z",
+        "kind": "deal_package_saved",
+        "description": "Saved chosen terms: Smallest change that meets your goal: $12,000 total; $5,400 2026-12-15, $6,600 2027-01-04.",
+        "refs": {
+          "projectId": "B"
+        },
+        "previousFingerprint": null,
+        "nextFingerprint": null
+      },
+      {
+        "id": "evt-lifecycle-6e1e1acc-9ccb-4646-ba7e-da7b4e810a6f-0",
+        "at": "2026-11-15T01:36:26.823Z",
+        "kind": "client_response_recorded",
+        "description": "The client countered on 2026-11-15: $12,500.00 in total, $12,500.00 on 2026-12-28. The original offer is kept.",
+        "refs": {
+          "projectId": "B"
+        },
+        "previousFingerprint": "a0ed60e33af8bfe3a79f4168d4dafdbab34f2e1dd0b9324b609853f52066cd5f",
+        "nextFingerprint": null
+      },
+      {
+        "id": "evt-lifecycle-f9e9e4fd-d1f8-4dc0-8d34-385ba4a094cd-0",
+        "at": "2026-11-15T01:36:28.060Z",
+        "kind": "partial_receipt_recorded",
+        "description": "Received $1,000.00 of $12,500.00 on 2026-11-15 for “Project B”; the remaining $11,500.00 is expected on 2027-01-08.",
+        "refs": {
+          "projectId": "B",
+          "lineId": "B-v2-p1"
+        },
+        "previousFingerprint": "95f8205e369595b97292562dca50155cc9478cd4ade0392c27a4d3b451b02dc2",
+        "nextFingerprint": null
+      }
+    ],
+    "calculation": null,
+    "origin": {
+      "kind": "new"
+    },
+    "dealPlanning": {
+      "version": "1.0",
+      "goals": [
+        {
+          "id": "g",
+          "projectId": "B",
+          "minimumTwoYearCashDeltaCents": 400000,
+          "baseline": "decline_unpaid_terms",
+          "maxAdditionalSepCents": 100000,
+          "dateTargets": [
+            {
+              "id": "g-by-date",
+              "kind": "project_receipts",
+              "byDate": "2027-01-10",
+              "minimumCents": 1000000
+            }
+          ],
+          "createdAt": "2026-11-15T12:00:00.000Z",
+          "updatedAt": "2026-11-15T01:34:56.652Z"
+        }
+      ],
+      "termSpaces": [
+        {
+          "projectId": "B",
+          "price": {
+            "minCents": 1200000,
+            "maxCents": 1500000,
+            "stepCents": 25000
+          },
+          "paymentWindows": [
+            {
+              "id": "dec",
+              "earliest": "2026-12-15",
+              "latest": "2026-12-31",
+              "maxShareBps": 10000
+            },
+            {
+              "id": "jan",
+              "earliest": "2027-01-04",
+              "latest": "2027-01-10",
+              "maxShareBps": 10000
+            }
+          ],
+          "maxPayments": 2,
+          "newTermsConfirmed": true,
+          "allowAdditionalSep": true
+        }
+      ],
+      "cashContext": null,
+      "packages": [
+        {
+          "id": "pkg-B-21253088c4b2-v-simplest",
+          "createdAt": "2026-11-15T01:34:57.438Z",
+          "workspaceRevision": 2,
+          "searchFingerprint": "21253088c4b230f5057103d9bd2f829a218e8f531f75fc7a4daae03ac6892c14",
+          "engineVersion": "headroom-engine-1.3.0",
+          "rulesVersion": "us-federal-aca-2026-2027.r3",
+          "goalId": "g",
+          "projectId": "B",
+          "variant": {
+            "id": "v-simplest",
+            "label": "Smallest change that meets your goal: $12,000 total; $5,400 2026-12-15, $6,600 2027-01-04",
+            "purpose": "simplest",
+            "terms": {
+              "priceCents": 1200000,
+              "payments": [
+                {
+                  "id": "pay-dec",
+                  "date": "2026-12-15",
+                  "amountCents": 540000
+                },
+                {
+                  "id": "pay-jan",
+                  "date": "2027-01-04",
+                  "amountCents": 660000
+                }
+              ],
+              "additionalSep": null
+            },
+            "twoYearCashDeltaCents": 831000,
+            "retirementAddedCents": 0,
+            "datedFlows": [
+              {
+                "date": "2026-12-15",
+                "amountCents": 540000,
+                "kind": "project_receipt",
+                "basis": "proposed",
+                "label": "Payment under these terms"
+              },
+              {
+                "date": "2027-01-04",
+                "amountCents": 660000,
+                "kind": "project_receipt",
+                "basis": "proposed",
+                "label": "Payment under these terms"
+              },
+              {
+                "date": "2027-04-15",
+                "amountCents": -165500,
+                "kind": "tax_settlement",
+                "basis": "estimated",
+                "label": "This project's extra tax and credit settlement for 2026 (paid with the return)"
+              },
+              {
+                "date": "2028-04-18",
+                "amountCents": -203500,
+                "kind": "tax_settlement",
+                "basis": "estimated",
+                "label": "This project's extra tax and credit settlement for 2027 (paid with the return)"
+              }
+            ],
+            "dateTargets": [
+              {
+                "targetId": "g-by-date",
+                "achievedCents": 1200000,
+                "met": true,
+                "explanation": "By 2027-01-10: $12,000 from the project ($0 already received + $12,000 under these terms). Gross money, not profit after tax."
+              }
+            ],
+            "aca": [
+              {
+                "year": 2026,
+                "magiCents": 10338500,
+                "ptcCents": 1271600,
+                "creditLost": false
+              },
+              {
+                "year": 2027,
+                "magiCents": 10475700,
+                "ptcCents": 1708300,
+                "creditLost": false
+              }
+            ],
+            "constraints": [
+              {
+                "id": "minimum_cash",
+                "satisfied": true,
+                "detail": "$8,310 after both returns settle vs your minimum $4,000 (retirement excluded)."
+              },
+              {
+                "id": "date_target",
+                "satisfied": true,
+                "detail": "By 2027-01-10: $12,000 from the project ($0 already received + $12,000 under these terms). Gross money, not profit after tax."
+              },
+              {
+                "id": "price_bounds",
+                "satisfied": true,
+                "detail": "Total asked $12,000 within $12,000–$15,000."
+              },
+              {
+                "id": "payment_windows",
+                "satisfied": true,
+                "detail": "$5,400 on 2026-12-15, $6,600 on 2027-01-04."
+              },
+              {
+                "id": "max_payments",
+                "satisfied": true,
+                "detail": "2 payment(s), at most 2."
+              },
+              {
+                "id": "additional_sep_limit",
+                "satisfied": true,
+                "detail": "Extra SEP-IRA $0, your limit $1,000."
+              },
+              {
+                "id": "sep_cash",
+                "satisfied": true,
+                "detail": "SEP cash left after agreed goals and recorded payments: $1,500."
+              },
+              {
+                "id": "sep_legal_limit",
+                "satisfied": true,
+                "detail": "The legal SEP-IRA limit on the year's whole business profit was checked by the tax calculation."
+              },
+              {
+                "id": "timing_confirmation",
+                "satisfied": true,
+                "detail": "2027 payments need the client's written confirmation that the money is not payable or available earlier."
+              },
+              {
+                "id": "new_terms_confirmation",
+                "satisfied": true,
+                "detail": "The client said new terms can be discussed."
+              },
+              {
+                "id": "fixed_facts",
+                "satisfied": true,
+                "detail": "$0 already received stays as recorded; payments cover only the remaining $12,000."
+              }
+            ],
+            "actions": [
+              {
+                "id": "send-terms",
+                "title": "Send the proposed terms for \"Project B\" to the client",
+                "dueDate": null,
+                "dueCondition": "Before the next invoice; nothing changes until the client confirms in writing.",
+                "kind": "send_terms",
+                "sourceIds": [
+                  "irs-pub-334"
+                ]
+              },
+              {
+                "id": "receive-pay-dec",
+                "title": "Receive $5,400 for \"Project B\" and record the actual payment",
+                "dueDate": "2026-12-15",
+                "dueCondition": null,
+                "kind": "receive_payment",
+                "sourceIds": []
+              },
+              {
+                "id": "receive-pay-jan",
+                "title": "Receive $6,600 for \"Project B\" and record the actual payment",
+                "dueDate": "2027-01-04",
+                "dueCondition": null,
+                "kind": "receive_payment",
+                "sourceIds": []
+              },
+              {
+                "id": "marketplace",
+                "title": "Update your Marketplace income estimate for the years these payments fall in",
+                "dueDate": null,
+                "dueCondition": "As soon as the client agrees to the terms.",
+                "kind": "marketplace_update",
+                "sourceIds": [
+                  "healthcare-gov-report-changes"
+                ]
+              },
+              {
+                "id": "settle-2026",
+                "title": "Keep about $1,655 for this project's extra 2026 tax and credit repayment (an estimate, not a quarterly payment calculation)",
+                "dueDate": "2027-04-15",
+                "dueCondition": null,
+                "kind": "tax_payment",
+                "sourceIds": [
+                  "irs-ptc-qa"
+                ]
+              },
+              {
+                "id": "settle-2027",
+                "title": "Keep about $2,035 for this project's extra 2027 tax and credit repayment (an estimate, not a quarterly payment calculation)",
+                "dueDate": "2028-04-18",
+                "dueCondition": null,
+                "kind": "tax_payment",
+                "sourceIds": [
+                  "irs-ptc-qa"
+                ]
+              }
+            ],
+            "differenceFromBestCents": 208000,
+            "verifiedExact": true,
+            "comparisons": {
+              "versusDeclineCents": 831000,
+              "versusOfferedCents": 1192600
+            },
+            "robustness": {
+              "holds": true,
+              "basis": "room_policy",
+              "roomCents": 380400,
+              "worstCashInRangesCents": null
+            },
+            "clientAgreement": {
+              "required": true,
+              "changes": [
+                "dates"
+              ],
+              "note": "Needs the client's agreement: payments of $5,400 on 2026-12-15 and $6,600 on 2027-01-04 instead of $12,000 on 2026-12-20. Until the client confirms in writing, the offer as it stands applies."
+            },
+            "moneyByDate": [
+              {
+                "date": "2026-12-15",
+                "receivedCents": 540000,
+                "availableCents": 374500,
+                "event": "Payment of $5,400"
+              },
+              {
+                "date": "2026-12-31",
+                "receivedCents": 540000,
+                "availableCents": 374500,
+                "event": "End of 2026"
+              },
+              {
+                "date": "2027-01-04",
+                "receivedCents": 1200000,
+                "availableCents": 831000,
+                "event": "Payment of $6,600"
+              },
+              {
+                "date": "2027-04-15",
+                "receivedCents": 1200000,
+                "availableCents": 831000,
+                "event": "2026 return due: this project's 2026 tax and credit settled"
+              },
+              {
+                "date": "2028-04-18",
+                "receivedCents": 1200000,
+                "availableCents": 831000,
+                "event": "2027 return due: this project's 2027 tax and credit settled"
+              }
+            ]
+          },
+          "clientDraft": {
+            "subject": "Proposed payment terms for Project B",
+            "body": "Hello,\n\nThank you for the offer for Project B. I'd like to propose the following terms:\n\n- Total price: $12,000.00\n- Payment 1: $5,400.00, to be paid on December 15, 2026\n- Payment 2: $6,600.00, to be paid on January 4, 2027\n\nPlease let me know whether these terms work for you, or suggest changes.\n\nThank you,\nThanks for considering these terms.",
+            "includesHouseholdDetails": false,
+            "generatedAt": "2026-11-15T01:34:57.438Z"
+          },
+          "reminders": [
+            {
+              "uid": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.send-terms@headroom.plan",
+              "actionId": "send-terms",
+              "title": "Send the proposed terms for \"Project B\" to the client",
+              "date": null,
+              "condition": "Before the next invoice; nothing changes until the client confirms in writing.",
+              "sequence": 0,
+              "status": "open",
+              "sourceIds": [
+                "irs-pub-334"
+              ]
+            },
+            {
+              "uid": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.receive-pay-dec@headroom.plan",
+              "actionId": "receive-pay-dec",
+              "title": "Receive $5,400 for \"Project B\" and record the actual payment",
+              "date": "2026-12-15",
+              "condition": null,
+              "sequence": 0,
+              "status": "open",
+              "sourceIds": []
+            },
+            {
+              "uid": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.receive-pay-jan@headroom.plan",
+              "actionId": "receive-pay-jan",
+              "title": "Receive $6,600 for \"Project B\" and record the actual payment",
+              "date": "2027-01-04",
+              "condition": null,
+              "sequence": 0,
+              "status": "open",
+              "sourceIds": []
+            },
+            {
+              "uid": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.marketplace@headroom.plan",
+              "actionId": "marketplace",
+              "title": "Update your Marketplace income estimate for the years these payments fall in",
+              "date": null,
+              "condition": "As soon as the client agrees to the terms.",
+              "sequence": 0,
+              "status": "open",
+              "sourceIds": [
+                "healthcare-gov-report-changes"
+              ]
+            },
+            {
+              "uid": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.settle-2026@headroom.plan",
+              "actionId": "settle-2026",
+              "title": "Keep about $1,655 for this project's extra 2026 tax and credit repayment (an estimate, not a quarterly payment calculation)",
+              "date": "2027-04-15",
+              "condition": null,
+              "sequence": 0,
+              "status": "open",
+              "sourceIds": [
+                "irs-ptc-qa"
+              ]
+            },
+            {
+              "uid": "2a0078c9-4ecd-4d32-9eb1-8f4783dc772c.B.settle-2027@headroom.plan",
+              "actionId": "settle-2027",
+              "title": "Keep about $2,035 for this project's extra 2027 tax and credit repayment (an estimate, not a quarterly payment calculation)",
+              "date": "2028-04-18",
+              "condition": null,
+              "sequence": 0,
+              "status": "open",
+              "sourceIds": [
+                "irs-ptc-qa"
+              ]
+            }
+          ],
+          "specialistNote": "Headroom decision summary — Project B (Our 2026-2027 household plan, synthetic example)\nCompared with: Your plan without the unpaid terms of \"Project B\". Profit forecast, other agreed projects, $0 already received from this project and SEP goals already agreed. Declining does not cancel anything else.\nChosen terms: total asked price $12,000.00; remaining payments $5,400.00 on 2026-12-15, $6,600.00 on 2027-01-04.\nNo additional SEP-IRA contribution.\nChange in spendable cash after final settlement of 2026 and 2027: $8,310.00. Retirement added (separate, not spendable): $0.00.\n2026: ACA household income $103,385.00, premium tax credit $12,716.00.\n2027: ACA household income $104,757.00, premium tax credit $17,083.00.\n2026 SEP for primary: goal $1,000.00, paid $0.00, remaining $1,000.00.\nCalculation: headroom-engine-1.3.0 / us-federal-aca-2026-2027.r3; fingerprint 21253088c4b230f5057103d9bd2f829a218e8f531f75fc7a4daae03ac6892c14. Planning estimate, not a tax return or an official form.",
+          "status": "superseded",
+          "decisionContext": {
+            "baseline": {
+              "kind": "decline_unpaid_terms",
+              "label": "Your plan without the unpaid terms of \"Project B\"",
+              "description": "Profit forecast, other agreed projects, $0 already received from this project and SEP goals already agreed. Declining does not cancel anything else."
+            },
+            "horizon": {
+              "from": "2026-01-01",
+              "through": "2027-12-31",
+              "settlementThrough": "2028-04-18"
+            },
+            "alternatives": [
+              {
+                "variantId": "v-simplest",
+                "label": "Smallest change that meets your goal: $12,000 total; $5,400 2026-12-15, $6,600 2027-01-04",
+                "purpose": "simplest",
+                "priceCents": 1200000,
+                "twoYearCashDeltaCents": 831000,
+                "comparisons": {
+                  "versusDeclineCents": 831000,
+                  "versusOfferedCents": 1192600
+                },
+                "holds": true,
+                "chosen": true,
+                "recommended": true
+              },
+              {
+                "variantId": "v-most_cash",
+                "label": "More cash, if the client agrees: $15,000 total; $9,002 2026-12-15, $5,998 2027-01-04; room before a credit is lost: $202",
+                "purpose": "most_cash",
+                "priceCents": 1500000,
+                "twoYearCashDeltaCents": 1039000,
+                "comparisons": {
+                  "versusDeclineCents": 1039000,
+                  "versusOfferedCents": 1400600
+                },
+                "holds": false,
+                "chosen": false,
+                "recommended": false
+              },
+              {
+                "variantId": "v-lowest_risk",
+                "label": "Most room before losing a credit: $14,500 total; $5,750 2026-12-15, $8,750 2027-01-04; room before a credit is lost: $3,214",
+                "purpose": "lowest_risk",
+                "priceCents": 1450000,
+                "twoYearCashDeltaCents": 1003700,
+                "comparisons": {
+                  "versusDeclineCents": 1003700,
+                  "versusOfferedCents": 1365300
+                },
+                "holds": true,
+                "chosen": false,
+                "recommended": false
+              }
+            ],
+            "recommendedVariantId": "v-simplest",
+            "recommendationReasons": [
+              "Recommended: The smallest change to the offered terms that meets your goal.",
+              "Synthetic example household: amounts are illustrative, not a real customer's results.",
+              "2026 benchmark is a county-level candidate, not a confirmed benchmark for your exact address and family.",
+              "2026 applicable figures come from the DRAFT 2026 Form 8962 instructions.",
+              "2027 benchmark is a county-level candidate, not a confirmed benchmark for your exact address and family.",
+              "2027 applicable figures are derived from Rev. Proc. 2026-26 bands (no published 2027 Form 8962 table yet).",
+              "Assumes required SSNs, lawful presence, Marketplace enrollment and no other coverage offers as confirmed in your entries; not a Marketplace eligibility determination.",
+              "New SEP-IRA contributions are limited to $1,500: the money set aside ($2,500) minus agreed contributions not yet paid ($1,000)."
+            ],
+            "originalOffer": {
+              "priceCents": 1200000,
+              "payments": [
+                {
+                  "amountCents": 1200000,
+                  "date": "2026-12-20"
+                }
+              ],
+              "source": {
+                "kind": "existing_project",
+                "sourceId": null
+              },
+              "confirmation": "captured",
+              "recordedAt": "2026-11-15T01:34:56.655Z"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "legacySnapshot": null
+}

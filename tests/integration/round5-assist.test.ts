@@ -98,9 +98,13 @@ describe("documents → reviewed facts → one atomic apply", () => {
       ytdNetProfit: { valueCents: null, status: "unknown", sourceId: ws.evidence[0].id }, remainingReceipts: { valueCents: 0, status: "estimated", sourceId: ws.evidence[0].id }, remainingExpenses: { valueCents: 0, status: "estimated", sourceId: ws.evidence[0].id } } as HouseholdWorkspace["forecasts"][number];
     const { applyImportGroup } = await import("@/lib/client/import-pipeline");
     const target = { kind: "forecast" as const, personId: "primary", year: 2026 as const, field: "ytdNetProfit" as const, status: "confirmed" as const, asOfDate: "2026-09-30" };
-    const both = applyImportGroup(forecastYtd, draft, [draft.facts[0], draft.facts[1]].map(f => ({ factId: f.id, target, resolvesConflictWith: [], correctedAmountCents: null })), { userDate: "2026-11-16" });
-    expect(both.result.status).toBe("rejected"); // same person and period, different values: choose one
-    const one = applyImportGroup(forecastYtd, draft, [{ factId: draft.facts[1].id, target, resolvesConflictWith: [draft.facts[0].id, draft.facts[2].id], correctedAmountCents: null }], { userDate: "2026-11-16" });
+    // A saved forecast's old exclusion flag does not confirm what this newly imported P&L includes.
+    const reviewConfirmations = { excludesManagedProjects: true };
+    const both = applyImportGroup(forecastYtd, draft, [draft.facts[0], draft.facts[1]].map(f => ({ factId: f.id, target, resolvesConflictWith: [], correctedAmountCents: null, reviewConfirmations })), { userDate: "2026-11-16" });
+    expect(both.result).toMatchObject({ status: "rejected", issues: expect.arrayContaining([expect.objectContaining({ code: "CONFLICT" })]) }); // same person and period, different values: choose one
+    const chosen = { factId: draft.facts[1].id, target, resolvesConflictWith: [draft.facts[0].id, draft.facts[2].id], correctedAmountCents: null };
+    expect(applyImportGroup(forecastYtd, draft, [chosen], { userDate: "2026-11-16" }).result).toMatchObject({ status: "rejected", issues: expect.arrayContaining([expect.objectContaining({ code: "MANAGED_PAYMENT_INSIDE" })]) });
+    const one = applyImportGroup(forecastYtd, draft, [{ ...chosen, reviewConfirmations }], { userDate: "2026-11-16" });
     expect(one.result.status).toBe("applied");
   });
 });

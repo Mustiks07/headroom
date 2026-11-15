@@ -36,3 +36,9 @@ Targeted runs on 2026-11-15: **2 files / 20 tests passed** (`round6-lifecycle.te
 - Cancelling agreed work can involve refunds or costs. The response evaluation leaves that financial outcome uncalculated when those facts are unknown; it does not present an invented zero-cost cancellation gain.
 - A freeform client note is retained as context. Only explicit limit controls change future search constraints. If the project has no term space yet, the normal goal/terms editor supplies it after recording the response.
 - Pasted content is never automatically sent to the client. Intake consent only covers the specified project context, and editing/reviewing a reply never implies acceptance or receipt.
+
+## Final integration and actual browser verification
+
+The final published Claude 2 command schema was merged in `0efa51f`; the temporary legacy payment normalization was removed. Canonical commands now retain cancelled expected lines and use the same IDs/event kinds as persistence. One upstream assertion was corrected to filter cancelled lines when counting unpaid terms. Lifecycle + round6 + the ten pinned decision cases: 24 passed; typecheck passed.
+
+On the composed production build, the actual browser completed counteroffer preview/commit, partial receipt, reload and JSON export; the original $12,000 offer remained unchanged. A separate agreement → partial receipt run disabled stale current-package export while historical PDF and current ICS remained available. The two historical PDF pages were rendered and inspected. Desktop and 360px result/receipt checks passed without horizontal overflow. These are synthetic developer checks, not customer outcomes.

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { HouseholdWorkspace, Project } from "@/domain/household-workspace";
 import { effectiveLine } from "@/domain/household-workspace";
+import type { DealTermsSpace } from "@/domain/deal-planning";
 import { centsToInput, localCalendarDate, money, shortDate } from "@/features/format";
 import { AmountInput, parseAmount } from "@/features/household-plan/parts";
 
@@ -12,8 +13,8 @@ export interface GoalDraft {
   keepAtLeast: string;
   sepMax: string;
   byDate: { on: boolean; date: string; amount: string; kind: "project_receipts" | "project_available_cash" | "household_balance" };
-  price: { min: string; max: string };
-  windows: { latestDate: string; maxParts: number };
+  price: { min: string; max: string; stepCents?: number };
+  windows: { latestDate: string; maxParts: number; saved?: DealTermsSpace["paymentWindows"] };
   clientOpen: boolean | null;
   cash: { balance: string; asOf: string; reserve: string; complete: boolean };
 }
@@ -117,8 +118,10 @@ export function GoalForm({ ws, project, goal, onChange, problems, touched, fixed
           <input id="goal-latest" type="date" value={goal.windows.latestDate} onChange={e => set({ windows: { ...goal.windows, latestDate: e.target.value } })} />{show("latest") && <p className="field-error">{show("latest")}</p>}</div>
         <div className="field"><label className="field-label" htmlFor="goal-parts">Payments the client could make</label>
           <select id="goal-parts" value={goal.windows.maxParts} onChange={e => set({ windows: { ...goal.windows, maxParts: Number(e.target.value) } })}>
-            <option value={1}>One payment</option><option value={2}>Up to two payments</option><option value={3}>Up to three payments</option></select></div>
+            <option value={1}>One payment</option><option value={2}>Up to two payments</option><option value={3}>Up to three payments</option><option value={4}>Up to four payments</option></select></div>
       </div>
+      {!!goal.windows.saved?.length && <div className="small"><p>Saved payment windows: {goal.windows.saved.map(w => `${shortDate(w.earliest)}–${shortDate(w.latest)}${w.maxShareBps < 10000 ? `, at most ${w.maxShareBps / 100}% of the price` : ""}`).join("; ")}. These limits stay in place. Changing the latest date only adjusts the last window.</p>
+        <button className="btn ghost small" type="button" onClick={() => set({ windows: { ...goal.windows, saved: undefined } })}>Allow any payment date from today to the latest date</button></div>}
       <fieldset className="tri"><legend className="field-label">Has the client said new terms are possible?</legend>
         <div className="seg small">{([[true, "Yes"], [false, "No — only as offered"], [null, "Not asked yet"]] as const).map(([v, t]) =>
           <label key={String(v)} className={goal.clientOpen === v ? "on" : ""}><input type="radio" name="goal-open" checked={goal.clientOpen === v} onChange={() => set({ clientOpen: v })} />{t}</label>)}</div>
