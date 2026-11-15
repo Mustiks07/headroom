@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://headroom-amber.vercel.app">Open Headroom ↗</a> &nbsp; · &nbsp; <a href="docs/presentation/headroom-business-cup.pdf">10-slide pitch</a> &nbsp; · &nbsp; <a href="docs/demo/round6-judge-script.md">Live walkthrough</a> &nbsp; · &nbsp; <a href="docs/presentation/README.md">Evidence & business model</a></strong>
+  <strong><a href="https://headroom-amber.vercel.app">Open Headroom ↗</a> &nbsp; · &nbsp; <a href="https://raw.githubusercontent.com/Mustiks07/headroom/main/docs/presentation/headroom-business-cup.pdf">Download 10-slide pitch</a> &nbsp; · &nbsp; <a href="docs/demo/round6-judge-script.md">Live walkthrough</a> &nbsp; · &nbsp; <a href="docs/presentation/README.md">Evidence & business model</a></strong>
 </p>
 
 **Understand a client offer before you agree.** Headroom shows independent professionals what remains for their household after project costs, taxes and Marketplace health insurance. Set your cash needs and payment limits, compare workable terms, prepare a client reply, and keep the decision current as the deal changes.
@@ -124,4 +124,4 @@ Contributors start with [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md), using
 
 **Business Cup · Money · B2C · Web**
 
-**[Try Headroom ↗](https://headroom-amber.vercel.app) · [Open the pitch](docs/presentation/headroom-business-cup.pdf) · [Submission materials](docs/presentation/README.md)**
+**[Try Headroom ↗](https://headroom-amber.vercel.app) · [Download the pitch](https://raw.githubusercontent.com/Mustiks07/headroom/main/docs/presentation/headroom-business-cup.pdf) · [Submission materials](docs/presentation/README.md)**

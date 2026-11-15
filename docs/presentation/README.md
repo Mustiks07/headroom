@@ -1,6 +1,6 @@
 # Headroom — Business Cup presentation
 
-[Open the app](https://headroom-amber.vercel.app) · [Download the 10-slide PDF](headroom-business-cup.pdf) · [Run the live demonstration](../demo/round6-judge-script.md)
+[Open the app](https://headroom-amber.vercel.app) · [Download the 10-slide PDF](https://raw.githubusercontent.com/Mustiks07/headroom/main/docs/presentation/headroom-business-cup.pdf) · [Run the live demonstration](../demo/round6-judge-script.md)
 
 English, 16:9, ten slides. Each finished slide was generated separately with its text, following Headroom's selected cobalt/chrome/chartreuse identity. Figures were checked against the combined round 6 build. Speaker notes and full sources are below; the PDF links to this evidence page without adding an eleventh slide.
 
