@@ -162,6 +162,8 @@ export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { 
       }
       return { kind: "deal_planning_updated", refs: { projectId: cmd.projectId }, description: "Updated the allowed terms for this project." };
     }
+    case "record_partial_receipt": case "settle_lower_total": case "record_client_response":
+      throw new CommandError("NOT_AVAILABLE_YET", "This change type is published in the round 6 contract and implemented in the next commit.");
   }
 }
 

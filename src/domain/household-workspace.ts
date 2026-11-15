@@ -16,7 +16,7 @@ import {
   type BlockedComparison, type CaseInput, type CurrentRisk, type MoneyFact, type ReadyComparison, type ScenarioKind, type ScenarioResult, type TaxYear,
 } from "./contracts";
 import { DealPlanningStateSchema } from "./deal-planning";
-import { OriginalOfferSchema } from "./decision-context";
+import { OfferVersionSchema, OriginalOfferSchema } from "./decision-context";
 
 export const WORKSPACE_VERSION = "2.0" as const;
 export const WORKSPACE_FILE_KIND = "headroom.workspace" as const;
@@ -141,6 +141,8 @@ export const ProjectSchema = z.object({
   agreedDecision: z.object({ kind: ScenarioKindSchema, label: z.string().max(300), chosenAt: DateTimeSchema, fingerprint: z.string().max(200).nullable() }).nullable(),
   /** Round 5 (additive): the client's offer as first entered; never overwritten by agreed or searched terms. Not part of fingerprints. */
   originalOffer: OriginalOfferSchema.nullable().optional(),
+  /** Round 6 (additive): versioned terms after the original offer (counteroffers, shared and accepted terms). Not part of fingerprints. */
+  offerVersions: z.array(OfferVersionSchema).max(20).optional(),
 });
 
 /* ------------------------------------------------------------------ SEP: owner + tax year */
@@ -191,6 +193,8 @@ export const WORKSPACE_EVENT_KINDS = [
   "payment_recorded", "payment_corrected", "sep_target_changed", "sep_contribution_recorded", "document_imported", "rules_updated",
   // Round 4 (additive): goal/terms/cash edits, a saved action package, a user-confirmed package status change.
   "deal_planning_updated", "deal_package_saved", "deal_status_changed",
+  // Round 6 (additive): payment and negotiation lifecycle.
+  "partial_receipt_recorded", "payment_settled_lower", "client_response_recorded",
 ] as const;
 
 /**
@@ -409,7 +413,7 @@ export function canonicalWorkspaceContent(ws: HouseholdWorkspace): unknown {
   return {
     household: ws.household,
     forecasts: [...ws.forecasts].sort((a, b) => `${a.personId}:${a.year}`.localeCompare(`${b.personId}:${b.year}`)),
-    projects: byId(ws.projects).map(p => ({ ...p, createdAt: undefined, statusChangedAt: undefined, originalOffer: undefined,
+    projects: byId(ws.projects).map(p => ({ ...p, createdAt: undefined, statusChangedAt: undefined, originalOffer: undefined, offerVersions: undefined,
       receipts: byId(p.receipts).map(l => ({ ...l, actual: l.actual && { ...l.actual, recordedAt: undefined }, corrections: undefined })),
       expenses: byId(p.expenses).map(l => ({ ...l, actual: l.actual && { ...l.actual, recordedAt: undefined }, corrections: undefined })) })),
     retirement: { ...ws.retirement,

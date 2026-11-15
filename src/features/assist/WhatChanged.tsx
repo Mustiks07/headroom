@@ -160,5 +160,10 @@ function describe(c: ChangeCommand, ws: HouseholdWorkspace): string {
     case "update_forecast": return `Update ${who(c.personId)}'s ${c.year} profit figure to ${money(c.amountCents)} (${c.status === "confirmed" ? "final" : "estimate"})`;
     case "change_goal": return `Change the goal for “${proj(c.projectId)?.title}”`;
     case "change_terms": return `Change the allowed terms for “${proj(c.projectId)?.title}”`;
+    case "record_partial_receipt": return `Record ${money(c.amountCents)} received on ${shortDate(c.date)} for “${proj(c.projectId)?.title}” as part of the payment; the rest stays expected on ${shortDate(c.remainderDate)}`;
+    case "settle_lower_total": return `Record ${money(c.amountCents)} received on ${shortDate(c.date)} as the full and final payment for “${proj(c.projectId)?.title}” (${c.reason})`;
+    case "record_client_response": return c.response === "accepted" ? `Record that the client accepted the terms for “${proj(c.projectId)?.title}”`
+      : c.response === "rejected" ? `Record that the client declined “${proj(c.projectId)?.title}” (money already received stays recorded)`
+      : `Record the client's counteroffer for “${proj(c.projectId)?.title}”: ${c.counter?.unpaid.map(u => `${money(u.amountCents)} on ${shortDate(u.date)}`).join(", ") ?? ""}`;
   }
 }
