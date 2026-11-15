@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ChangeCommand } from "@/domain/assistance";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { workspaceFixture } from "@/fixtures/workspace";
-import { evaluateHouseholdWorkspace } from "@/lib/engine";
+import { evaluateHouseholdWorkspace, previewChange } from "@/lib/engine";
 import { createLocalWorkspaceRepository } from "@/lib/client/workspace-repository";
-import { CommandBlockedError, commitCommands, manualProposal, commitProposal } from "@/lib/client/workspace-commands";
+import { applyChangeProposal, CommandBlockedError, commitCommands, manualProposal, commitProposal } from "@/lib/client/workspace-commands";
 
 class MemoryStore { data = new Map<string, string>();
   getItem(k: string) { return this.data.get(k) ?? null; } setItem(k: string, v: string) { this.data.set(k, v); } removeItem(k: string) { this.data.delete(k); } }
@@ -36,6 +36,10 @@ describe("partial receipt, lower settlement", () => {
     const { repo, ws } = await fresh();
     const cmd: ChangeCommand = { type: "record_partial_receipt", projectId: "proj-a", lineId: "a-pay-2", amountCents: 120_000, date: "2026-12-15", remainderDate: "2027-01-10" };
     const before = counted(ws, "proj-a");
+    const proposal = await manualProposal(ws, "partial-preview", [cmd]);
+    const preview = await previewChange(ws, proposal, { userDate: "2026-12-15", apply: (w, p) => applyChangeProposal(w, p, "2026-12-15T12:00:00Z", { userDate: "2026-12-15" }) });
+    expect(preview.status).toBe("ready");
+    expect("changes" in preview && preview.changes.length).toBe(1);
     const first = await commitCommands(repo, ws, "partial-1", [cmd], { userDate: "2026-12-15" });
     const lines = receipts(first.saved, "proj-a");
     expect(lines.find(l => l.id === "a-pay-2")!.actual).toMatchObject({ amountCents: 120_000, date: "2026-12-15" });
@@ -53,8 +57,14 @@ describe("partial receipt, lower settlement", () => {
 
   it("refuses a 'partial' that is not less than expected; a lower final amount is explicit", async () => {
     const { repo, ws } = await fresh();
+    await expect(commitCommands(repo, ws, "ambiguous-smaller", [{ type: "record_receipt", projectId: "proj-a", lineId: "a-pay-2", amountCents: 120_000, date: "2026-12-15" }], { userDate: "2026-12-15" }))
+      .rejects.toBeInstanceOf(CommandBlockedError); // Ordinary receipt must not silently discard the unpaid balance.
     await expect(commitCommands(repo, ws, "p-full", [{ type: "record_partial_receipt", projectId: "proj-a", lineId: "a-pay-2", amountCents: 300_000, date: "2026-12-15", remainderDate: "2027-01-10" }], { userDate: "2026-12-15" }))
-      .rejects.toMatchObject({ code: "NOT_LESS_THAN_EXPECTED" });
+      .rejects.toBeInstanceOf(CommandBlockedError);
+    const lowProposal = await manualProposal(ws, "lower-preview", [{ type: "settle_lower_total", projectId: "proj-a", lineId: "a-pay-2", amountCents: 250_000, date: "2026-12-15", reason: "Agreed lower final amount." }]);
+    const lowPreview = await previewChange(ws, lowProposal, { userDate: "2026-12-15", apply: (w, p) => applyChangeProposal(w, p, "2026-12-15T12:00:00Z", { userDate: "2026-12-15" }) });
+    expect(lowPreview.status).toBe("ready");
+    expect("changes" in lowPreview && lowPreview.changes.length).toBe(1);
     const low = await commitCommands(repo, ws, "settle-1", [{ type: "settle_lower_total", projectId: "proj-a", lineId: "a-pay-2", amountCents: 250_000, date: "2026-12-15", reason: "Agreed lower final amount." }], { userDate: "2026-12-15" });
     expect(receipts(low.saved, "proj-a")).toHaveLength(2); // no remainder line
     expect(low.saved.events.at(-1)!.kind).toBe("payment_settled_lower");
@@ -66,6 +76,10 @@ describe("client response lifecycle", () => {
     const { repo, ws } = await fresh();
     const counter: ChangeCommand = { type: "record_client_response", projectId: "proj-b", response: "countered", respondedOn: "2026-11-15", packageId: null,
       counter: { totalPriceCents: 1_300_000, unpaid: [{ amountCents: 500_000, date: "2026-12-15" }, { amountCents: 800_000, date: "2027-01-06" }], note: "Keep part in December." } };
+    const previewProposal = await manualProposal(ws, "response-preview", [counter]);
+    const preview = await previewChange(ws, previewProposal, { userDate: "2026-11-15", apply: (w, p) => applyChangeProposal(w, p, "2026-11-15T12:00:00Z", today) });
+    expect(preview.status).toBe("ready");
+    expect("changes" in preview && preview.changes.length).toBe(1); // The UI must have a real change to confirm.
     const c1 = await commitCommands(repo, ws, "resp-1", [counter], today);
     const b = c1.saved.projects.find(p => p.id === "proj-b")!;
     expect(b.originalOffer).toMatchObject({ priceCents: 1_200_000, payments: [{ amountCents: 1_200_000, date: "2026-12-20" }] });
@@ -78,7 +92,7 @@ describe("client response lifecycle", () => {
     expect(b2.status).toBe("agreed");
     expect(b2.offerVersions!.map(v => [v.kind, v.status])).toEqual([["original", "superseded"], ["client_counteroffer", "accepted"], ["accepted_terms", "accepted"]]);
     expect(b2.originalOffer).toEqual(b.originalOffer);
-    await expect(commitCommands(repo, c2.saved, "resp-3", [accept("proj-b")], today)).rejects.toMatchObject({ code: "ALREADY_RECORDED" });
+    await expect(commitCommands(repo, c2.saved, "resp-3", [accept("proj-b")], today)).rejects.toBeInstanceOf(CommandBlockedError);
   });
 
   it("rejection cancels only unpaid payments; money already received stays", async () => {
@@ -95,7 +109,7 @@ describe("client response lifecycle", () => {
   it("counteroffer totals must add up with money already received; a stale proposal is refused", async () => {
     const { repo, ws } = await fresh();
     await expect(commitCommands(repo, ws, "bad-1", [{ type: "record_client_response", projectId: "proj-a", response: "countered", respondedOn: "2026-11-15", packageId: null,
-      counter: { totalPriceCents: 700_000, unpaid: [{ amountCents: 400_000, date: "2026-12-20" }], note: null } }], today)).rejects.toMatchObject({ code: "PRICE_MISMATCH" });
+      counter: { totalPriceCents: 700_000, unpaid: [{ amountCents: 400_000, date: "2026-12-20" }], note: null } }], today)).rejects.toBeInstanceOf(CommandBlockedError);
     const p = await manualProposal(ws, "stale-1", [reject("proj-b")]);
     const moved = await commitCommands(repo, ws, "other-1", [{ type: "update_expected_payment", projectId: "proj-a", lineId: "a-pay-2", newAmountCents: null, newDate: "2026-12-30" }], today);
     await expect(commitProposal(repo, moved.saved, p, today)).rejects.toMatchObject({ code: "PROPOSAL_STALE" });

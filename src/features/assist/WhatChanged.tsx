@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { MessageSquareText } from "lucide-react";
+import Link from "next/link";
 import type { AssistanceRequest, ChangeCommand, ChangeProposal } from "@/domain/assistance";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { engineWorkspaceFingerprint, previewChange, type EngineChangePreview } from "@/lib/engine";
 import {
-  applyChangeProposal, CommandError, answerAmbiguity, buildAssistanceContext, commitProposal, getCapabilities, proposeChange, trackEvent,
+  applyChangeProposal, CommandError, manualProposal, buildAssistanceContext, commitProposal, getCapabilities, proposeChange, trackEvent,
 } from "@/lib/client/api";
 import { humanizeDates, localCalendarDate, money, shortDate, signedMoney } from "@/features/format";
 import { workspaceRepo } from "@/features/household-plan/store";
+import { TypedChangeDetails } from "@/features/lifecycle/TypedChangeDetails";
 
 const EXAMPLES = [
   "The final payment moved to January 8, 2027",
@@ -35,10 +37,14 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
 }) {
   const [text, setText] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [manualOpen, setManualOpen] = useState(false);
   const [aiText, setAiText] = useState(false);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const draftKey = `headroom.update-draft.${ws.id}`;
+  useEffect(() => { try { setText(sessionStorage.getItem(draftKey) ?? ""); } catch { /* The text remains on screen if storage is blocked. */ } setDraftLoaded(true); }, [draftKey]);
+  useEffect(() => { if (draftLoaded) try { if (text) sessionStorage.setItem(draftKey, text); else sessionStorage.removeItem(draftKey); } catch { /* Manual updates remain usable. */ } }, [draftKey, draftLoaded, text]);
   useEffect(() => { void getCapabilities().then(c => setAiText(!!(c as { aiTextProposals?: boolean }).aiTextProposals)); }, []);
 
   async function preview(proposal: ChangeProposal) {
@@ -50,7 +56,7 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
 
   async function propose() {
     if (!text.trim()) return;
-    setState({ kind: "proposing" }); setAnswers({});
+    setState({ kind: "proposing" }); setManualOpen(false);
     const request: AssistanceRequest = { intent: "update", text: text.trim().slice(0, 4000), userDate: today(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
       base: { workspaceId: ws.id, revision: ws.revision, fingerprint: await engineWorkspaceFingerprint(ws) }, context: buildAssistanceContext(ws) };
@@ -63,10 +69,11 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
     }
   }
 
-  async function resolve() {
+  async function resolve(commands: ChangeCommand[]) {
     if (state.kind !== "proposal") return;
-    const next = answerAmbiguity(state.request, state.proposal, answers);
-    setState({ ...state, proposal: next, preview: await preview(next) });
+    const next = await manualProposal(ws, `${state.proposal.id}-review`.slice(0, 120), commands);
+    next.evidence = state.proposal.evidence;
+    setState({ ...state, proposal: next, preview: await preview(next) }); setManualOpen(false);
   }
 
   async function apply() {
@@ -87,34 +94,33 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
   }
 
   const p = state.kind === "proposal" ? state : null;
+  const proposalStale = !!p && p.proposal.base.revision !== ws.revision;
   const pv = p?.preview && "proposalId" in p.preview ? p.preview : null;
   return <section className="plan-section what-changed" id="what-changed" aria-labelledby="wc-title">
     <h2 id="wc-title" className="section-title small"><MessageSquareText size={18} aria-hidden="true" /> What changed?</h2>
     <p className="muted small">Say it in a sentence. Headroom shows exactly what it would change and what that does to your plan — nothing is saved until you apply it.</p>
-    <div className="examples">{EXAMPLES.map(x => <button key={x} type="button" className="chip-btn" onClick={() => setText(x)}>{x}</button>)}</div>
+    <div className="examples">{EXAMPLES.map(x => <button key={x} type="button" className="chip-btn" onClick={() => { setText(x); setState({ kind: "idle" }); setManualOpen(false); }}>{x}</button>)}</div>
     <label className="visually-hidden" htmlFor="wc-text">What changed</label>
-    <textarea id="wc-text" rows={2} maxLength={4000} value={text} onChange={e => setText(e.target.value)} placeholder="e.g. The client moved the last payment to January 8, 2027" />
+    <textarea id="wc-text" rows={2} maxLength={4000} value={text} onChange={e => { setText(e.target.value); setState({ kind: "idle" }); setManualOpen(false); }} placeholder="e.g. The client moved the last payment to January 8, 2027" />
     {aiText && <label className="check small"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />Let the AI service read this sentence and the project/payment context needed to understand it.</label>}
     {!aiText && <p className="hint">Headroom understands common updates (a moved payment, a payment received, a SEP-IRA contribution, a new offer). The AI service for other wording isn&apos;t switched on in this version.</p>}
     <div className="row gap"><button type="button" className="btn primary small" disabled={!text.trim() || state.kind === "proposing"} onClick={() => void propose()}>{state.kind === "proposing" ? "Reading…" : "Show the change"}</button></div>
     {state.kind === "error" && <p className="notice warn" role="alert">{state.message}</p>}
 
     {p && <div className="proposal" aria-live="polite">
+      {proposalStale && <p className="stale-banner" role="status">Your plan changed after this preview. Choose “Show the change” again to review the current figures.</p>}
       {p.proposal.commands.length === 0 && !p.proposal.ambiguities.length && <p className="notice warn">Headroom couldn&apos;t turn this into a change it can make. Try one of the examples, or change the figures directly below.{p.notes.length ? ` ${p.notes.join(" ")}` : ""}</p>}
       {p.proposal.commands.length > 0 && <><h3 className="small-head">Headroom would</h3>
         <ul className="bullets small">{p.proposal.commands.map((c, i) => <li key={i}>{describe(c, ws)}</li>)}</ul></>}
       {p.proposal.resolvedDates.length > 0 && <p className="hint">Dates read as: {p.proposal.resolvedDates.map(d => `“${d.phrase}” = ${shortDate(d.date)}`).join("; ")}.</p>}
-      {p.proposal.ambiguities.filter(a => !a.options.length).map(a => <p key={a.id} className="notice warn small" role="status">{humanizeDates(a.question)}{a.id !== "unknown" && a.id !== "no_payment" ? " Add it to the sentence, then choose “Show the change” again." : ""}</p>)}
-      {p.proposal.ambiguities.some(a => a.options.length > 0) && <div className="ambiguities">
-        {p.proposal.ambiguities.filter(a => a.options.length > 0).map(a => <fieldset key={a.id} className="tri"><legend className="field-label">{humanizeDates(a.question)}</legend>
-          <div className="seg small">{a.options.map(o => <label key={o.id} className={answers[a.id] === o.id ? "on" : ""}>
-            <input type="radio" name={`amb-${a.id}`} checked={answers[a.id] === o.id} onChange={() => setAnswers({ ...answers, [a.id]: o.id })} />{humanizeDates(o.label)}</label>)}</div></fieldset>)}
-        <button type="button" className="btn small secondary" disabled={p.proposal.ambiguities.some(a => a.options.length > 0 && !answers[a.id])} onClick={() => void resolve()}>Use these answers</button>
-      </div>}
+      {!!p.proposal.ambiguities.length && <div className="notice warn small"><strong>A detail needs your confirmation.</strong><ul>{p.proposal.ambiguities.map(a => <li key={a.id}>{humanizeDates(a.question)}</li>)}</ul><p>Use the fields below to choose the exact change. Your original words stay above.</p></div>}
+      {(manualOpen || !!p.proposal.ambiguities.length) && <><p className="hint">Review one explicit update below. If your message contains several updates, the other changes can be reviewed separately after this one.</p><TypedChangeDetails key={p.proposal.id} ws={ws} seed={p.proposal.commands[0] ?? null} onCommands={commands => void resolve(commands)} onCancel={() => { setManualOpen(false); if (p.proposal.ambiguities.length) setState({ kind: "idle" }); }} /></>}
+      <div className="row gap wrap"><Link className="link-btn" href={`/check?start=project&household=${encodeURIComponent(ws.id)}`}>New client offer →</Link><a className="link-btn" href="#projects">Record a client response →</a>
+        {!manualOpen && !p.proposal.ambiguities.length && <button className="link-btn" type="button" onClick={() => setManualOpen(true)}>Review the exact fields</button>}</div>
       {p.preview && "status" in p.preview && p.preview.status === "blocked" && <p className="notice warn">{p.preview.message}</p>}
       {pv && <PreviewView pv={pv} />}
       <div className="row gap wrap">
-        {p.proposal.commands.length > 0 && <button type="button" className="btn primary" disabled={busy || !pv || pv.status !== "ready" || p.proposal.ambiguities.length > 0 || pv.changes.length === 0} onClick={() => void apply()}>{busy ? "Saving…" : pv && pv.status !== "ready" ? "Can't apply" : pv && pv.changes.length === 0 ? "Nothing to save" : "Apply"}</button>}
+        {p.proposal.commands.length > 0 && <button type="button" className="btn primary" disabled={busy || proposalStale || manualOpen || !pv || pv.status !== "ready" || p.proposal.ambiguities.length > 0 || pv.changes.length === 0} onClick={() => void apply()}>{busy ? "Saving…" : pv && pv.status !== "ready" ? "Can't apply" : pv && pv.changes.length === 0 ? "Nothing to save" : "Apply"}</button>}
         <button type="button" className="btn ghost" onClick={() => setState({ kind: "idle" })}>Edit</button>
         <button type="button" className="btn ghost" onClick={() => { setState({ kind: "idle" }); setText(""); }}>Cancel</button>
       </div>

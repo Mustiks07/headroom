@@ -20,23 +20,27 @@ const TASK: Record<ReadinessIntent, string> = {
  * Only the questions this task needs (Claude 2's assessInputReadiness), 1–3 at a time, each with
  * its reason. "I don't know yet" keeps the fact unknown — it is never filled with $0.
  */
-export function Readiness({ ws, intent, projectId, onAnswer, onSubmit }: {
+export function Readiness({ ws, intent, projectId, onAnswer, onSubmit, focused = false, onImport }: {
   ws: HouseholdWorkspace; intent: ReadinessIntent; projectId?: string; onAnswer: (path: string) => void;
+  focused?: boolean; onImport?: () => void;
   /** Saves the answered copy as one revision; resolves false when nothing was saved. */
   onSubmit: (next: HouseholdWorkspace, summary: string) => Promise<boolean>;
 }) {
   const r = useMemo(() => assessInputReadiness(ws, intent, null, projectId ? { projectId } : {}), [ws, intent, projectId]);
   const [later, setLater] = useState<string[]>([]);
+  const [focusId, setFocusId] = useState<string | null>(null);
   if (r.status === "ready") return r.precision === "range_changes_answer" || r.precision === "range_not_yet_checked"
     ? <p className="hint">{humanizeDates(r.precisionNote)}</p> : null;
   if (r.status === "unsupported") return <div className="notice warn small" role="status"><strong>Headroom can&apos;t calculate {TASK[intent]} for this situation.</strong>
     <ul className="bullets small">{r.unsupported.map(u => <li key={u.code + u.path}>{humanizeDates(u.reason)}</li>)}</ul>
     <p>Your facts stay saved and can be exported for a tax professional.</p></div>;
   const open = [...r.questions].sort((a, b) => a.priority - b.priority).filter(q => !later.includes(q.id));
-  const shown = open.slice(0, 3);
+  const selected = open.find(q => q.id === focusId) ?? open[0];
+  const shown = focused ? (selected ? [selected] : []) : open.slice(0, 3);
   return <div className="readiness" role="status">
     <p className="small"><strong>{r.questions.length} thing{r.questions.length === 1 ? "" : "s"} to confirm for {TASK[intent]}</strong>
       {r.notNeeded.length > 0 && <span className="muted"> · not needed now: {r.notNeeded.map(humanizeDates).join("; ")}</span>}</p>
+    {onImport && <button className="btn secondary small" type="button" onClick={onImport}>Add a document instead of typing</button>}
     <ul className="question-list">{shown.map(q => <li key={q.id}>
       <p className="check-title">{humanizeDates(q.question)}</p>
       <p className="muted small">{humanizeDates(q.reason)}{q.documentHint ? ` Where to find it: ${humanizeDates(q.documentHint)}.` : ""}</p>
@@ -64,6 +68,8 @@ export function Readiness({ ws, intent, projectId, onAnswer, onSubmit }: {
       {q.allowUnknown && <button type="button" className="link-btn" onClick={() => setLater([...later, q.id])}>I don&apos;t know yet</button>}
     </li>)}</ul>
     {open.length === 0 && later.length > 0 && <p className="hint">You&apos;ve left {later.length} question{later.length > 1 ? "s" : ""} for later. The result waits for them — nothing unknown is treated as $0.</p>}
+    {later.length > 0 && <button className="btn secondary small" type="button" onClick={() => setLater([])}>Review questions left for later ({later.length})</button>}
+    {focused && open.length > 1 && <details className="remaining-questions"><summary>See the other {open.length - 1} question{open.length > 2 ? "s" : ""}</summary><ol>{open.filter(q => q.id !== selected?.id).map(q => <li key={q.id}><button className="link-btn" type="button" onClick={() => setFocusId(q.id)}>{humanizeDates(q.question)}</button></li>)}</ol></details>}
   </div>;
 }
 

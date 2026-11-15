@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Check, Pencil, Plus, X } from "lucide-react";
 import type { TaxYear } from "@/domain/contracts";
 import { effectiveLine, type HouseholdWorkspace, type Project, type ProjectLine, type SepYearStatus } from "@/domain/household-workspace";
-import { centsToInput, humanizeDates, money, parseDollarsToCents, shortDate } from "@/features/format";
+import { centsToInput, humanizeDates, localCalendarDate, money, parseDollarsToCents, shortDate } from "@/features/format";
 import { personName } from "@/features/household/draft";
+import { ClientResponsePanel } from "@/features/lifecycle/ClientResponsePanel";
+import { ReceiptPanel } from "@/features/lifecycle/ReceiptPanel";
+import type { LifecycleSaved } from "@/features/lifecycle/CommandReview";
 
 /* ---------- small amount/date inputs for explicit forms ---------- */
 
@@ -33,7 +36,7 @@ const validDate = (d: string, year?: TaxYear) => /^\d{4}-\d{2}-\d{2}$/.test(d) &
 const STATUS_TEXT = { proposed: "Proposal", agreed: "Agreed", cancelled: "Cancelled" } as const;
 const STATUS_TONE = { proposed: "neutral", agreed: "good", cancelled: "bad" } as const;
 
-export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, onStatus, onCompare, comparing, onConditions, editConditions = false, onFindTerms }: {
+export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, onStatus, onCompare, comparing, onConditions, editConditions = false, onFindTerms, onLifecycleSaved }: {
   ws: HouseholdWorkspace; project: Project;
   onRecord: (lineId: string, a: { amountCents: number; date: string; sourceLabel: string }) => void;
   onCorrect: (lineId: string, a: { amountCents: number; date: string; reason: string }) => void;
@@ -43,13 +46,21 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
   onConditions: (c: Pick<Project, "cashAccountingConfirmed" | "timingArrangementConfirmed" | "terms">) => void;
   editConditions?: boolean;
   onFindTerms?: () => void;
+  onLifecycleSaved?: LifecycleSaved;
 }) {
   const [open, setOpen] = useState<{ lineId: string; mode: "record" | "correct" } | null>(null);
   const [conditions, setConditions] = useState(editConditions);
+  const [clientResponse, setClientResponse] = useState(false);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  function closeLifecycle() { setOpen(null); setClientResponse(false); trigger.current?.focus({ preventScroll: true }); }
+  function savedLifecycle(saved: HouseholdWorkspace, summary: string) {
+    setOpen(null); setClientResponse(false); onLifecycleSaved?.(saved, summary);
+    document.getElementById(`p-${project.id}`)?.focus({ preventScroll: true });
+  }
   return <article id={`project-${project.id}`} className={`project-card status-${project.status}`} aria-labelledby={`p-${project.id}`}>
     <header className="project-head">
       <div>
-        <h3 id={`p-${project.id}`}>{project.title}</h3>
+        <h3 id={`p-${project.id}`} tabIndex={-1}>{project.title}</h3>
         <p className="muted small">{personName(ws.household, project.ownerPersonId) === "You" ? "Your business" : `${personName(ws.household, project.ownerPersonId)}'s business`}
           {project.agreedDecision && project.status === "agreed" ? ` · agreed: ${humanizeDates(project.agreedDecision.label)}` : ""}</p>
       </div>
@@ -70,17 +81,21 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
               {l.corrections.length > 0 && <><br /><span className="muted small">corrected {l.corrections.length}×</span></>}</>
               : l.cancelledAt ? <span className="muted">Cancelled</span> : <span className="muted small">Not yet</span>}</td>
             <td className="line-actions">
-              {project.status !== "proposed" && !l.actual && !l.cancelledAt && <button type="button" className="btn small secondary" onClick={() => setOpen({ lineId: l.id, mode: "record" })}>
+              {project.status !== "cancelled" && !l.actual && !l.cancelledAt && <button type="button" className="btn small secondary" onClick={e => { trigger.current = e.currentTarget; setClientResponse(false); setOpen({ lineId: l.id, mode: "record" }); }}>
                 <Check size={14} /> {kind === "expense" ? "Record paid" : "Record received"}</button>}
-              {l.actual && <button type="button" className="btn small ghost" onClick={() => setOpen({ lineId: l.id, mode: "correct" })}><Pencil size={14} /> Correct</button>}
+              {l.actual && <button type="button" className="btn small ghost" onClick={e => { trigger.current = e.currentTarget; setClientResponse(false); setOpen({ lineId: l.id, mode: "correct" }); }}><Pencil size={14} /> Correct</button>}
               {project.status === "agreed" && !l.actual && !l.cancelledAt && <button type="button" className="link-btn" onClick={() => { if (window.confirm("Cancel this expected payment? It will be removed from your forecast.")) onCancelLine(l.id); }}>Cancel payment</button>}
             </td>
           </tr>;
         })}
       </tbody>
     </table></div>
-    {open && <LineForm line={[...project.receipts, ...project.expenses].find(l => l.id === open.lineId)!} mode={open.mode}
-      onCancel={() => setOpen(null)} onSubmit={v => { if (open.mode === "record") onRecord(open.lineId, v as { amountCents: number; date: string; sourceLabel: string }); else onCorrect(open.lineId, v as { amountCents: number; date: string; reason: string }); setOpen(null); }} />}
+    {open && (onLifecycleSaved && project.receipts.some(l => l.id === open.lineId)
+      ? <ReceiptPanel key={`${open.lineId}-${open.mode}`} ws={ws} projectId={project.id} line={project.receipts.find(l => l.id === open.lineId)!} mode={open.mode === "correct" ? "correction" : "receipt"}
+          onCancel={closeLifecycle} onSaved={savedLifecycle} />
+      : <LineForm line={[...project.receipts, ...project.expenses].find(l => l.id === open.lineId)!} mode={open.mode}
+          onCancel={() => setOpen(null)} onSubmit={v => { if (open.mode === "record") onRecord(open.lineId, v as { amountCents: number; date: string; sourceLabel: string }); else onCorrect(open.lineId, v as { amountCents: number; date: string; reason: string }); setOpen(null); }} />)}
+    {clientResponse && onLifecycleSaved && <ClientResponsePanel ws={ws} project={project} onCancel={closeLifecycle} onSaved={savedLifecycle} />}
 
     {project.status === "proposed" && (conditions || editConditions
       ? <ConditionsForm project={project} onCancel={() => setConditions(false)} onSave={c => { onConditions(c); setConditions(false); }} />
@@ -90,8 +105,9 @@ export function ProjectCard({ ws, project, onRecord, onCorrect, onCancelLine, on
       {project.status !== "cancelled" && project.receipts.some(l => !l.actual && !l.cancelledAt && l.expected) && <>
         {onFindTerms && <button type="button" className="btn primary small" onClick={onFindTerms}>Find terms for my goal</button>}
         <button type="button" className="btn ghost small" onClick={onCompare} aria-pressed={comparing}>{comparing ? "Comparing below" : project.status === "agreed" ? "Review remaining payments" : "Standard comparison"}</button></>}
-      {project.status === "proposed" && <button type="button" className="btn ghost small" onClick={() => { if (window.confirm(`Agree to “${project.title}” exactly as offered?`)) onStatus("agreed"); }}>Agree as offered</button>}
-      {project.status === "agreed" && <button type="button" className="link-btn" onClick={() => { if (window.confirm(`Cancel “${project.title}”? Payments already received stay in your forecast.`)) onStatus("cancelled"); }}>Cancel this project</button>}
+      {project.status !== "cancelled" && onLifecycleSaved && <button type="button" className="btn secondary small" aria-expanded={clientResponse} onClick={e => { trigger.current = e.currentTarget; setOpen(null); setClientResponse(v => !v); }}>Record client response</button>}
+      {!onLifecycleSaved && project.status === "proposed" && <button type="button" className="btn ghost small" onClick={() => { if (window.confirm(`Agree to “${project.title}” exactly as offered?`)) onStatus("agreed"); }}>Agree as offered</button>}
+      {!onLifecycleSaved && project.status === "agreed" && <button type="button" className="link-btn" onClick={() => { if (window.confirm(`Cancel “${project.title}”? Payments already received stay in your forecast.`)) onStatus("cancelled"); }}>Cancel this project</button>}
       {project.status === "cancelled" && <button type="button" className="link-btn" onClick={() => onStatus("agreed")}>Undo cancellation</button>}
     </div>
   </article>;
@@ -129,7 +145,7 @@ function LineForm({ line, mode, onSubmit, onCancel }: {
   const [note, setNote] = useState("");
   const [touched, setTouched] = useState(false);
   const a = parseAmount(amount);
-  const dateOk = validDate(date);
+  const dateOk = validDate(date) && date <= localCalendarDate();
   const noteOk = mode === "record" || note.trim().length > 0;
   const ok = !a.error && dateOk && noteOk;
   return <form className="line-form" onSubmit={e => { e.preventDefault(); setTouched(true); if (ok) onSubmit({ amountCents: a.cents!, date, ...(mode === "record" ? { sourceLabel: note } : { reason: note }) }); }}>
@@ -138,7 +154,7 @@ function LineForm({ line, mode, onSubmit, onCancel }: {
       <AmountInput id={`amt-${line.id}`} label="Amount" value={amount} onChange={setAmount} error={touched ? a.error : null} />
       <div className={`field ${touched && !dateOk ? "has-problem" : ""}`}><label className="field-label" htmlFor={`date-${line.id}`}>Date</label>
         <input id={`date-${line.id}`} type="date" value={date} onChange={e => setDate(e.target.value)} />
-        {touched && !dateOk && <p className="field-error">Enter the date.</p>}</div>
+        {touched && !dateOk && <p className="field-error">Enter when it actually happened, no later than today.</p>}</div>
       <div className={`field ${touched && !noteOk ? "has-problem" : ""}`}><label className="field-label" htmlFor={`note-${line.id}`}>{mode === "record" ? "Where is it recorded? (optional)" : "Why the correction?"}</label>
         <input id={`note-${line.id}`} maxLength={200} value={note} onChange={e => setNote(e.target.value)} placeholder={mode === "record" ? "e.g. bank deposit Dec 16" : "e.g. typed the wrong amount"} />
         {touched && !noteOk && <p className="field-error">Say briefly what was wrong.</p>}</div>
@@ -216,7 +232,7 @@ function Tri({ id, label, value, onChange }: { id: string; label: string; value:
 
 export function SepPanel({ ws, rows, legal, onRecord, onGoal, onBudget, budgetRemaining }: {
   ws: HouseholdWorkspace; rows: SepYearStatus[]; legal: Map<string, number | null>;
-  onRecord: (c: { personId: string; taxYear: TaxYear; amountCents: number; paidDate: string; sourceLabel: string }) => void;
+  onRecord: (c: { actionId: string; personId: string; taxYear: TaxYear; amountCents: number; paidDate: string; sourceLabel: string }) => Promise<boolean>;
   onGoal: (personId: string, year: TaxYear, cents: number) => void;
   onBudget: (cents: number | null, asOf: string) => void;
   budgetRemaining: number | null;
@@ -232,7 +248,9 @@ export function SepPanel({ ws, rows, legal, onRecord, onGoal, onBudget, budgetRe
   const [touched, setTouched] = useState(false);
   const [budgetText, setBudgetText] = useState(centsToInput(ws.retirement.futureContributionBudget.amountCents));
   const a = parseAmount(amount);
-  const paidOk = /^\d{4}-\d{2}-\d{2}$/.test(paid) && paid >= `${taxYear}-01-01` && paid <= `${taxYear + 1}-10-15`;
+  const paidOk = /^\d{4}-\d{2}-\d{2}$/.test(paid) && paid >= `${taxYear}-01-01` && paid <= `${taxYear + 1}-10-15` && paid <= localCalendarDate();
+  const [saving, setSaving] = useState(false);
+  const [recordId, setRecordId] = useState(() => `manual-sep-${crypto.randomUUID()}`);
   const b = budgetText.trim() === "" ? { cents: null, error: null } : parseAmount(budgetText, true);
   const budget = ws.retirement.futureContributionBudget;
 
@@ -256,8 +274,9 @@ export function SepPanel({ ws, rows, legal, onRecord, onGoal, onBudget, budgetRe
     </div>)}
 
     {!form ? <button type="button" className="btn secondary small" onClick={() => setForm(true)}><Plus size={14} /> Record a contribution you made</button>
-      : <form className="line-form" onSubmit={e => { e.preventDefault(); setTouched(true); if (a.error || !paidOk) return;
-        onRecord({ personId, taxYear, amountCents: a.cents!, paidDate: paid, sourceLabel: note }); setForm(false); setAmount(""); setPaid(""); setNote(""); setTouched(false); }}>
+      : <form className="line-form" onSubmit={async e => { e.preventDefault(); setTouched(true); if (a.error || !paidOk || saving) return;
+        setSaving(true); const saved = await onRecord({ actionId: recordId, personId, taxYear, amountCents: a.cents!, paidDate: paid, sourceLabel: note }); setSaving(false);
+        if (saved) { setForm(false); setAmount(""); setPaid(""); setNote(""); setTouched(false); setRecordId(`manual-sep-${crypto.randomUUID()}`); } }}>
         <p className="small"><strong>A contribution that actually left your account</strong> — enter the amount and date from the confirmation.</p>
         <div className="grid-3">
           {owners.length > 1 && <div className="field"><label className="field-label" htmlFor="c-person">Whose SEP-IRA?</label>
@@ -267,14 +286,14 @@ export function SepPanel({ ws, rows, legal, onRecord, onGoal, onBudget, budgetRe
           <AmountInput id="c-amount" label="Amount contributed" value={amount} onChange={setAmount} error={touched ? a.error : null} />
           <div className={`field ${touched && !paidOk ? "has-problem" : ""}`}><label className="field-label" htmlFor="c-date">Date paid</label>
             <input id="c-date" type="date" value={paid} onChange={e => setPaid(e.target.value)} />
-            {touched && !paidOk && <p className="field-error">A {taxYear} contribution must be paid between Jan 1, {taxYear} and Oct 15, {taxYear + 1}.</p>}</div>
+            {touched && !paidOk && <p className="field-error">Enter the date the contribution actually left your account, no later than today. A payment after the normal return deadline needs an applicable extension.</p>}</div>
           <div className="field"><label className="field-label" htmlFor="c-note">Confirmation <span className="optional">optional</span></label>
             <input id="c-note" maxLength={200} value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. brokerage confirmation #123" /></div>
         </div>
-        <div className="row gap"><button type="submit" className="btn primary small">Save contribution</button><button type="button" className="btn ghost small" onClick={() => setForm(false)}>Cancel</button></div>
+        <div className="row gap"><button type="submit" className="btn primary small" disabled={saving}>{saving ? "Saving…" : "Save contribution"}</button><button type="button" className="btn ghost small" onClick={() => setForm(false)}>Cancel</button></div>
       </form>}
 
-    <form className="budget" onSubmit={e => { e.preventDefault(); if (!b.error) onBudget(b.cents, new Date().toISOString().slice(0, 10)); }}>
+    <form className="budget" onSubmit={e => { e.preventDefault(); if (!b.error) onBudget(b.cents, localCalendarDate()); }}>
       <AmountInput id="budget" label="Cash set aside for future SEP contributions" value={budgetText} onChange={setBudgetText} error={b.error} />
       <p className="hint">{budget.asOfDate ? `Snapshot as of ${shortDate(budget.asOfDate)}. ` : ""}To update it, enter the cash available today after the contributions you've recorded. Payments made since the snapshot use that cash; older payments already reflected in it are not deducted twice.{budget.amountCents === null ? " Leave empty if you don't know — then no extra contribution is suggested." : ""}
         {budgetRemaining !== null ? ` After goals you've already accepted: ${money(budgetRemaining)} left.` : ""}</p>

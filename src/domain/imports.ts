@@ -49,6 +49,12 @@ export const ImportDecisionSchema = z.object({
   resolvesConflictWith: z.array(IdSchema).max(10),
   /** When the user corrected the extracted value during review. */
   correctedAmountCents: CentsSchema.nonnegative().nullable(),
+  /** Explicit review answers, never inferred from a document's silence. Additive for existing clients. */
+  reviewConfirmations: z.object({
+    noAdditionalProjectCosts: z.boolean().optional(),
+    singleExpectedPayment: z.boolean().optional(),
+    excludesManagedProjects: z.boolean().optional(),
+  }).optional(),
 });
 
 /** POST-free client call `applyImportGroup(repo, ws, draft, decisions, {userDate})`. */

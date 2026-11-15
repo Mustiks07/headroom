@@ -15,6 +15,7 @@ export function ContinuePlan() {
   return <Link className="continue-plan" href={`/household/${encodeURIComponent(latest.id)}`}>
     <span><strong>Continue your plan</strong> — {latest.household.title}</span>
     <span className="muted small">Updated {dateTime(latest.updatedAt)} · {latest.projects.length} project{latest.projects.length === 1 ? "" : "s"}</span>
+    {latest.events.at(-1) && <span className="continue-last-change small">{latest.events.at(-1)!.description}</span>}
     <ArrowRight size={16} aria-hidden="true" />
   </Link>;
 }

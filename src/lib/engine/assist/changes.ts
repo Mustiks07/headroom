@@ -43,6 +43,8 @@ export const PaymentCommandSchema = z.discriminatedUnion("type", [
 ]);
 export type PaymentCommand = z.infer<typeof PaymentCommandSchema>;
 export type EngineChangeCommand = ChangeCommand | PaymentCommand;
+/** The published command uses remainderDate; legacy callers may still supply an explicit remainder. */
+type NormalizedChangeCommand = Exclude<ChangeCommand, { type: "record_partial_receipt" | "settle_lower_total" }> | PaymentCommand;
 export const EngineChangeProposalSchema = ChangeProposalSchema.extend({ commands: z.array(z.union([ChangeCommandSchema, PaymentCommandSchema])).max(5) });
 export type EngineChangeProposal = z.infer<typeof EngineChangeProposalSchema>;
 export interface ApplyOutcome {
@@ -99,6 +101,10 @@ export function resolveRelativeDate(phrase: string, userDate: string): string | 
 const usd = (c: number | null | undefined) => (c === null || c === undefined ? "not set" : formatUsd(c));
 const lineText = (l: ProjectLine) => l.actual ? `${formatUsd(l.actual.amountCents)} received on ${l.actual.date}` : l.expected ? `${formatUsd(l.expected.amountCents)} expected on ${l.expected.date}` : "no amount";
 const shortHash = (s: string) => { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+const freeReceiptId = (project: Project, base: string) => {
+  const ids = new Set([...project.receipts, ...project.expenses].map(l => l.id));
+  for (let n = 1; ; n++) { const id = `${base.slice(0, 92)}${n === 1 ? "" : `-${n}`}`; if (!ids.has(id)) return id; }
+};
 
 /** Validate the meaning of each command and apply it to a copy. Pure. */
 export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangeProposal | EngineChangeProposal, userDate: string, now: string): ApplyOutcome {
@@ -120,7 +126,17 @@ export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangePropos
   const owner = ws.projects[0]?.ownerPersonId ?? ws.household.people.find(p => p.role === "primary")!.id;
   const dp = (): DealPlanningState => (ws.dealPlanning ??= { version: "1.0", goals: [], termSpaces: [], cashContext: null, packages: [] });
 
-  (proposal.commands as EngineChangeCommand[]).forEach((c, i) => {
+  (proposal.commands as EngineChangeCommand[]).forEach((command, i) => {
+    let c: NormalizedChangeCommand;
+    const canonicalPartial = command.type === "record_partial_receipt" && "remainderDate" in command;
+    const canonicalSettlement = command.type === "settle_lower_total";
+    if (command.type === "record_partial_receipt" && "remainderDate" in command) {
+      const payment = ws.projects.find(p => p.id === command.projectId)?.receipts.find(l => l.id === command.lineId);
+      if (!payment?.expected) { block(i, "lineId", "Choose an expected payment before recording a partial receipt."); return; }
+      c = { type: "record_partial_receipt", projectId: command.projectId, lineId: command.lineId, amountCents: command.amountCents, date: command.date,
+        remaining: { amountCents: payment.expected.amountCents - command.amountCents, date: command.remainderDate } };
+    } else if (command.type === "settle_lower_total") c = { ...command, type: "settle_line_for_less" };
+    else c = command;
     const before = out.blockers.length;
     switch (c.type) {
       case "add_offered_project": {
@@ -185,6 +201,7 @@ export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangePropos
           if (l.actual.amountCents === c.amountCents && l.actual.date === c.date) { out.noOps.push({ commandIndex: i, reason: "This payment is already recorded with the same amount and date." }); break; }
           block(i, "lineId", `This payment is already recorded (${lineText(l)}). To change it, record a correction with a reason.`); break;
         }
+        if (l.expected && c.amountCents < l.expected.amountCents) { block(i, "amountCents", "This is less than expected. Choose a partial payment (with the remaining date) or a fully settled lower amount before saving."); break; }
         ensureSource();
         const prev = lineText(l);
         l.actual = { amountCents: c.amountCents, date: c.date, recordedAt: now, sourceId };
@@ -347,8 +364,8 @@ export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangePropos
         if (c.type === "record_partial_receipt") {
           if (c.remaining.date === null) { block(i, "remaining.date", "When is the rest due? Without a date its tax year is unknown, so nothing is assumed."); break; }
           if (c.remaining.date < userDate) { block(i, "remaining.date", `The rest cannot be due before today (${userDate}); if it already arrived, record that payment.`); break; }
-          const restId = `${l.id}-rest`;
-          if (p.receipts.some(x => x.id === restId)) { block(i, "lineId", "A remaining payment from an earlier partial payment already exists; record payments against it."); break; }
+          const restId = canonicalPartial ? freeReceiptId(p, `${l.id}-rest`) : `${l.id}-rest`;
+          if (!canonicalPartial && p.receipts.some(x => x.id === restId)) { block(i, "lineId", "A remaining payment from an earlier partial payment already exists; record payments against it."); break; }
           const diff = c.amountCents + c.remaining.amountCents - expected.amountCents;
           l.actual = { amountCents: c.amountCents, date: c.date, recordedAt: now, sourceId };
           p.receipts.splice(li + 1, 0, { id: restId, label: `Remaining after ${formatUsd(c.amountCents)} received on ${c.date} (of ${formatUsd(expected.amountCents)} expected ${expected.date})`.slice(0, 200),
@@ -358,16 +375,64 @@ export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangePropos
             after: `${formatUsd(c.amountCents)} received on ${c.date}; ${formatUsd(c.remaining.amountCents)} still expected on ${c.remaining.date}` });
           if (diff !== 0) out.notes.push(`Received plus remaining is ${formatUsd(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than the ${formatUsd(expected.amountCents)} expected: the expected total for "${p.title}" changes by that much.`);
           if (c.date.slice(0, 4) !== c.remaining.date.slice(0, 4)) out.notes.push(`The part received counts in ${c.date.slice(0, 4)} income; the rest in ${c.remaining.date.slice(0, 4)}.`);
-          event(i, "payment_recorded", `Recorded a partial payment of ${formatUsd(c.amountCents)} for "${p.title}"; ${formatUsd(c.remaining.amountCents)} still expected on ${c.remaining.date}.`, { projectId: p.id, lineId: l.id });
+          event(i, canonicalPartial ? "partial_receipt_recorded" : "payment_recorded", `Recorded a partial payment of ${formatUsd(c.amountCents)} for "${p.title}"; ${formatUsd(c.remaining.amountCents)} still expected on ${c.remaining.date}.`, { projectId: p.id, lineId: l.id });
         } else {
           l.actual = { amountCents: c.amountCents, date: c.date, recordedAt: now, sourceId };
-          l.label = `Settled for ${formatUsd(c.amountCents)} instead of ${formatUsd(expected.amountCents)}: ${c.reason}`.slice(0, 200);
+          if (!canonicalSettlement) l.label = `Settled for ${formatUsd(c.amountCents)} instead of ${formatUsd(expected.amountCents)}: ${c.reason}`.slice(0, 200);
           out.touchedProjectIds.push(p.id);
           out.changes.push({ commandIndex: i, path: `projects[${pi}].receipts[${li}].actual`, label: `"${p.title}" settled for less (${c.reason})`, before: prev,
             after: `${formatUsd(c.amountCents)} received on ${c.date}; nothing more expected` });
           out.notes.push(`${formatUsd(expected.amountCents - c.amountCents)} that was expected will not be received.`);
-          event(i, "payment_recorded", `"${p.title}" settled for ${formatUsd(c.amountCents)} instead of ${formatUsd(expected.amountCents)} (${c.reason}).`, { projectId: p.id, lineId: l.id });
+          event(i, canonicalSettlement ? "payment_settled_lower" : "payment_recorded", `"${p.title}" settled for ${formatUsd(c.amountCents)} instead of ${formatUsd(expected.amountCents)} (${c.reason}).`, { projectId: p.id, lineId: l.id });
         }
+        break;
+      }
+      case "record_client_response": {
+        const pi = ws.projects.findIndex(p => p.id === c.projectId);
+        const p = ws.projects[pi];
+        if (!p) { block(i, "projectId", "This project is not in your plan."); break; }
+        if (c.respondedOn > userDate) { block(i, "respondedOn", `A client response cannot be dated after today (${userDate}).`); break; }
+        if (p.status === "cancelled") { block(i, "projectId", "This project was declined. Reopen it or add a new offer before recording a new response."); break; }
+        if (c.response === "accepted" && c.packageId) { block(i, "packageId", "Record agreement on the saved option so its exact terms and decision history are kept."); break; }
+        const actuals = p.receipts.filter(l => l.actual);
+        const received = actuals.reduce((sum, l) => sum + l.actual!.amountCents, 0);
+        const open = p.receipts.filter(l => !l.actual && !l.cancelledAt && l.expected);
+        const oldTerms = open.map(l => `${formatUsd(l.expected!.amountCents)} expected on ${l.expected!.date}`).join(", ");
+        const openVersions = p.offerVersions?.filter(v => v.status === "open") ?? [];
+        if (c.response === "accepted") {
+          if (p.status === "agreed" && !openVersions.length) { block(i, "response", "These terms are already recorded as agreed."); break; }
+          p.status = "agreed"; p.statusChangedAt = now;
+          out.changes.push({ commandIndex: i, path: `projects[${pi}].status`, label: `Client accepted "${p.title}"`, before: `Proposed: ${oldTerms || "no unpaid payments"}`,
+            after: `Agreed: ${oldTerms || "no unpaid payments"}. Payments are recorded as received only when they arrive.` });
+        } else if (c.response === "rejected") {
+          for (const line of open) line.cancelledAt = now;
+          p.status = "cancelled"; p.statusChangedAt = now;
+          for (const pkg of ws.dealPlanning?.packages.filter(k => k.projectId === p.id) ?? []) if (pkg.status === "draft" || pkg.status === "terms_shared_by_user") pkg.status = "superseded";
+          out.changes.push({ commandIndex: i, path: `projects[${pi}].status`, label: `Client declined "${p.title}"`, before: oldTerms || "No unpaid payments",
+            after: `Unpaid payments cancelled; ${formatUsd(received)} already received stays recorded.` });
+          out.notes.push("This records the client's answer. Any refund or cost of ending agreed work must be recorded separately; a complete cancellation outcome needs those facts.");
+        } else {
+          if (!c.counter) { block(i, "counter", "Enter the client's counteroffer price and remaining payment dates."); break; }
+          const unpaid = c.counter.unpaid.reduce((sum, payment) => sum + payment.amountCents, 0);
+          if (c.counter.totalPriceCents !== null && c.counter.totalPriceCents !== received + unpaid) {
+            block(i, "counter.totalPriceCents", `The counteroffer total must equal ${formatUsd(received)} already received plus ${formatUsd(unpaid)} still to come.`); break;
+          }
+          if (c.counter.unpaid.some(payment => payment.date < userDate)) { block(i, "counter.unpaid", `A payment still to come cannot be dated before today (${userDate}).`); break; }
+          ensureSource();
+          for (const line of open) line.cancelledAt = now;
+          // Same stable line identifiers as the canonical persistence handler. Offer history itself is
+          // appended by that handler; it is informational and excluded from financial fingerprints.
+          const version = (p.offerVersions?.at(-1)?.version ?? 1) + 1;
+          c.counter.unpaid.forEach((payment, index) => p.receipts.push({ id: freeReceiptId(p, `${p.id}-v${version}-p${index + 1}`), label: `Counteroffer payment ${index + 1}`,
+            expected: { ...payment }, actual: null, cancelledAt: null, sourceId, corrections: [] }));
+          p.status = "proposed"; p.statusChangedAt = now;
+          for (const pkg of ws.dealPlanning?.packages.filter(k => k.projectId === p.id) ?? []) if (pkg.status === "draft" || pkg.status === "terms_shared_by_user") pkg.status = "superseded";
+          out.changes.push({ commandIndex: i, path: `projects[${pi}].receipts`, label: `Client counteroffer for "${p.title}"`, before: oldTerms || "No unpaid payments",
+            after: `${c.counter.unpaid.map(payment => `${formatUsd(payment.amountCents)} expected on ${payment.date}`).join(", ")}; ${formatUsd(received)} already received stays recorded.` });
+          out.notes.push("The new terms are a proposal until acceptance is recorded. The client's original offer remains in history.");
+        }
+        out.touchedProjectIds.push(p.id);
+        event(i, "client_response_recorded", `Recorded the client's ${c.response} response to "${p.title}" on ${c.respondedOn}.`, { projectId: p.id });
         break;
       }
       case "record_refund": {

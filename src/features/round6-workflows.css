@@ -1,0 +1,73 @@
+/* C identity carried into the real working path. No raster UI or animated money. */
+.work-heading { border-left: 7px solid var(--brand, #263fff); padding-left: 22px; margin: 0 0 30px; }
+.work-heading h1, .work-heading h2 { font-size: clamp(28px, 3.2vw, 42px); letter-spacing: -.045em; line-height: 1.1; margin: 6px 0 12px; }
+.offer-answer { margin: 36px 0; }
+.offer-answer .readiness { padding: 28px; background: #fff; border: 1px solid #d8def0; border-radius: 18px; }
+.offer-answer .question-list { margin-top: 24px; }
+.offer-answer .question-list > li { border: 0; padding: 16px 0; }
+.offer-answer .question-list .check-title { font-size: 24px; line-height: 1.3; letter-spacing: -.025em; }
+.remaining-questions { margin-top: 22px; border-top: 1px solid #d8def0; padding-top: 16px; }
+.remaining-questions summary, .document-tools > summary, .plan-details > summary { min-height: 48px; cursor: pointer; font-weight: 650; }
+.remaining-questions li { padding: 10px 0; }
+.document-tools, .plan-details { border-top: 1px solid #d8def0; padding-top: 20px; margin: 22px 0; }
+.plan-details > summary { display: flex; flex-wrap: wrap; gap: 14px; align-items: baseline; font-size: 20px; }
+.joined-result { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); border: 1px solid #d8def0; border-radius: 20px; overflow: hidden; background: #fff; }
+.joined-outcome { background: #263fff; color: #fff; padding: 32px; }
+.joined-outcome .eyebrow, .joined-outcome h3 { color: #fff; }
+.outcome-number { font-size: clamp(44px, 5.8vw, 72px); line-height: 1.08; font-weight: 750; letter-spacing: -.055em; margin: 26px 0 16px; overflow-wrap: anywhere; }
+.joined-terms { padding: 32px; }
+.joined-terms h3 { font-size: 28px; letter-spacing: -.035em; }
+.payment-ledger { margin: 20px 0; }
+.payment-ledger > div { display: flex; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid #d8def0; }
+.payment-ledger dd { margin: 0; font-weight: 650; }
+.offer-breakdown { margin: 18px 0; border-block: 1px solid #d8def0; padding: 16px 0; }
+.offer-breakdown summary { cursor: pointer; font-weight: 650; min-height: 44px; display: flex; align-items: center; }
+.joined-variant.variant-grid { display: block; }
+.joined-variant .variant { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); padding: 0; border-radius: 20px; overflow: hidden; border: 1px solid #d8def0; }
+.joined-variant .variant-outcome { padding: 30px; background: #263fff; color: white; }
+.joined-variant .variant-outcome .tile-k, .joined-variant .variant-outcome .tile-sub, .joined-variant .variant-outcome .tile-big, .joined-variant .variant-outcome .variant-title, .joined-variant .variant-outcome .hint { color: white; }
+.joined-variant .variant-outcome .tile-big { font-size: clamp(44px, 5vw, 68px); overflow-wrap: anywhere; }
+.joined-variant .variant-outcome .mbd { color: white; }
+.joined-variant .variant-actionable { padding: 30px; }
+.joined-variant .variant-details { grid-column: 1/-1; padding: 24px 30px; }
+.deal-result .choice-rows { display: block; margin-top: 24px; border: 0; padding: 0; }
+.deal-result .choice-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 14px; min-height: 72px; padding: 16px 20px; border-radius: 8px; border-bottom: 1px solid #d8def0; align-items: center; }
+.deal-result .choice-row.on { background: #e8edff; }
+.deal-result .choice-main { display: grid; gap: 5px; }
+.deal-result .choice-main > span { color: #596580; font-size: 14px; }
+.deal-result .choice-amount { font-weight: 700; font-size: 22px; }
+.household-plan .overview { margin-top: 28px; }
+.household-details .stack { margin-bottom: 28px; }
+.household-plan button:focus-visible, .offer-entry button:focus-visible, .offer-entry input:focus-visible, .offer-entry textarea:focus-visible, .offer-entry select:focus-visible { outline: 3px solid #213fff; outline-offset: 3px; }
+.offer-entry { max-width: 1200px; margin: 0 auto; padding: 48px 32px 72px; }
+.offer-entry-grid { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.15fr); gap: 32px; align-items: start; }
+.offer-source { background: #edf1ff; border: 1px solid #d8def0; border-radius: 16px; padding: 24px; overflow-wrap: anywhere; }
+.offer-source blockquote { margin: 16px 0; background: white; padding: 24px; border-radius: 8px; white-space: pre-wrap; max-height: 380px; overflow-y: auto; }
+.offer-source details summary { min-height: 44px; cursor: pointer; }
+.offer-review { min-width: 0; }
+.offer-review .field { margin-bottom: 20px; }
+.offer-review label { display: block; font-weight: 550; margin-bottom: 8px; }
+.offer-review input, .offer-review select, .offer-review textarea { width: 100%; min-height: 48px; font-size: 16px; }
+.offer-review .check input { width: 20px; min-height: 20px; }
+.offer-entry .flow-actions { margin-top: 28px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.offer-entry .flow-step { color: #53617d; margin-bottom: 24px; font-size: 14px; }
+.offer-entry .flow-step strong { color: #263fff; }
+.offer-entry .focused-question { padding: 20px; background: #edf1ff; border-radius: 12px; margin: 20px 0; }
+.offer-entry .payment-edit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; border-bottom: 1px solid #d8def0; padding: 16px 0; }
+.offer-entry .payment-edit label { font-size: 14px; }
+.offer-entry .field-help { font-size: 14px; color: #53617d; margin: 8px 0; }
+@media (max-width: 700px) {
+  .offer-entry { padding: 28px 20px 48px; }
+  .offer-entry-grid, .joined-result, .joined-variant .variant { grid-template-columns: 1fr; }
+  .offer-source { padding: 18px; }
+  .joined-outcome, .joined-terms, .joined-variant .variant-outcome, .joined-variant .variant-actionable { padding: 24px 20px; }
+  .joined-variant .variant-details { padding: 20px; }
+  .offer-entry .payment-edit { grid-template-columns: 1fr; }
+  .offer-entry .flow-actions > .btn { width: 100%; }
+  .deal-result .choice-row { grid-template-columns: 22px minmax(0, 1fr); padding: 14px 10px; }
+  .deal-result .choice-amount { grid-column: 2; }
+  .joined-terms .row > .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) { .joined-result, .offer-entry-grid { animation: workflow-reveal 200ms ease-out; } }
+@keyframes workflow-reveal { from { opacity: .65; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .household-plan *, .offer-entry * { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

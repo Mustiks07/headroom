@@ -23,6 +23,7 @@ export function ChooseTerms({ ws, variant, result, onSave, onCancel }: {
   const [error, setError] = useState<string | null>(null);
   const [fresh, setFresh] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editedDraft, setEditedDraft] = useState<ActionPackage["clientDraft"]>(null);
   const project = ws.projects.find(p => p.id === result.projectId);
   const preview = useMemo(() => { try { return { ok: true as const, pkg: buildActionPackage(ws, result, variant.id, { includeHouseholdDetails: details }) }; }
     catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; } }, [ws, result, variant.id, details]);
@@ -34,14 +35,14 @@ export function ChooseTerms({ ws, variant, result, onSave, onCancel }: {
       {" "}{signedMoney(variant.twoYearCashDeltaCents)} cash after both tax years {result.baseline.kind === "accept_as_offered" ? "vs. accepting as offered" : "vs. declining these terms"}.</p>
     {fresh === false && <p className="stale-banner" role="status">Your plan changed since these terms were calculated. Search again before saving them.</p>}
     {!preview.ok ? <p className="notice warn">{preview.error}</p> : <>
-      <ClientDraftView draft={preview.pkg.clientDraft} notes={clientDraftNotes(variant)} details={details} onDetails={setDetails} />
+      <ClientDraftView draft={editedDraft ?? preview.pkg.clientDraft} notes={clientDraftNotes(variant)} details={details} onDetails={v => { setDetails(v); setEditedDraft(null); }} onEdit={setEditedDraft} />
       <RemindersView pkg={preview.pkg} />
     </>}
     {error && <p className="notice warn" role="alert">{error}</p>}
     <div className="row gap wrap">
       <button type="button" className="btn primary" disabled={!preview.ok || fresh !== true || busy} onClick={async () => {
         if (!preview.ok) return; setBusy(true); setError(null);
-        const ok = await onSave(preview.pkg); if (!ok) setError("The terms weren't saved. Your choice is kept here — try again."); setBusy(false);
+        const ok = await onSave({ ...preview.pkg, clientDraft: editedDraft ?? preview.pkg.clientDraft }); if (!ok) setError("The terms weren't saved. Your choice is kept here — try again."); setBusy(false);
       }}>{busy ? "Saving…" : "Save these terms to my plan"}</button>
       <button type="button" className="btn ghost" onClick={onCancel}>Back to the options</button>
     </div>
@@ -49,13 +50,15 @@ export function ChooseTerms({ ws, variant, result, onSave, onCancel }: {
   </section>;
 }
 
-function ClientDraftView({ draft, notes, details, onDetails }: { draft: ActionPackage["clientDraft"]; notes: string[]; details?: boolean; onDetails?: (v: boolean) => void }) {
+function ClientDraftView({ draft, notes, details, onDetails, onEdit }: { draft: ActionPackage["clientDraft"]; notes: string[]; details?: boolean; onDetails?: (v: boolean) => void; onEdit?: (draft: ActionPackage["clientDraft"]) => void }) {
   const [copied, setCopied] = useState(false);
   if (!draft) return null;
   const text = `Subject: ${draft.subject}\n\n${draft.body}`;
   return <div className="client-draft">
     <h3 className="small-head">Message to your client (draft)</h3>
-    <textarea readOnly value={text} rows={Math.min(14, text.split("\n").length + 1)} aria-label="Draft message to your client" />
+    {onEdit ? <><label className="field-label" htmlFor="client-draft-subject">Subject</label><input id="client-draft-subject" value={draft.subject} maxLength={200} onChange={e => onEdit({ ...draft, subject: e.target.value })} />
+      <label className="field-label" htmlFor="client-draft-body">Message</label><textarea id="client-draft-body" value={draft.body} maxLength={5000} rows={Math.min(14, text.split("\n").length + 1)} onChange={e => onEdit({ ...draft, body: e.target.value })} />
+      <p className="hint">Make the wording yours. Editing this message does not change the calculated price or dates; use the terms editor for those changes.</p></> : <textarea readOnly value={text} rows={Math.min(14, text.split("\n").length + 1)} aria-label="Draft message to your client" />}
     <div className="row gap wrap">
       <button type="button" className="btn small ghost" onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch { setCopied(false); } }}><Copy size={14} /> {copied ? "Copied" : "Copy"}</button>
       <button type="button" className="btn small ghost" onClick={() => downloadBlob(clientDraftFile(draft), `message-to-client-${fileStamp()}.txt`)}><Download size={14} /> Download .txt</button>

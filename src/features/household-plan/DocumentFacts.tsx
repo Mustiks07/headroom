@@ -1,186 +1,128 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, FileUp, X } from "lucide-react";
-import type { ExtractionResult } from "@/domain/contracts";
-import type { HouseholdWorkspace, WorkspaceEvent } from "@/domain/household-workspace";
-import { withEvent } from "@/domain/household-workspace";
+import { FileUp, Plus, X } from "lucide-react";
+import { ImportDraftSchema, type ImportDraft } from "@/domain/assistance";
+import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import {
-  EXTRACTION_FIELDS, applyDocumentFact, extractDocument, getCapabilities, previewDocumentFacts,
-  trackEvent, type FactPreview, type FactTarget,
+  commitImportGroup, emptyImportDraft, extractDocument, getCapabilities, mergeIntoDraft, toExtractedFacts, trackEvent,
+  type ExtractionResponse, type WorkspaceRepository,
 } from "@/lib/client/api";
-import { money, shortDate } from "@/features/format";
+import { localCalendarDate } from "@/features/format";
+import { ImportReview } from "@/features/imports/ImportReview";
+import { isPriorYearOnlyWarning } from "@/features/imports/review-model";
+import "@/features/imports/imports.css";
 
-type Answers = { option: string | null; date: string; taxYear: "" | "2026" | "2027"; asOfDate: string; status: "" | "confirmed" | "estimated"; reason: string; skip: boolean };
-interface Doc {
-  id: string; name: string;
-  state: "waiting_consent" | "reading" | "review" | "unavailable" | "failed" | "done";
-  message?: string; warnings: string[]; extraction?: ExtractionResult; facts: FactPreview[]; answers: Record<number, Answers>;
-  file?: File; summary?: string;
+interface QueuedDocument {
+  id: string; name: string; file?: File; documentId?: string;
+  state: "consent" | "reading" | "ready" | "failed" | "unavailable";
+  messages: string[];
 }
-
+interface Props {
+  ws: HouseholdWorkspace;
+  repo: WorkspaceRepository;
+  onApplied: (saved: HouseholdWorkspace, summary: string) => void;
+  disabled?: boolean;
+}
 const MAX_BYTES = 3 * 1024 * 1024;
-const needsProvider = (f: File) => /\.(pdf|png|jpe?g|webp)$/i.test(f.name) || /^(application\/pdf|image\/)/.test(f.type);
-const PERIOD: Record<string, string> = { annual: "full year", year_to_date: "year to date", monthly: "per month", one_time: "one-time", unknown: "period not stated" };
-const blank = (): Answers => ({ option: null, date: "", taxYear: "", asOfDate: "", status: "", reason: "", skip: false });
+const STATE_LABEL: Record<QueuedDocument["state"], string> = { consent: "Your permission needed", reading: "Reading", ready: "Ready for review", failed: "Could not read", unavailable: "Not sent" };
+const needsProvider = (file: File) => /\.pdf$/i.test(file.name) || file.type === "application/pdf";
 
-/** Builds the target for applyDocumentFact from the chosen option and the user's answers; null while something is missing. */
-function targetOf(f: FactPreview, a: Answers): FactTarget | null {
-  const opt = f.options.find(o => o.id === a.option) ?? (f.options.length === 1 ? f.options[0] : null);
-  if (!opt) return null;
-  const t = { ...opt.target } as Record<string, unknown>;
-  const year = (t.year ?? t.taxYear ?? (a.taxYear ? Number(a.taxYear) : null)) as number | null;
-  for (const need of opt.needs) {
-    if (need === "date") { const d = (t.date as string | undefined) ?? (a.date || f.found.date || ""); if (!d) return null; t.date = d; if (t.kind === "sep_contribution") t.paidDate = d; }
-    if (need === "tax_year") { if (!year) return null; }
-    if (need === "as_of_date") { if (!a.asOfDate) return null; t.asOfDate = a.asOfDate; }
-    if (need === "status") { if (!a.status) return null; t.status = a.status; }
-    if (need === "correction_reason") { if (!a.reason.trim()) return null; t.correctionReason = a.reason.trim(); }
-  }
-  if (t.kind === "forecast") t.year = year;
-  if (t.kind === "sep_contribution") { t.taxYear = year; if (!t.paidDate) t.paidDate = (a.date || f.found.date) ?? undefined; if (!t.paidDate) return null; }
-  if (t.kind === "payment_received" && !t.date) { const d = a.date || f.found.date; if (!d) return null; t.date = d; }
-  if ((t.kind === "forecast" || t.kind === "sep_contribution") && !year) return null;
-  return t as unknown as FactTarget;
-}
-
-/** A figure is "clear" when there is exactly one sensible destination and nothing to decide. */
-const isClear = (f: FactPreview) => !f.blockers.length && !f.alreadyApplied && f.options.length === 1 && targetOf(f, blank()) !== null;
-
-/**
- * Documents → reviewed facts for a household plan. Several files can be read one after another;
- * clear figures can be confirmed together after a summary, anything ambiguous needs its own choice.
- * Uses Claude 3's extractDocument / previewDocumentFacts / applyDocumentFact; saving goes through
- * `onCommit` as ONE revision with a "document imported" history entry.
- */
-export function DocumentFacts({ ws, onCommit }: { ws: HouseholdWorkspace; onCommit: (next: HouseholdWorkspace, summary: string) => Promise<boolean> }) {
-  const [docs, setDocs] = useState<Doc[]>([]);
+/** All files feed one common review and one atomic, revision-checked persistence command. */
+export function DocumentFacts({ ws, repo, onApplied, disabled = false }: Props) {
+  const [docs, setDocs] = useState<QueuedDocument[]>([]);
+  const [draft, setDraft] = useState<ImportDraft>(() => emptyImportDraft(`documents-${ws.id}`.slice(0, 120)));
   const [ai, setAi] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasted, setPasted] = useState("");
+  const [restored, setRestored] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [referenceOnlyDocuments, setReferenceOnlyDocuments] = useState<Record<string, string>>({});
   const input = useRef<HTMLInputElement>(null);
+  const readHashes = useRef(new Set<string>());
+  const draftRef = useRef(draft);
+  const key = `headroom:document-review:${ws.id}`;
   useEffect(() => { void getCapabilities().then(c => setAi(c.aiExtraction)); }, []);
-
-  const patch = (id: string, p: Partial<Doc>) => setDocs(ds => ds.map(d => (d.id === id ? { ...d, ...p } : d)));
-
-  async function read(doc: Doc, consent: boolean) {
-    patch(doc.id, { state: "reading" });
+  useEffect(() => {
     try {
-      const extraction = await extractDocument(doc.file!, { consentToProvider: consent });
-      if (extraction.status === "unavailable") { patch(doc.id, { state: "unavailable", warnings: extraction.warnings }); return; }
-      const facts = previewDocumentFacts(ws, extraction);
-      patch(doc.id, { state: "review", extraction, facts, warnings: extraction.warnings, answers: Object.fromEntries(facts.map(f => [f.index, blank()])) });
-    } catch (e) { patch(doc.id, { state: "failed", message: e instanceof Error ? e.message : "The file couldn't be read." }); }
+      const stored = JSON.parse(sessionStorage.getItem(key) ?? "null");
+      const parsed = ImportDraftSchema.safeParse(stored?.draft ?? stored);
+      if (parsed.success) {
+        draftRef.current = parsed.data; setDraft(parsed.data); readHashes.current = new Set(parsed.data.documents.map(d => d.documentId));
+        if (stored?.referenceOnlyDocuments && typeof stored.referenceOnlyDocuments === "object") setReferenceOnlyDocuments(Object.fromEntries(Object.entries(stored.referenceOnlyDocuments).filter((entry): entry is [string, string] => typeof entry[1] === "string")));
+      }
+    } catch { /* Local review is optional; do not block documents. */ }
+    setRestored(true);
+  }, [key]);
+  useEffect(() => { if (restored) try { sessionStorage.setItem(key, JSON.stringify({ draft, referenceOnlyDocuments })); } catch { /* File contents never enter this store. */ } }, [draft, referenceOnlyDocuments, key, restored]);
+
+  const patch = (id: string, changes: Partial<QueuedDocument>) => setDocs(old => old.map(d => d.id === id ? { ...d, ...changes } : d));
+  async function read(doc: QueuedDocument, consent: boolean) {
+    if (!doc.file) return;
+    patch(doc.id, { state: "reading", messages: [] });
+    try {
+      const response = await extractDocument(doc.file, { consentToProvider: consent }) as ExtractionResponse;
+      if (response.status === "unavailable") { patch(doc.id, { state: "failed", messages: response.warnings }); return; }
+      const hash = response.document?.documentId ?? Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await doc.file.arrayBuffer()))).map(b => b.toString(16).padStart(2, "0")).join("");
+      if (readHashes.current.has(hash)) { patch(doc.id, { state: "ready", messages: ["This exact document is already in this review. Nothing was added twice."] }); return; }
+      const provenance = consent ? "ai_model" as const : "deterministic_text" as const;
+      const facts = response.facts ?? toExtractedFacts(response, hash, response.document?.kind, provenance);
+      if (!facts.length) { patch(doc.id, { state: "failed", messages: [...response.warnings, "No supported figures were found. Paste labelled text or enter the figures directly in your plan."] }); return; }
+      const document = { documentId: hash, kind: response.document?.kind ?? facts[0].documentKind, label: doc.name.slice(0, 200), addedAt: new Date().toISOString(), provenance };
+      const merged = mergeIntoDraft(draftRef.current, facts, document);
+      // Resolve conflicts after explicit person/year/month/project targets, never an unknown-person slot.
+      const parsed = ImportDraftSchema.safeParse({ ...merged.draft, facts: merged.draft.facts.map(f => ({ ...f, review: f.review === "conflict" ? "extracted" : f.review, conflictsWith: [] })) });
+      if (!parsed.success) { patch(doc.id, { state: "failed", messages: ["This document would exceed the review limit or contains an unreadable figure. Finish the current group, then retry with the relevant pages or text."] }); return; }
+      const priorYearWarning = response.warnings.find(isPriorYearOnlyWarning);
+      if (priorYearWarning) setReferenceOnlyDocuments(old => ({ ...old, [hash]: priorYearWarning }));
+      readHashes.current.add(hash); draftRef.current = parsed.data; setDraft(parsed.data);
+      patch(doc.id, { state: "ready", documentId: hash, messages: response.warnings });
+    } catch (e) { patch(doc.id, { state: "failed", messages: [e instanceof Error ? e.message : "This file could not be read. Your other documents are still here."] }); }
   }
 
-  function add(files: FileList | null) {
-    if (!files) return;
-    const added: Doc[] = [...files].map((file, i) => ({ id: `${Date.now()}-${i}`, name: file.name, file, warnings: [], facts: [], answers: {},
-      state: file.size > MAX_BYTES ? "failed" : needsProvider(file) ? (ai ? "waiting_consent" : "unavailable") : "reading",
-      message: file.size > MAX_BYTES ? "This file is larger than 3 MB. Export a smaller file or enter the figures by hand." : undefined }));
-    setDocs(ds => [...ds, ...added]);
+  function add(files: File[]) {
+    setNotice("");
+    const occupied = draft.documents.length + docs.filter(d => d.state === "reading" || d.state === "consent").length;
+    if (occupied + files.length > 20) { setNotice("Review at most 20 documents together. Finish this group before adding more."); return; }
+    const added = files.map((file): QueuedDocument => {
+      const supported = /\.(pdf|txt|csv)$/i.test(file.name);
+      const invalid = !supported || file.size > MAX_BYTES;
+      return { id: crypto.randomUUID(), name: file.name, file, state: invalid ? "failed" : needsProvider(file) ? ai ? "consent" : "unavailable" : "reading",
+        messages: !supported ? ["Use a PDF with selectable text, CSV or TXT. Scans and photos are not supported here; paste their text or enter figures by hand."] : file.size > MAX_BYTES ? ["This file is larger than 3 MB. Export a smaller file or paste the relevant text."] : needsProvider(file) && !ai ? ["PDF analysis is unavailable right now. Paste selectable text below, or enter the figures directly in your plan."] : [] };
+    });
+    setDocs(old => [...old, ...added]);
     if (input.current) input.current.value = "";
-    for (const d of added) if (d.state === "reading") void read(d, false);
-    for (const d of added) if (d.state === "unavailable") patch(d.id, { warnings: ["Document analysis for PDFs and images isn't switched on in this version. CSV and text files work; you can also enter the figures by hand."] });
+    for (const doc of added) if (doc.state === "reading") void read(doc, false);
+  }
+  function remove(doc: QueuedDocument) {
+    setDocs(old => old.filter(d => d.id !== doc.id));
+    if (doc.documentId) { readHashes.current.delete(doc.documentId); const next = { ...draftRef.current, documents: draftRef.current.documents.filter(d => d.documentId !== doc.documentId), facts: draftRef.current.facts.filter(f => f.documentId !== doc.documentId) }; draftRef.current = next; setDraft(next); }
   }
 
-  async function apply(doc: Doc, which: "clear" | number) {
-    let next = ws;
-    const results: string[] = [];
-    const events: WorkspaceEvent[] = [];
-    const indices = which === "clear" ? doc.facts.filter(isClear).map(f => f.index) : [which];
-    for (const i of indices) {
-      const f = doc.facts.find(x => x.index === i)!;
-      const target = targetOf(f, doc.answers[i] ?? blank());
-      const field = doc.extraction!.fields[i];
-      if (!target) { results.push(`${label(f)}: choose where it goes first.`); continue; }
-      const r = applyDocumentFact(next, field, target);
-      if (r.status === "applied") { next = r.workspace; events.push({ ...r.event, id: `evt-doc-${field.evidence.id}-${i}`.slice(0, 100), at: new Date().toISOString() } as WorkspaceEvent); }
-      else if (r.status === "duplicate") results.push(`${label(f)}: already recorded — nothing changed.`);
-      else results.push(`${label(f)}: ${r.message}`);
-    }
-    if (!events.length) { patch(doc.id, { summary: results.join(" ") || "Nothing to apply." }); return; }
-    for (const e of events) next = withEvent(next, e);
-    const ok = await onCommit(next, `Added ${events.length} figure${events.length > 1 ? "s" : ""} from ${doc.name}.`);
-    if (ok) {
-      void trackEvent("review_completed", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "document" });
-      const facts = previewDocumentFacts(next, doc.extraction!);
-      const left = facts.filter(f => !f.alreadyApplied && !f.blockers.length && !(doc.answers[f.index]?.skip));
-      patch(doc.id, { facts, state: left.length ? "review" : "done", summary: [`Saved ${events.length} figure${events.length > 1 ? "s" : ""}.`, ...results].join(" ") });
-    } else patch(doc.id, { summary: "Nothing was saved — your choices are kept. Try again." });
-  }
-
-  return <section className="plan-section" id="documents" aria-labelledby="docs-title">
-    <h2 id="docs-title" className="section-title small">Add documents</h2>
-    <p className="muted small">Profit-and-loss reports, pay stubs, Marketplace statements, payment and SEP-IRA confirmations. Headroom proposes figures; nothing is used until you confirm it.
-      {ai ? " Document analysis runs only after you agree for that file. Use PDFs with selectable text; if a photo or scan cannot be read, paste its text or enter the figures." : " CSV and text files work. Document analysis is unavailable right now; you can enter other figures by hand."}</p>
-    <div className="row gap wrap">
-      <label className="btn secondary small file-btn"><FileUp size={16} /> Choose files
-        <input ref={input} type="file" multiple accept={ai ? ".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt" : ".csv,.txt,text/csv,text/plain"} onChange={e => add(e.target.files)} /></label>
-      <a className="link-btn" href="/samples/index.html" target="_blank" rel="noreferrer">Supported document formats</a>
-    </div>
-    {docs.length > 0 && <ul className="doc-queue">{docs.map(doc => <li key={doc.id} className={`doc doc-${doc.state}`}>
-      <div className="doc-head"><strong>{doc.name}</strong><span className={`pill ${doc.state === "done" ? "good" : doc.state === "failed" || doc.state === "unavailable" ? "warn" : "neutral"}`}>{STATE_TEXT[doc.state]}</span>
-        <button type="button" className="icon-btn" aria-label={`Remove ${doc.name} from this list`} onClick={() => setDocs(ds => ds.filter(d => d.id !== doc.id))}><X size={14} /></button></div>
-      {doc.state === "waiting_consent" && <div className="notice small">This file will be sent to the document-analysis service to read its figures. Headroom doesn&apos;t keep the original.
-        <div className="row gap"><button type="button" className="btn small primary" onClick={() => void read(doc, true)}>Send this file</button>
-          <button type="button" className="btn small ghost" onClick={() => patch(doc.id, { state: "unavailable", warnings: ["Not sent. Enter the figures by hand if you need them."] })}>Don&apos;t send</button></div></div>}
-      {doc.state === "reading" && <p className="loading-line"><span className="spinner" aria-hidden="true" /> Reading…</p>}
-      {(doc.message || doc.warnings.length > 0) && <ul className="bullets small">{[doc.message, ...doc.warnings].filter(Boolean).map(w => <li key={w}>{w}</li>)}</ul>}
-      {doc.summary && <p className="small" role="status">{doc.summary}</p>}
-      {doc.state === "review" && <Review doc={doc} onAnswer={(i, a) => patch(doc.id, { answers: { ...doc.answers, [i]: { ...(doc.answers[i] ?? blank()), ...a } } })} onApply={w => void apply(doc, w)} />}
+  return <section className="plan-section import-section" id="document-facts" aria-labelledby="docs-title"><span id="documents" />
+    <div className="import-section-title"><div><span className="import-eyebrow">Less retyping. More certainty.</span><h2 id="docs-title" className="section-title small">Bring the source with you.</h2><p className="muted">Add income, insurance or payment documents. Review them together before anything changes.</p></div><FileUp size={32} aria-hidden="true" /></div>
+    <div className="import-entry-actions"><label className={`btn secondary file-btn ${saving || disabled ? "disabled" : ""}`}><Plus size={18} /> Add documents<input ref={input} type="file" multiple accept=".pdf,.csv,.txt,application/pdf,text/csv,text/plain" disabled={saving || disabled} onChange={e => add(Array.from(e.target.files ?? []))} /></label><button type="button" className="btn ghost" aria-expanded={pasteOpen} onClick={() => setPasteOpen(!pasteOpen)}>Paste document text</button><a className="link-btn small" href="/samples/index.html" target="_blank" rel="noreferrer">Supported formats</a></div>
+    <p className="import-upload-note">CSV and TXT use text extraction. {ai ? "Text PDFs require your permission before external analysis." : "PDF analysis is unavailable; paste the text instead."} Original files are not kept.</p>
+    {pasteOpen && <form className="import-paste" onSubmit={e => { e.preventDefault(); if (pasted.trim()) add([new File([pasted], "Pasted document.txt", { type: "text/plain" })]); }}><label htmlFor={`paste-${ws.id}`}>Paste labelled figures from your document</label><p className="small muted">Keep each label, amount, period and year together, for example: “Annual net profit 2026: $55,000”. Unlabelled prose may need manual entry.</p><textarea id={`paste-${ws.id}`} rows={5} maxLength={20000} value={pasted} onChange={e => setPasted(e.target.value)} /><button className="btn secondary small" disabled={!pasted.trim() || saving || disabled}>Read this text</button></form>}
+    {notice && <p className="import-notice" role="status">{notice}</p>}
+    {docs.length > 0 && <ul className="import-queue">{docs.map(doc => <li key={doc.id}><div className="import-queue-row"><strong>{doc.name}</strong><span className={`import-state ${doc.state === "failed" || doc.state === "consent" ? "needs-answer" : ""}`}>{STATE_LABEL[doc.state]}</span><button type="button" className="icon-btn" disabled={saving || doc.state === "reading"} aria-label={`Remove ${doc.name} from review`} onClick={() => remove(doc)}><X size={17} /></button></div>
+      {doc.state === "consent" && <div className="import-consent"><p>This PDF&apos;s readable text will be sent to the document-analysis provider. Only continue if you are comfortable sharing it. Headroom does not store the original file.</p><div className="row gap wrap"><button type="button" className="btn primary small" onClick={() => void read(doc, true)}>Allow analysis of this file</button><button type="button" className="btn ghost small" onClick={() => patch(doc.id, { state: "unavailable", messages: ["Not sent. You can paste the text or enter figures directly."] })}>Don&apos;t send</button></div></div>}
+      {doc.state === "reading" && <p role="status" className="small"><span className="spinner" aria-hidden="true" /> Reading this document…</p>}
+      {doc.messages.length > 0 && <ul className="import-file-notes">{doc.messages.map((m, i) => <li key={i}>{m}</li>)}</ul>}
+      {doc.state === "failed" && doc.file && <button className="btn ghost small" disabled={saving} onClick={() => needsProvider(doc.file!) ? patch(doc.id, { state: ai ? "consent" : "unavailable" }) : void read(doc, false)}>Try reading again</button>}
     </li>)}</ul>}
+    {draft.facts.length > 0 && <><ImportReview ws={ws} draft={draft} referenceOnlyDocuments={referenceOnlyDocuments} storageKey={`${key}:choices`} disabled={saving || disabled || docs.some(d => d.state === "reading")} onApply={async (review, decisions) => {
+      setSaving(true);
+      try {
+        const { result, saved } = await commitImportGroup(repo, ws, review, decisions, { userDate: localCalendarDate() });
+        if (result.status === "applied") {
+          if (!saved) throw new Error("The save completed but the updated plan could not be reopened. Reload this page before making another change.");
+          onApplied(saved, `Saved ${result.applied} document figure${result.applied === 1 ? "" : "s"} together.`);
+          void trackEvent("review_completed", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "document" });
+        } else if (result.status === "stale") { const current = await repo.get(ws.id); if (current) onApplied(current, "Loaded the latest plan. Review your document group again."); }
+        return result;
+      } finally { setSaving(false); }
+    }} /><div className="import-reset"><span>Review choices stay in this tab. The original files are not stored.</span><button className="btn ghost small" disabled={saving || docs.some(d => d.state === "reading")} onClick={() => { const empty = emptyImportDraft(`documents-${ws.id}`.slice(0, 120)); draftRef.current = empty; setDraft(empty); setDocs([]); setReferenceOnlyDocuments({}); readHashes.current.clear(); try { sessionStorage.removeItem(key); sessionStorage.removeItem(`${key}:choices`); } catch { /* State cleared here. */ } }}>Clear this review</button></div></>}
   </section>;
-}
-
-const STATE_TEXT: Record<Doc["state"], string> = { waiting_consent: "Waiting for your OK", reading: "Reading", review: "Review", unavailable: "Can't read here", failed: "Couldn't read", done: "Done" };
-const label = (f: FactPreview) => (EXTRACTION_FIELDS as Record<string, { label: string }>)[f.path]?.label ?? f.path;
-
-function Review({ doc, onAnswer, onApply }: { doc: Doc; onAnswer: (i: number, a: Partial<Answers>) => void; onApply: (w: "clear" | number) => void }) {
-  const clear = doc.facts.filter(isClear);
-  const open = doc.facts.filter(f => !isClear(f) && !f.alreadyApplied && !f.blockers.length && !doc.answers[f.index]?.skip);
-  const recorded = doc.facts.filter(f => f.alreadyApplied);
-  const blocked = doc.facts.filter(f => f.blockers.length && !f.alreadyApplied);
-  if (!doc.facts.length) return <p className="small">No figures Headroom can use were found. Enter them by hand.</p>;
-  return <div className="stack">
-    {clear.length > 0 && <div className="fact-group">
-      <p className="small"><strong>{clear.length} clear figure{clear.length > 1 ? "s" : ""}</strong> — one obvious place each:</p>
-      <ul className="fact-list">{clear.map(f => <FactLine key={f.index} f={f} destination={f.options[0].label} />)}</ul>
-      <button type="button" className="btn small primary" onClick={() => onApply("clear")}><Check size={14} /> Use these {clear.length} figure{clear.length > 1 ? "s" : ""}</button>
-    </div>}
-    {open.length > 0 && <div className="fact-group">
-      <p className="small"><strong>Needs your choice</strong> — Headroom won&apos;t guess these:</p>
-      {open.map(f => <Decide key={f.index} f={f} a={doc.answers[f.index] ?? blank()} onAnswer={a => onAnswer(f.index, a)} onApply={() => onApply(f.index)} />)}
-    </div>}
-    {recorded.length > 0 && <p className="hint">{recorded.length} figure{recorded.length > 1 ? "s were" : " was"} already recorded from this document — nothing is added twice.</p>}
-    {blocked.length > 0 && <details className="explain"><summary>Not used ({blocked.length})</summary>
-      <ul className="fact-list">{blocked.map(f => <li key={f.index}><span>{label(f)} {f.found.amountCents !== null ? money(f.found.amountCents) : f.found.date ? shortDate(f.found.date) : ""}</span><span className="muted small">{f.blockers.join(" ")}</span></li>)}</ul></details>}
-  </div>;
-}
-
-function FactLine({ f, destination }: { f: FactPreview; destination: string }) {
-  return <li><span><strong>{label(f)}</strong> {f.found.amountCents !== null ? <strong className="num">{money(f.found.amountCents)}</strong> : null}{f.found.date ? ` · ${shortDate(f.found.date)}` : ""}
-    {f.found.period ? <span className="muted"> · {PERIOD[f.found.period] ?? f.found.period}</span> : null}{f.found.taxYear ? <span className="muted"> · {f.found.taxYear}</span> : null}</span>
-    <span className="muted small">→ {destination}{f.found.excerpt ? <> · “{f.found.excerpt}”</> : null}</span></li>;
-}
-
-function Decide({ f, a, onAnswer, onApply }: { f: FactPreview; a: Answers; onAnswer: (a: Partial<Answers>) => void; onApply: () => void }) {
-  const opt = f.options.find(o => o.id === a.option) ?? (f.options.length === 1 ? f.options[0] : null);
-  const ready = targetOf(f, a) !== null;
-  const id = `fact-${f.index}`;
-  return <div className="fact-decide">
-    <ul className="fact-list"><FactLine f={f} destination={opt ? opt.label : "choose below"} /></ul>
-    {f.options.length > 1 && <div className="field"><label className="field-label" htmlFor={`${id}-opt`}>Where does it belong?</label>
-      <select id={`${id}-opt`} value={a.option ?? ""} onChange={e => onAnswer({ option: e.target.value || null })}><option value="">Choose…</option>
-        {f.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select></div>}
-    {opt && <div className="grid-3">
-      {opt.needs.includes("date") && !f.found.date && <div className="field"><label className="field-label" htmlFor={`${id}-date`}>Date</label><input id={`${id}-date`} type="date" value={a.date} onChange={e => onAnswer({ date: e.target.value })} /></div>}
-      {opt.needs.includes("tax_year") && <div className="field"><label className="field-label" htmlFor={`${id}-year`}>Tax year</label>
-        <select id={`${id}-year`} value={a.taxYear} onChange={e => onAnswer({ taxYear: e.target.value as Answers["taxYear"] })}><option value="">Choose…</option><option value="2026">2026</option><option value="2027">2027</option></select></div>}
-      {opt.needs.includes("as_of_date") && <div className="field"><label className="field-label" htmlFor={`${id}-asof`}>Figures run through</label><input id={`${id}-asof`} type="date" value={a.asOfDate} onChange={e => onAnswer({ asOfDate: e.target.value })} /></div>}
-      {opt.needs.includes("status") && <div className="field"><label className="field-label" htmlFor={`${id}-status`}>Is it final?</label>
-        <select id={`${id}-status`} value={a.status} onChange={e => onAnswer({ status: e.target.value as Answers["status"] })}><option value="">Choose…</option><option value="confirmed">Yes, final</option><option value="estimated">No, an estimate</option></select></div>}
-      {opt.needs.includes("correction_reason") && <div className="field"><label className="field-label" htmlFor={`${id}-why`}>Why replace the recorded amount?</label><input id={`${id}-why`} value={a.reason} onChange={e => onAnswer({ reason: e.target.value })} /></div>}
-    </div>}
-    <div className="row gap"><button type="button" className="btn small primary" disabled={!ready} onClick={onApply}>Use this figure</button>
-      <button type="button" className="btn small ghost" onClick={() => onAnswer({ skip: true })}>Skip</button></div>
-  </div>;
 }

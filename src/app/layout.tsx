@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "@/features/round6-workflows.css";
 
 export const metadata: Metadata = {
   title: "Headroom — Before you say yes to a client offer",

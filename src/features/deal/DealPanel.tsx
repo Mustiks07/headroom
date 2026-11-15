@@ -129,10 +129,16 @@ const RELAX_LABEL = { price_max: "A higher price", latest_payment_date: "A later
 const RELAX_TEXT = { price_max: "Ask up to", latest_payment_date: "Allow payment until", additional_sep: "Allow extra SEP-IRA up to", minimum_cash: "Keep at least", date_target: "Change the date goal to" } as const;
 
 function NoTerms({ result, onApply }: { result: NoFeasibleTerms; onApply: (rx: NoFeasibleTerms["relaxations"][number]) => void }) {
+  const extra = result as NoFeasibleTerms & { nearest?: Array<{ variant: DealVariant; shortfallCents: number; unmet: string[] }>; binding?: string[] };
   return <div className="blocked unsupported no-terms" role="status">
     <div className="blocked-head"><XCircle size={20} aria-hidden="true" /><div><h3>No terms within your limits meet this goal</h3>
       <p>Headroom searched {searchedText(result)} and none met every limit. Nothing is recommended.</p></div></div>
     <ul className="missing-list">{result.violated.map(v => <li key={v.id + v.detail}><div><strong>{CONSTRAINT_TEXT[v.id] ?? v.id}</strong><span>{humanizeDates(v.detail)}</span></div></li>)}</ul>
+    {!!extra.nearest?.length && <div className="nearest-options"><h4 className="small-head">Closest calculated options inside your limits</h4><p className="small">These are valid terms, but they still miss your goal. Nothing is selected for you.</p>
+      {extra.nearest.slice(0, 2).map(({ variant, shortfallCents, unmet }) => <details key={variant.id} className="explain"><summary>{money(variant.terms.priceCents)} price · {signedMoney(variant.twoYearCashDeltaCents)} extra cash after both settlements</summary>
+        <p className="small">Compared with {result.baseline.label.toLowerCase()}, through {shortDate(result.horizon.settlementThrough)}. Added retirement: {money(variant.retirementAddedCents)}, separate from cash.</p>
+        <p>{variant.terms.payments.map(p => `${money(p.amountCents)} on ${shortDate(p.date)}`).join("; ")}</p><p className="small">Largest gap among missed targets: {money(shortfallCents)}. {unmet.map(k => CONSTRAINT_TEXT[k] ?? k).join("; ")}</p>
+      </details>)}</div>}
     {result.relaxations.length > 0 ? <div className="relax">
       <p className="small"><strong>Calculated changes to one limit</strong> (within the search checked, other limits unchanged):</p>
       <ul className="relax-list">{result.relaxations.map((rx, i) => { const usable = rx.requiredCents !== null || rx.requiredDate !== null;
@@ -157,7 +163,7 @@ function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: Househo
   // Mobile (design C): one selected option shown in full, the others as selection rows.
   const [sel, setSel] = useState(result.recommendedVariantId);
   useEffect(() => { setSel(result.recommendedVariantId); }, [result]);
-  const sorted = [...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId));
+  const sorted = [...result.variants].sort((a, b) => Number(b.id === result.recommendedVariantId) - Number(a.id === result.recommendedVariantId)).slice(0, 3);
   return <div className="deal-result">
     <div className="horizon" role="radiogroup" aria-label="Which money to show">
       {([["settled", "After tax settlements"], ["by_date", "By your date"]] as const).map(([k, label]) =>
@@ -165,8 +171,8 @@ function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: Househo
     </div>
     <p className="baseline-note"><strong>Compared with: {result.baseline.label}.</strong> {humanizeDates(result.baseline.description)} Cash is what your family keeps after both tax years settle (through {shortDate(result.horizon.settlementThrough)}) — not a bank balance.</p>
     {result.cashCompleteness === "household_incomplete" && <p className="notice warn small">Your balance goal can&apos;t be confirmed because the cash picture isn&apos;t marked complete. Only this project&apos;s money is shown; Headroom doesn&apos;t say whether your household will cover every bill.</p>}
-    <div className={`variant-grid ${stale ? "is-stale" : ""}`}>
-      {sorted.map(v => <VariantCard selected={v.id === sel} key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
+    <div className={`variant-grid joined-variant ${stale ? "is-stale" : ""}`}>
+      {sorted.filter(v => v.id === sel || !sorted.some(x => x.id === sel) && v.id === sorted[0]?.id).map(v => <VariantCard selected key={v.id} ws={ws} v={v} recommended={v.id === result.recommendedVariantId} expanded={open === v.id}
         onToggle={() => setOpen(open === v.id ? null : v.id)} onChoose={() => onChoose(v)} disabled={stale} result={result} onGoToForecast={onGoToForecast} view={view} />)}
     </div>
     {sorted.length > 1 && <fieldset className="choice-rows">
@@ -203,9 +209,10 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
   const agree = (v as { clientAgreement?: { required: boolean; changes: Array<"price" | "dates">; note: string | null } }).clientAgreement;
   const mbd = (v as { moneyByDate?: Array<{ date: string; receivedCents: number; availableCents: number; event: string }> }).moneyByDate ?? [];
   const yearEnd = mbd.find(r => r.date === "2026-12-31") ?? null;
-  const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null } }).comparisons;
+  const cmp = (v as { comparisons?: { versusDeclineCents: number; versusOfferedCents: number | null; versusOriginalOfferCents?: number | null } }).comparisons;
   const rob = (v as { robustness?: { holds: boolean; basis: string; roomCents: number | null } }).robustness;
   return <article className={`variant ${recommended ? "recommended" : ""} ${goalMet ? "" : "unmet"} ${selected ? "is-selected" : "is-unselected"}`} aria-labelledby={`v-${v.id}`}>
+    <div className="variant-outcome">
     <header><p className="tile-k">{PURPOSE[v.purpose]}</p>{recommended && <span className="pill good"><Star size={13} aria-hidden="true" /> Our pick</span>}</header>
     <h3 id={`v-${v.id}`} className="variant-title">{humanizeDates(v.label)}</h3>
     {view === "settled" ? <>
@@ -225,8 +232,10 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
           <td className="num">{money(r.receivedCents)}</td><td className={`num ${r.availableCents < 0 ? "neg" : ""}`}>{money(r.availableCents)}</td></tr>)}</tbody></table>}
       {mbd.length > 0 && <p className="hint">Received = gross payments. Available = after this project&apos;s costs, extra SEP-IRA and the tax and credit change set aside; the last row matches the result after both returns.</p>}
     </>}
+    </div><div className="variant-actionable">
     {v.retirementAddedCents > 0 && <p className="tile-line">+ <strong className="num">{money(v.retirementAddedCents)}</strong> into retirement (not counted as cash)</p>}
     {cmp && cmp.versusOfferedCents !== null && v.purpose !== "as_offered" && <p className="tile-line"><span className={`num ${signClass(cmp.versusOfferedCents)}`}>{signedMoney(cmp.versusOfferedCents)}</span> compared with the offer as it stands</p>}
+    {cmp?.versusOriginalOfferCents !== null && cmp?.versusOriginalOfferCents !== undefined && <p className="tile-line"><span className={`num ${signClass(cmp.versusOriginalOfferCents)}`}>{signedMoney(cmp.versusOriginalOfferCents)}</span> compared with the original client offer · cash after both tax settlements</p>}
     {(agree ? agree.required : v.purpose !== "as_offered") && <p className="tile-line small"><span className="client-agreement">Client agreement needed</span>{" "}
       for the changed {agree && agree.changes.length ? agree.changes.map(c => c === "price" ? "price" : "payment dates").join(" and ") : "price or payment dates"}. Proposed payments, not money received.{agree?.note ? ` ${humanizeDates(agree.note)}` : ""}</p>}
     {rob && !rob.holds && <p className="notice warn small">Little room: {rob.roomCents !== null ? `about ${money(rob.roomCents)} of extra 2026–2027 profit could break this` : "a small change in income could break this"}{rob.basis === "declared_ranges" ? " within the income ranges you entered" : ""}. Check the details before you choose.</p>}
@@ -241,7 +250,8 @@ function VariantCard({ ws, v, recommended, expanded, onToggle, onChoose, disable
     {v.differenceFromBestCents !== 0 && <p className="hint">{money(Math.abs(v.differenceFromBestCents))} less cash than the option with the most cash{v.purpose === "simplest" || v.purpose === "as_offered" ? " — with fewer changes to ask for" : ""}.</p>}
     <div className="card-actions">
       <button type="button" className="btn ghost small" aria-expanded={expanded} onClick={onToggle}>{expanded ? "Hide details" : "Money by date & details"}</button>
-      <button type="button" className="btn primary small" disabled={disabled || !goalMet} onClick={onChoose}>Choose these terms</button>
+      <button type="button" className="btn primary small" disabled={disabled || !goalMet} onClick={onChoose}>Prepare client reply</button>
+    </div>
     </div>
     {expanded && <VariantDetails ws={ws} v={v} result={result} onGoToForecast={onGoToForecast} />}
   </article>;

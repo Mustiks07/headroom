@@ -62,13 +62,14 @@ export function HouseholdList({ deleted = false }: { deleted?: boolean }) {
       <Link href="/check" className="btn primary">Start from my own figures <ArrowRight size={16} /></Link>
       <button type="button" className="btn secondary" onClick={() => void openSample()}><FlaskConical size={16} /> Open the sample household plan</button>
     </div>
-    <p className="muted small">With your own figures: check your subsidy, then choose <strong>Make this my household plan</strong>.</p>
+    <p className="muted small">Start with your household or a client offer. Confirmed facts stay in your plan, so you only update what changes.</p>
 
     {plans === null ? <p className="loading-line"><span className="spinner" aria-hidden="true" /> Loading…</p>
       : plans.length === 0 ? <p className="muted">No household plans yet.</p>
       : <ul className="plan-list">{plans.map(d => <li key={d.id}><Link className="plan-link" href={`/household/${encodeURIComponent(d.id)}`}>
         <span className="plan-title">{d.household.title}{d.household.isSynthetic && <span className="pill neutral small-pill">Sample</span>}</span>
         <span className="muted small">{d.projects.length} project{d.projects.length === 1 ? "" : "s"} · revision {d.revision} · updated {dateTime(d.updatedAt)}{workspaceRepo().locationOf(d.id) === "cloud" ? " · guest cloud" : " · this browser"}</span>
+        <span className="small">{d.events.at(-1)?.description ?? "Continue with the saved household facts."}</span>
         <ArrowRight size={16} aria-hidden="true" className="go-icon" /></Link></li>)}</ul>}
 
     {migrating ? <MigrationReview plan={migrating.plan} source={migrating.source} onCancel={() => setMigrating(null)}

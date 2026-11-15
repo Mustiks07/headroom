@@ -20,13 +20,14 @@ export function HeroEntry() {
     e.preventDefault();
     if (!text.trim()) { setError("Paste the offer or describe the project — or add a document instead."); field.current?.focus(); return; }
     void trackEvent("start", { dataKind: "own", inputPath: "paste" });
-    try { sessionStorage.setItem(PASTED_KEY, text.slice(0, 20000)); } catch { /* storage blocked: the form below still opens */ }
+    if (text.length > 8000) { setError("This reader accepts up to 8,000 characters. Shorten the offer before continuing."); return; }
+    try { sessionStorage.setItem(PASTED_KEY, text); } catch { setError("This browser could not carry the text to the next page. Use Enter figures below, or allow browser storage."); return; }
     router.push("/check?start=project&pasted=1");
   }
   return <form className="entry-tray" onSubmit={submit} noValidate>
     <label htmlFor="hero-offer" className="tray-label">Start with a client offer</label>
     <div className="tray-row">
-      <textarea id="hero-offer" ref={field} rows={1} maxLength={20000} value={text} placeholder="Paste the offer or describe the project…"
+      <textarea id="hero-offer" ref={field} rows={1} maxLength={8000} value={text} placeholder="Paste the offer or describe the project…"
         aria-invalid={!!error} aria-describedby={error ? "hero-offer-error" : "hero-offer-hint"}
         onChange={e => { setText(e.target.value); if (error) setError(null); }} />
       <button type="submit" className="btn primary hero-cta">Check my offer <ArrowRight size={20} aria-hidden="true" /></button>
