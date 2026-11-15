@@ -3,6 +3,7 @@ import type { ActionPackage, DealVariant, ReadyDealSearch, Reminder } from "@/do
 import { sepPosition, type HouseholdWorkspace } from "@/domain/household-workspace";
 import type { DecisionContext } from "@/domain/decision-context";
 import { originalOfferFromLines } from "./workspace-commands";
+import { RETURN_DUE } from "./filing-dates";
 
 /**
  * Deterministic builders for the action package (round 4). No money is calculated here: every
@@ -247,7 +248,6 @@ export function buildCalendar(ws: HouseholdWorkspace, pkg: ActionPackage, now = 
 export interface PlanCalendarEvent { uid: string; date: string; title: string; description: string }
 
 /** Due date of the individual return for a tax year (no extension). SEP can be later only with a filed extension (IRS Pub. 560). */
-const RETURN_DUE: Record<number, string> = { 2026: "2027-04-15", 2027: "2028-04-17" };
 
 /**
  * What is still relevant NOW: open expected payments of agreed projects, open package actions

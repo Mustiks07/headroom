@@ -13,6 +13,15 @@ class MemoryStore { data = new Map<string, string>();
   getItem(k: string) { return this.data.get(k) ?? null; } setItem(k: string, v: string) { this.data.set(k, v); } removeItem(k: string) { this.data.delete(k); } }
 
 describe("current actions are a projection of saved facts", () => {
+  it("uses the observed-holiday deadline in both the action list and the exported calendar", async () => {
+    const ws = structuredClone(workspaceFixture) as HouseholdWorkspace;
+    ws.retirement.targets.push({ ...ws.retirement.targets[0], id: "sep-2027-primary", year: 2027, targetCents: 100_000 });
+    const actions = await currentActions(ws, "2026-11-15");
+    expect(actions.find(a => a.kind === "sep_remaining" && a.refs.year === 2027)?.dueDate).toBe("2028-04-18");
+    const events = parseIcs(buildCurrentCalendar(ws, new Date("2026-11-15T12:00:00Z")).ics);
+    expect(events.find(e => e.UID.includes(".sep.primary.2027@"))?.DTSTART).toBe("20280418");
+  });
+
   it("pending / completed / overdue / remainder / counteroffer review, and the calendar labels done vs cancelled", async () => {
     const repo = createLocalWorkspaceRepository({ store: new MemoryStore() });
     const ws = await repo.save(structuredClone(workspaceFixture) as HouseholdWorkspace, null);

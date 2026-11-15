@@ -7,8 +7,8 @@ import type { CurrentAction } from "@/domain/actions";
 import { sepPosition, type HouseholdWorkspace } from "@/domain/household-workspace";
 import { calendarUid } from "./deal-exports";
 import { packageCurrency } from "./deal-state";
+import { RETURN_DUE } from "./filing-dates";
 
-const RETURN_DUE: Record<number, string> = { 2026: "2027-04-15", 2027: "2028-04-17" };
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const isRemainder = (id: string, label?: string) => /-rest(-\d+)?$/.test(id) || /^Rest of\b/.test(label ?? "");
 
