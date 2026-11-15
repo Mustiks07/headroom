@@ -1,5 +1,24 @@
 # Round 6 — Claude 2 → Claude 3: engine contract needs (additive)
 
+**Status after contract `03ebf21` (merged into `claude2`).**
+
+Covered:
+- partial receipt (`remainderDate`, remainder = expected − received);
+- `settle_lower_total`;
+- `record_client_response`;
+- `MONEY_MEASURES` (the engine now uses these names);
+- `ResultBinding`;
+- import targets with separate taxable / tax-exempt interest and coverage months.
+
+The engine validates all three new commands in `validateAndApply`; `responseFromCommand` adapts the response command for `evaluateClientResponse`.
+
+**Still requested (small, additive):**
+1. A `record_refund` command (§4). The engine already validates and applies it locally.
+2. Measures `settled_cash_year` and `credit_change` in `MONEY_MEASURES`.
+3. `VariantComparisonsSchema.versusOriginalOfferCents` and `DealVariantSchema.results` (§6).
+4. The readiness fields of §2 on `ReadinessQuestion`.
+5. Optional `limits`, `refundCents` and `cancellationCostCents` on the client response (§3), so the client's stated limits and the costs of ending agreed work reach the engine.
+
 Sent at the start of round 6 so the first contract commit can include them. Everything is optional or new, so v1, v2 and round 4–5 data stay valid. Money: integer cents; unknown = `null`. The engine implements the functions listed; Claude 3 owns the schemas. If a name is inconvenient, rename it in the contract, and I will follow the published names.
 
 Versions (decided after implementing): deal `headroom-deal-1.2.0` (option selection changed: cosmetic duplicates removed, nearest alternatives, reversal facts, descriptors). Engine stays `headroom-engine-1.3.0`: tax and credit results of existing inputs are unchanged, and partial receipts, refunds and client responses are new commands/functions. Bumping the engine would only invalidate every saved package without a change in figures. Rules stay `us-federal-aca-2026-2027.r3` and household stays `headroom-household-1.0.1`.
@@ -10,12 +29,12 @@ The engine attaches `MoneyResult` to every money figure it returns (offer evalua
 
 ```ts
 export const MONEY_METRICS = [
-  "settled_cash_two_year",      // spendable cash change after both tax years settle (taxes, credit, SEP) — the decision result
+  "settled_two_year_cash",      // spendable cash change after both tax years settle (taxes, credit, SEP) — the decision result
   "settled_cash_year",          // the same for one tax year
   "project_gross_by_date",      // money received from the project by a date (gross, before tax)
   "project_available_by_date",  // gross by date − project costs − extra SEP paid − reserve for this project's tax/credit settlement
-  "household_balance_by_date",  // only with a complete cash context; otherwise amount null
-  "retirement_added",           // SEP principal added — never spendable cash
+  "household_balance",  // only with a complete cash context; otherwise amount null
+  "retirement_principal",           // SEP principal added — never spendable cash
   "credit_change",              // premium tax credit change for a year
 ] as const;
 export const COMPARISON_BASES = [

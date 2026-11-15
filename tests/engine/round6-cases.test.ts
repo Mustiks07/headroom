@@ -117,16 +117,16 @@ describe("round 6 decision cases", () => {
   it("6. partial receipt across years: received part counts in 2026, the rest in 2027; nothing doubled or lost", async () => {
     const ws = dealWorkspace();
     const pv = await previewChange(ws, await proposal(ws, "partial", [{ type: "record_partial_receipt", projectId: "A", lineId: "a2", amountCents: usd(1000), date: "2026-11-16",
-      remaining: { amountCents: usd(2000), date: "2027-01-08" } }]), { userDate: "2026-11-16" });
+      remainderDate: "2027-01-08" }]), { userDate: "2026-11-16" });
     if (!("changes" in pv)) throw new Error();
     expect([pv.status, pv.after!.cashDeltaCents, pv.changes[0].after]).toEqual(["ready", -usd(5), "$1,000 received on 2026-11-16; $2,000 still expected on 2027-01-08"]);
     // Oracle: 2026 profit 118,000 → 116,000; 2027 118,000 → 120,000.
     expect(oracleDelta([usd(116000), usd(120000)], [usd(118000), usd(118000)])).toBe(pv.after!.cashDeltaCents);
     write("6", "Partial receipt across tax years", [
-      "**Input.** Case 1; of A's $3,000 due Dec 1, $1,000 arrives Nov 16, 2026; the client confirms $2,000 on Jan 8, 2027.",
+      "**Input.** Case 1; of A's $3,000 due Dec 1, $1,000 arrives Nov 16, 2026; the rest ($2,000) is now expected on Jan 8, 2027.",
       `**Output.** ${pv.changes[0].before} → ${pv.changes[0].after}. ${pv.notes.join(" ")} 2026 credit ${$(pv.before!.currentYearSubsidyCents)} → ${$(pv.after!.currentYearSubsidyCents)}; cash vs the plan before: ${$(pv.after!.cashDeltaCents)}.`,
       "**Independent check.** Oracle on 2026 profit $116,000 / 2027 $120,000 vs $118,000 / $118,000 gives the same −$5.",
-      "**Limits.** The remaining amount and its date are what the user confirmed; no extra payment is inferred from a smaller receipt."], { workspace: ws });
+      "**Limits.** The rest is the expected amount minus what arrived, on the date the user gives; settling for less is a separate explicit event, never inferred from a smaller receipt."], { workspace: ws });
   });
 
   it("7. SEP paid in February 2027: the tax year must be stated — the two answers differ", async () => {

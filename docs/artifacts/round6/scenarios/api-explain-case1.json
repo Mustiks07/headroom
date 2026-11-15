@@ -1,0 +1,47 @@
+{
+    "providerUsed": false,
+    "verification": {
+        "origin": "server_recomputed",
+        "workspaceId": "ws-family-demo",
+        "workspaceRevision": 0,
+        "fingerprint": "f074fac5a1b9b5a164d02083fc057184c242a13bd7ea6de54f39d595c408ffa7",
+        "engineVersion": "headroom-engine-1.3.0",
+        "rulesVersion": "us-federal-aca-2026-2027.r3",
+        "note": "Rebuilt on the server from plan revision 0 with the current calculation (headroom-engine-1.3.0 / us-federal-aca-2026-2027.r3)."
+    },
+    "explanation": {
+        "packetId": "pkt-deal-f074fac5a1b9",
+        "text": "You ask $12,000.00 in total, all still to be paid. Payment 1: $5,400.00 on December 15, 2026. Payment 2: $6,600.00 on January 4, 2027. Compared with your plan without the unpaid terms of \"Project B\", these terms leave $8,310.00 more spendable cash after both tax returns are settled. By December 31, 2026: $5,400.00 received from this project, of which about $3,745.00 is free to spend after costs, extra SEP and a reserve for this project's tax. This is money by a date, not the result after both returns. Compared with the offer as it stands, the change is $11,926.00. These terms ask the client for new payment dates. Until the client agrees in writing, the offer as it stands applies ($12,000.00 on December 20, 2026). 2026: profit $5,400.00 higher, self-employment tax $763.00 more, income tax $438.00 more, premium tax credit $454.00 less; net $3,745.00 more (settled with the return due April 15, 2027). 2027: profit $6,600.00 higher, self-employment tax $932.00 more, income tax $534.00 more, premium tax credit $569.00 less; net $4,565.00 more (settled with the return due April 18, 2028). Compared with the offer as it stands ($-3,616.00), the difference comes from: new payment dates at the offered price $11,926.00 more (in this order; each step is fully recalculated). Limits: The difference is measured against the baseline named above; it is not savings caused by Headroom. Asked terms are proposals until the client confirms in writing. Planning estimate on your entries; not tax advice or a Marketplace eligibility decision.",
+        "references": [
+            "price",
+            "pay_1_amount",
+            "pay_1_date",
+            "pay_2_amount",
+            "pay_2_date",
+            "baseline",
+            "cash_delta",
+            "by_date",
+            "by_date_received",
+            "by_date_available",
+            "vs_offered",
+            "offer_pay_1_amount",
+            "offer_pay_1_date",
+            "profit_2026",
+            "se_2026",
+            "tax_2026",
+            "credit_change_2026",
+            "cash_2026",
+            "due_2026",
+            "profit_2027",
+            "se_2027",
+            "tax_2027",
+            "credit_change_2027",
+            "cash_2027",
+            "due_2027",
+            "offered_vs_base",
+            "step_1"
+        ],
+        "source": "deterministic",
+        "unanswered": []
+    }
+}

@@ -11,6 +11,7 @@
  * dates are never offered again. Money already received stays a fact in every comparison.
  */
 import type { BlockedComparison } from "@/domain/contracts";
+import type { ChangeCommand } from "@/domain/assistance";
 import type { DealGoal, DealTermsSpace } from "@/domain/deal-planning";
 import { HouseholdWorkspaceSchema, type HouseholdWorkspace } from "@/domain/household-workspace";
 import { evaluateTermsExact, searchDealTerms, type EngineDealVariant } from "../deal";
@@ -43,6 +44,20 @@ export interface ClientResponseEvaluation {
   /** The allowed terms narrowed by the client's limits, for the next search (null = unchanged / no terms set). */
   restrictedSpace: DealTermsSpace | null;
   notes: string[];
+}
+
+/**
+ * Adapter from the contract command `record_client_response` (03ebf21). Refund and cancellation costs are not part of
+ * the command: they stay unknown (null) unless entered separately, so ending agreed work is not counted as free.
+ */
+export function responseFromCommand(ws: HouseholdWorkspace, cmd: Extract<ChangeCommand, { type: "record_client_response" }>, recordedAt: string, sourceId: string): ClientResponse {
+  const project = ws.projects.find(p => p.id === cmd.projectId);
+  const received = project ? project.receipts.filter(l => l.actual).reduce((a, l) => a + l.actual!.amountCents, 0) : 0;
+  return { id: `resp-${cmd.projectId}-${cmd.respondedOn}`, projectId: cmd.projectId, recordedAt, sourceId,
+    kind: cmd.response === "rejected" ? "declined" : cmd.response === "countered" ? "counteroffer" : "accepted",
+    terms: cmd.counter ? { priceCents: cmd.counter.totalPriceCents ?? received + cmd.counter.unpaid.reduce((a, q) => a + q.amountCents, 0),
+      payments: cmd.counter.unpaid.map(q => ({ amountCents: q.amountCents, date: q.date })) } : null,
+    limits: null, refundCents: null, cancellationCostCents: null };
 }
 
 const needs = (kind: ClientResponse["kind"], questions: ClientResponseEvaluation["questions"]): ClientResponseEvaluation =>
@@ -110,7 +125,7 @@ export async function evaluateClientResponse(raw: HouseholdWorkspace, response: 
     if (unknownCost) notes.push("Refunds or costs of ending agreed work are not entered, so the cash effect of ending it is not calculated (they are not assumed to be $0).");
     return { status: "ready", kind: "declined", questions: unknownCost ? [{ key: `decline.costs:${project.id}`, question: "Does ending the agreement mean a refund or other costs? Enter them, or confirm none.", reason: "Agreed work cannot be dropped for free by assumption." }] : [],
       counter: null, meetsGoal: null, restrictedSpace: null, notes,
-      results: [money("settled_cash_two_year", unknownCost ? null : delta, { kind: agreed ? "agreed_terms" : "latest_client_offer", label: agreed ? `Keeping the agreed terms of "${project.title}"` : `Accepting "${project.title}" as offered` },
+      results: [money("settled_two_year_cash", unknownCost ? null : delta, { kind: agreed ? "agreed_terms" : "latest_client_offer", label: agreed ? `Keeping the agreed terms of "${project.title}"` : `Accepting "${project.title}" as offered` },
         { horizon: { from: "2026-01-01", through: "2027-12-31", settlementThrough: "2028-04-18" }, conditions: unknownCost ? ["Refunds or costs of ending the agreement are not known."] : [] })] };
   }
 
@@ -147,23 +162,23 @@ export async function evaluateClientResponse(raw: HouseholdWorkspace, response: 
   if (r.status === "ready") counter = r.variants.find(x => x.purpose === "as_offered") as EngineDealVariant ?? null;
   const exact = evaluateTermsExact(counterWs, { ...goal, baseline: "decline_unpaid_terms" }, { priceCents: t.priceCents, payments: t.payments.map((q, i) => ({ id: `p${i}`, date: q.date!, amountCents: q.amountCents })), additionalSep: null });
   if (exact.status !== "ready") return exact;
-  const results: MoneyResult[] = [money("settled_cash_two_year", exact.cashDeltaCents, { kind: "decline_unpaid_terms", label: agreed ? `Declining the unpaid part of "${project.title}" (refunds or costs not known, not counted)` : `Your plan without the unpaid terms of "${project.title}"` })];
+  const results: MoneyResult[] = [money("settled_two_year_cash", exact.cashDeltaCents, { kind: "decline_unpaid_terms", label: agreed ? `Declining the unpaid part of "${project.title}" (refunds or costs not known, not counted)` : `Your plan without the unpaid terms of "${project.title}"` })];
   // Against the offer it replaces (as currently recorded).
   if (openLines.length) {
     const current = evaluateTermsExact(ws, { ...goal, baseline: "decline_unpaid_terms" }, { priceCents: received + openLines.reduce((a, l) => a + l.expected!.amountCents, 0),
       payments: openLines.map(l => ({ id: l.id, date: l.expected!.date, amountCents: l.expected!.amountCents })), additionalSep: null });
-    if (current.status === "ready") results.push(money("settled_cash_two_year", exact.cashDeltaCents - current.cashDeltaCents,
+    if (current.status === "ready") results.push(money("settled_two_year_cash", exact.cashDeltaCents - current.cashDeltaCents,
       { kind: agreed ? "agreed_terms" : "latest_client_offer", label: agreed ? `The agreed terms of "${project.title}"` : `"${project.title}" as offered before this response` }));
   }
-  if (counter?.comparisons.versusOriginalOfferCents != null) results.push(money("settled_cash_two_year", counter.comparisons.versusOriginalOfferCents, { kind: "original_offer", label: `The client's original offer for "${project.title}"` }));
+  if (counter?.comparisons.versusOriginalOfferCents != null) results.push(money("settled_two_year_cash", counter.comparisons.versusOriginalOfferCents, { kind: "original_offer", label: `The client's original offer for "${project.title}"` }));
   const pkg = ws.dealPlanning?.packages.filter(p => p.projectId === project.id && p.status !== "superseded").at(-1);
   if (pkg) {
     const proposed = evaluateTermsExact(ws, { ...goal, baseline: "decline_unpaid_terms" }, pkg.variant.terms);
-    if (proposed.status === "ready") results.push(money("settled_cash_two_year", exact.cashDeltaCents - proposed.cashDeltaCents, { kind: "household_proposal", label: "The terms you proposed to the client" },
+    if (proposed.status === "ready") results.push(money("settled_two_year_cash", exact.cashDeltaCents - proposed.cashDeltaCents, { kind: "household_proposal", label: "The terms you proposed to the client" },
       { conditions: [`Your proposal: ${formatUsd(pkg.variant.terms.priceCents)} total.`] }));
     else notes.push("Your earlier proposal no longer matches the recorded payments, so it is not compared.");
   }
-  if (counter) results.push(...counter.results.filter(x => x.metric !== "settled_cash_two_year"));
+  if (counter) results.push(...counter.results.filter(x => x.metric !== "settled_two_year_cash"));
   let restricted: DealTermsSpace | null = null;
   if (response.limits && space) {
     const rs = restrictTerms(space, response.limits, response.limits.priceFixed ? t.priceCents : null);

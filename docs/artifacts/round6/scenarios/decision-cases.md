@@ -65,10 +65,10 @@ Re-search with the client's limit: **no feasible terms**. Within the allowed pri
 
 ## 6. Partial receipt across tax years
 
-**Input.** Case 1; of A's $3,000 due Dec 1, $1,000 arrives Nov 16, 2026; the client confirms $2,000 on Jan 8, 2027.
+**Input.** Case 1; of A's $3,000 due Dec 1, $1,000 arrives Nov 16, 2026; the rest ($2,000) is now expected on Jan 8, 2027.
 **Output.** $3,000 expected on 2026-12-01 → $1,000 received on 2026-11-16; $2,000 still expected on 2027-01-08. The part received counts in 2026 income; the rest in 2027. 2026 credit $13,170 → $13,339; cash vs the plan before: −$5.
 **Independent check.** Oracle on 2026 profit $116,000 / 2027 $120,000 vs $118,000 / $118,000 gives the same −$5.
-**Limits.** The remaining amount and its date are what the user confirmed; no extra payment is inferred from a smaller receipt.
+**Limits.** The rest is the expected amount minus what arrived, on the date the user gives; settling for less is a separate explicit event, never inferred from a smaller receipt.
 
 ## 7. SEP-IRA contribution paid in February 2027
 

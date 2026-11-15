@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ChangeProposalSchema, type ExtractedFact } from "@/domain/assistance";
 import type { HouseholdWorkspace } from "@/domain/household-workspace";
 import { extractedFactsFixture } from "@/fixtures/assistance";
-import { assessInputReadiness, checkExtractedFacts, engineWorkspaceFingerprint, evaluateClientResponse, evaluateHouseholdWorkspace, validateAndApply } from "@/lib/engine";
+import { assessInputReadiness, checkExtractedFacts, engineWorkspaceFingerprint, evaluateClientResponse, evaluateHouseholdWorkspace, responseFromCommand, validateAndApply } from "@/lib/engine";
 import { deal, dealWorkspace, T } from "./deal-fixture";
 import { usd } from "./helpers";
 
@@ -55,11 +55,10 @@ describe("readiness semantics", () => {
 });
 
 describe("payment events", () => {
-  it("partial receipt keeps the total, refuses a missing date or a full amount, and a retry is a no-op", async () => {
+  it("partial receipt keeps the total, refuses a past remainder date or a full amount, and a retry is a no-op", async () => {
     const ws = dealWorkspace();
-    const partial = (remainingDate: string | null, amount = usd(1000)) => proposal(ws, "pp", [{ type: "record_partial_receipt", projectId: "A", lineId: "a2", amountCents: amount, date: "2026-11-16",
-      remaining: { amountCents: usd(2000), date: remainingDate } }]);
-    expect(validateAndApply(ws, await partial(null), "2026-11-16", T).blockers[0].path).toBe("commands[0].remaining.date");
+    const partial = (remainderDate: string, amount = usd(1000)) => proposal(ws, "pp", [{ type: "record_partial_receipt", projectId: "A", lineId: "a2", amountCents: amount, date: "2026-11-16", remainderDate }]);
+    expect(validateAndApply(ws, await partial("2026-11-10"), "2026-11-16", T).blockers[0].path).toBe("commands[0].remainderDate");
     expect(validateAndApply(ws, await partial("2027-01-08", usd(3000)), "2026-11-16", T).blockers[0].path).toBe("commands[0].amountCents");
     const out = validateAndApply(ws, await partial("2027-01-08"), "2026-11-16", T);
     const a = out.workspace.projects[0].receipts;
@@ -70,7 +69,7 @@ describe("payment events", () => {
 
   it("settling for less ends the line explicitly; a refund cannot exceed what was received", async () => {
     const ws = dealWorkspace();
-    const settled = validateAndApply(ws, await proposal(ws, "s", [{ type: "settle_line_for_less", projectId: "A", lineId: "a2", amountCents: usd(2500), date: "2026-11-16", reason: "Scope reduced" }]), "2026-11-16", T);
+    const settled = validateAndApply(ws, await proposal(ws, "s", [{ type: "settle_lower_total", projectId: "A", lineId: "a2", amountCents: usd(2500), date: "2026-11-16", reason: "Scope reduced" }]), "2026-11-16", T);
     expect(settled.notes.join(" ")).toMatch(/\$500 that was expected will not be received/);
     expect(settled.workspace.projects[0].receipts.every(l => l.actual)).toBe(true);
     const tooMuch = validateAndApply(ws, await proposal(ws, "r", [{ type: "record_refund", projectId: "A", amountCents: usd(3500), date: "2026-11-16", reason: "Cancelled" }]), "2026-11-16", T);
@@ -92,5 +91,18 @@ describe("client responses", () => {
     expect("questions" in wrongTotal && wrongTotal.questions.map(q => q.key)).toContain("counter.total:B");
     const decline = await evaluateClientResponse(ws, { ...base, projectId: "A", kind: "declined", terms: null }, "2026-11-16");
     expect("results" in decline && decline.results[0]).toMatchObject({ amountCents: null, precision: "not_calculable", basis: { kind: "agreed_terms" } });
+  });
+
+  it("the contract's record_client_response: a counter replaces only the unpaid terms; a wrong total is refused", async () => {
+    const ws = dealWorkspace();
+    const cmd = (total: number | null) => proposal(ws, `cr-${total}`, [{ type: "record_client_response", projectId: "A", response: "countered", respondedOn: "2026-11-16", packageId: null,
+      counter: { totalPriceCents: total, unpaid: [{ amountCents: usd(3500), date: "2027-01-08" }], note: null } }]);
+    expect(validateAndApply(ws, await cmd(usd(7000)), "2026-11-16", T).blockers[0].path).toBe("commands[0].counter.totalPriceCents");
+    const out = validateAndApply(ws, await cmd(usd(6500)), "2026-11-16", T);
+    const a = out.workspace.projects[0];
+    expect([a.status, a.receipts.filter(l => l.actual).map(l => l.id), a.receipts.filter(l => !l.actual && !l.cancelledAt).map(l => l.expected!.amountCents)]).toEqual(["proposed", ["a1"], [usd(3500)]]);
+    const ev = await evaluateClientResponse(ws, responseFromCommand(ws, { type: "record_client_response", projectId: "A", response: "countered", respondedOn: "2026-11-16", packageId: null,
+      counter: { totalPriceCents: usd(6500), unpaid: [{ amountCents: usd(3500), date: "2027-01-08" }], note: null } }, T, "demo-input"), "2026-11-16");
+    expect("results" in ev && ev.status).toBe("ready");
   });
 });

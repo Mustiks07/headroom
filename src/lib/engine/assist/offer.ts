@@ -135,7 +135,7 @@ export async function evaluateOfferAsOffered(raw: HouseholdWorkspace, projectId:
     const untouchedNote = untouched.length ? [`${untouched.join(", ")} is not changed by this offer as written.`] : [];
     let cum = 0;
     const results: MoneyResult[] = [
-      money("settled_cash_two_year", cash, basis, { precision, conditions: untouchedNote }),
+      money("settled_two_year_cash", cash, basis, { precision, conditions: untouchedNote }),
       ...years.flatMap(y => [money("settled_cash_year", y.cashChangeCents, basis, { year: y.year, precision }),
         money("credit_change", y.premiumTaxCreditChangeCents, basis, { year: y.year, precision })]),
       ...[...receipts].sort((a, b) => a.date.localeCompare(b.date)).map(r => { cum += r.amountCents;
