@@ -116,6 +116,7 @@ const KIND_NOTES: Record<Exclude<DocumentKind, null>, string> = {
 export function extractFromText(text: string, documentId: string, rawLabel: string): ExtractionResult {
   const kind = documentKind(text);
   const isProfitAndLoss: boolean = kind === "profit and loss statement";
+  const isSepConfirmation: boolean = kind === "SEP contribution confirmation";
   const label = kind ? `${rawLabel} (looks like a ${kind})` : rawLabel;
   const warnings: string[] = [];
   const lines = text.replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
@@ -133,7 +134,9 @@ export function extractFromText(text: string, documentId: string, rawLabel: stri
   lines.slice(0, MAX_LINES).forEach((line, index) => {
     const parts = splitLine(line);
     if (!parts) return;
-    const match = LABELS.find(([re]) => re.test(parts.label));
+    // In a SEP confirmation, "Contribution amount" is the SEP contribution (generic label, document kind decides).
+    const sepAmount = isSepConfirmation && /contribution\s+(amount|total)|amount\s+contributed|contribution$/i.test(parts.label);
+    const match = sepAmount ? [/./, "income.existingSepContribution" as ExtractionFieldPath] as const : LABELS.find(([re]) => re.test(parts.label));
     if (!match) return;
     // A P&L's expenses are already inside its net profit; they are not a project's expenses.
     if (isProfitAndLoss && OPPORTUNITY_FIELD.test(match[1])) return;
@@ -165,6 +168,17 @@ export function extractFromText(text: string, documentId: string, rawLabel: stri
     fields.push({ path, proposedValue,
       evidence: evidenceFor(documentId, `l${index + 1}`, `${label}, line ${index + 1}`, redactExcerpt(line), taxYear, undefined) });
   });
+
+  // A P&L covering January 1 through a date before December 31 is year to date; through December 31, the full
+  // year. Any other range (e.g. one quarter) stays "unknown" — a partial period is never treated as a year.
+  if (isProfitAndLoss) {
+    const end = detectAsOfDate(text);
+    const fromJanuary = /\b(jan(uary)?\.?\s+1(st)?\b|01\/01\/\d{4}|\d{4}-01-01)\s*(?:-|–|to|through)/i.test(text);
+    for (const f of fields) {
+      const v = f.proposedValue as { kind: string; period?: AmountPeriod };
+      if (v.kind === "money" && v.period === "unknown" && end && fromJanuary) v.period = end.endsWith("-12-31") ? "annual" : "year_to_date";
+    }
+  }
 
   const counts = new Map<string, number>();
   fields.forEach(f => counts.set(f.path, (counts.get(f.path) ?? 0) + 1));

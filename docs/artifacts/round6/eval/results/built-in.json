@@ -1,0 +1,227 @@
+{
+  "summary": {
+    "label": "built-in",
+    "base": "http://<host>",
+    "corpusVersion": "round6-1.0",
+    "ranAt": "2026-11-15T01:00:53.957Z",
+    "consent": false,
+    "modes": [
+      "built-in"
+    ],
+    "cases": 13,
+    "correct": 67,
+    "incorrect": 0,
+    "missing": 0,
+    "extra": 0,
+    "expectedChecks": 67,
+    "accuracy": 100,
+    "latencyMs": {
+      "median": 8,
+      "max": 174
+    }
+  },
+  "results": [
+    {
+      "id": "m1-offer-email",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 128,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 10,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "m2-counteroffer",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 9,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 10,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "m3-invoice",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 5,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 7,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "m4-ambiguous-date",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 7,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 10,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "m5-already-paid",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 5,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 10,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "m6-hourly-rate",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 4,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 2,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d1-payment-confirmation",
+      "type": "document",
+      "format": "text_pdf",
+      "httpStatus": 200,
+      "ms": 174,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [],
+      "score": {
+        "correct": 2,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d2-w2",
+      "type": "document",
+      "format": "text_pdf",
+      "httpStatus": 200,
+      "ms": 19,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [],
+      "score": {
+        "correct": 3,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d3-marketplace-notice",
+      "type": "document",
+      "format": "text_pdf",
+      "httpStatus": 200,
+      "ms": 18,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [],
+      "score": {
+        "correct": 3,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d4-ytd-pl",
+      "type": "document",
+      "format": "text",
+      "httpStatus": 200,
+      "ms": 10,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [],
+      "score": {
+        "correct": 4,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d5-pl-revised",
+      "type": "document",
+      "format": "text",
+      "httpStatus": 200,
+      "ms": 6,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [],
+      "score": {
+        "correct": 4,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d6-sep-confirmation",
+      "type": "document",
+      "format": "text_pdf",
+      "httpStatus": 200,
+      "ms": 8,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [],
+      "score": {
+        "correct": 1,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "d7-scan",
+      "type": "document",
+      "format": "scan_pdf",
+      "httpStatus": 200,
+      "ms": 6,
+      "mode": "built-in",
+      "status": "unavailable",
+      "notes": [],
+      "score": {
+        "correct": 1,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    }
+  ]
+}

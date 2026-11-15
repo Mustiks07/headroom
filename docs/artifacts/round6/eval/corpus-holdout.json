@@ -1,0 +1,22 @@
+{
+  "corpusVersion": "round6-holdout-1.0",
+  "created": "2026-11-15",
+  "userDate": "2026-11-15",
+  "timeZone": "America/Chicago",
+  "provenance": "Synthetic. Written after the built-in reader fixes and run once; the reader was NOT changed after seeing these results.",
+  "cases": [
+    { "id": "h1-offer-upfront", "type": "message", "purpose": "first_offer", "file": "inputs/h1-offer-upfront.txt",
+      "expected": { "outcome": "proposed", "offers": [{ "totalCents": 750000, "costsStated": false, "taxYearStated": null,
+        "payments": [{ "amountCents": 250000, "date": null, "status": "expected" }, { "amountCents": 500000, "date": null, "status": "expected" }] }] } },
+    { "id": "h2-pay-friday", "type": "message", "purpose": "first_offer", "file": "inputs/h2-pay-friday.txt",
+      "expected": { "outcome": "proposed", "offers": [{ "totalCents": null, "costsStated": false, "taxYearStated": null,
+        "payments": [{ "amountCents": 320000, "date": "2026-12-04", "status": "expected" }] }] } },
+    { "id": "h3-revised-offer", "type": "message", "purpose": "counteroffer", "file": "inputs/h3-revised-offer.txt",
+      "expected": { "outcome": "proposed", "offers": [{ "totalCents": null, "costsStated": false, "taxYearStated": null,
+        "payments": [{ "amountCents": 900000, "date": "2027-01-12", "status": "expected" }] }] } },
+    { "id": "h4-pay-stub", "type": "document", "format": "text", "file": "inputs/h4-pay-stub.txt",
+      "expected": { "fields": [{ "path": "income.grossWages", "amountCents": 3500000, "period": "year_to_date" }] } },
+    { "id": "h5-1099-int", "type": "document", "format": "text", "file": "inputs/h5-1099-int.txt",
+      "expected": { "fields": [{ "path": "income.taxableInterest", "amountCents": 41200 }, { "path": "income.taxExemptInterest", "amountCents": 105000 }] } }
+  ]
+}

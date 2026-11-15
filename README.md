@@ -6,7 +6,7 @@ Headroom is a browser-based planning product for self-employed US adults. It hel
 
 **[Open Headroom](https://headroom-amber.vercel.app) · [Try the family example](https://headroom-amber.vercel.app/demo?case=family-cliff) · [Use your own figures](https://headroom-amber.vercel.app/check)**
 
-**Live on Vercel, with guest cloud save connected to Supabase.** No signup, email, password or card is required. Round 5 connects the selected C interface, goal-based terms, confirmed text updates, historical decision PDFs and current calendar exports. BasisWeb text assistance and text-PDF extraction have been exercised with real provider requests; photos/scanned PDFs are not supported by the configured gateway. All checkout access is no-charge. See the [round 5 integration handoff](docs/handoffs/integration-round5.md) for exact verification and remaining gaps.
+**Live on Vercel, with guest cloud save connected to Supabase.** No signup, email, password or card is required. Round 5 connects the selected C interface, goal-based terms, confirmed text updates, historical decision PDFs and current calendar exports. BasisWeb text assistance and text-PDF extraction have been exercised with real provider requests; photos and scanned PDFs are not read (no OCR); paste or manual entry is offered instead. All checkout access is no-charge. See the [round 5 integration handoff](docs/handoffs/integration-round5.md) for exact verification and remaining gaps.
 
 Current calculation versions: `headroom-engine-1.3.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`, deal search `headroom-deal-1.1.0`. Earlier reviews remain available as history, including [round 4](docs/handoffs/integration-round4.md).
 
@@ -52,6 +52,14 @@ For the bounded browser check, install Chromium once with `npx playwright instal
 Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
 
 **Next assignments:** [round 6 shared brief](docs/tasks/ROUND6_SHARED.md), [Claude 1 — complete user experience](docs/tasks/CLAUDE1_ROUND6.md), [Claude 2 — trusted decisions and evidence](docs/tasks/CLAUDE2_ROUND6.md), [Claude 3 — common data/AI path](docs/tasks/CLAUDE3_ROUND6.md). These cover the remaining first-input, semantic multi-document, negotiation and partial-payment gaps. They are requirements, not claims that every requested feature is already live.
+
+## Data and AI path (round 6, Claude 3 branch)
+
+- **First offer from an ordinary email** (`POST /api/assist/intake`): amounts and dates as written, costs unknown unless stated, no inferred tax year, invoices stay "expected", separate projects stay separate, typed questions for what is missing. Works without AI (built-in reading) and, with consent, through the configured provider with every value checked against the text.
+- **One document import path** for new and saved plans: the user chooses whose figure, which year, which months and which payment; the engine's semantic check runs on the whole group; one revision or nothing; repeat imports add nothing. A PDF's embedded text is read on the server without AI when AI is off or not allowed; scans and photos are not read.
+- **Negotiation and payments**: client accepted / declined / countered (original offer kept, versions recorded), partial receipts with a dated remainder, explicit lower settlement. Manual forms and confirmed AI proposals share one command path, and saving re-runs the engine's business checks.
+- **Exports and actions**: current actions from saved facts, calendar updates with stable IDs ("Done" for received payments, "Cancelled" for dropped ones), historical decision PDFs that list what was recorded since.
+- Evidence: [AI/extraction evaluation](docs/artifacts/round6/ai-evaluation.md) (fixed synthetic corpus; built-in reading measured, provider run pending a configured key in this branch), [technical proof](docs/demo/round6-technical-proof.md), [handoff](docs/handoffs/claude3-round6.md).
 
 ## Specification
 

@@ -84,6 +84,16 @@ export interface AiReservation {
   settle(usage: AiUsage | null, outcome: string): Promise<void>;
 }
 
+/** Anonymous operational counter (migration 006): feature / provider / outcome / latency / tokens. Never content. Best effort. */
+async function countCall(admin: ReturnType<typeof privilegedClient>, feature: AiFeature, provider: AiProvider, outcome: string, startedAt: number | null, usage: AiUsage | null) {
+  if (!admin) return;
+  try {
+    const { error } = await admin.rpc("headroom_count_ai_call", { p_feature: feature, p_provider: provider, p_outcome: outcome.slice(0, 40),
+      p_latency_ms: startedAt === null ? 0 : Math.min(2_000_000_000, Date.now() - startedAt), p_input: usage?.inputTokens ?? null, p_output: usage?.outputTokens ?? null });
+    if (error) console.warn("[headroom] ai call counter unavailable", error.code ?? "unknown");
+  } catch { /* the counter never affects the request */ }
+}
+
 function clientIp(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
 }
@@ -120,16 +130,18 @@ export async function reserveAiCall(request: Request, feature: AiFeature, input:
       p_ip_limit: cap("AI_IP_DAILY_CALL_LIMIT", 20, 200),
       p_global_limit: cap("AI_DAILY_CALL_LIMIT", 100, 1000),
     });
-    if (error || typeof data !== "string") throw new HttpError(503, "AI_UNAVAILABLE", "The AI request limit could not be checked. Enter the details manually.");
-    if (data !== "ok") throw new HttpError(429, "AI_BUDGET_REACHED", "Today's AI request limit has been reached. Enter the details manually or try again tomorrow.");
+    if (error || typeof data !== "string") { await countCall(admin, feature, "basisweb", "quota_check_failed", null, null); throw new HttpError(503, "AI_UNAVAILABLE", "The AI request limit could not be checked. Enter the details manually."); }
+    if (data !== "ok") { await countCall(admin, feature, "basisweb", "quota_reached", null, null); throw new HttpError(429, "AI_BUDGET_REACHED", "Today's AI request limit has been reached. Enter the details manually or try again tomorrow."); }
     let reported = false;
+    const startedAt = Date.now();
     return { provider: "basisweb", model, apiKey: config.ai.apiKey, ...limits,
       async settle(usage, outcome) {
         if (reported) return;
         reported = true;
         console.info(JSON.stringify({ type: "headroom_ai_call", provider: "basisweb", feature, model, outcome,
           inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null,
-          usageKnown: usage !== null, accounting: "daily_call_quota", costUsd: null }));
+          usageKnown: usage !== null, accounting: "daily_call_quota", costUsd: null, latencyMs: Date.now() - startedAt }));
+        await countCall(admin, feature, "basisweb", outcome, startedAt, usage);
       },
     };
   }
@@ -150,11 +162,13 @@ export async function reserveAiCall(request: Request, feature: AiFeature, input:
       : `You've reached today's limit for ${MESSAGES[feature].toLowerCase()}. Continue by entering the details yourself or try again tomorrow.`);
   }
   let settled = false;
+  const startedAt = Date.now();
   return {
     provider: "anthropic", model, apiKey: config.ai.apiKey, maxOutputTokens: limits.maxOutputTokens, timeoutMs: limits.timeoutMs,
     async settle(usage, outcome) {
       if (settled) return;
       settled = true;
+      await countCall(admin, feature, "anthropic", outcome, startedAt, usage);
       // A timeout/lost response does not prove the provider did no billable work.
       // Keep the reservation for the day rather than refunding a possibly paid call.
       if (!usage) {

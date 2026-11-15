@@ -27,7 +27,7 @@ export { subscribeToLocalPlanChanges } from "./local-repository";
 export {
   extractDocument, exportPlanPdf, exportPlanJson, exportCaseJson, readCaseInputFromJson,
   getCapabilities, startCheckout, verifyCheckout, getLocalEntitlement, trackEvent, exportForecastPdf,
-  exportDecisionPdf, exportCalendarIcs, clientDraftFile, proposeChange, intakeOffer, explainResult, explainWorkspace, lookupLocation, lookupBenchmark,
+  exportDecisionPdf, exportCalendarIcs, clientDraftFile, proposeChange, intakeOffer, trackPlanReopened, isDeveloperContext, explainResult, explainWorkspace, lookupLocation, lookupBenchmark,
 } from "./features";
 export { toExtractedFacts, mergeIntoDraft, applyConfirmedFacts, emptyImportDraft } from "./import-draft";
 export type { ExtractionResponse, FactDecision, GroupApplyResult } from "./import-draft";

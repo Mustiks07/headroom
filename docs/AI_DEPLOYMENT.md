@@ -10,9 +10,10 @@ Real checks on November 15, 2026: structured text, text-PDF through Headroom's e
 |---|---|---|
 | extraction | POST /api/documents/extract | Embedded PDF text read on our server, then sent with permission for fact proposals. CSV/TXT parsed deterministically. |
 | proposal | POST /api/assist/propose | Consented text becomes commands/questions; supported patterns work without AI. |
+| proposal (same feature and call quota) | POST /api/assist/intake | Round 6: an ordinary client email or counteroffer → offers as written + typed questions. Every provider value must be quoted from the text; otherwise it is dropped and asked. Without consent/AI: built-in reading. `providerStatus` says `used`, `not_consented`, `disabled`, `quota`, `timeout`, `refused`, `invalid_output` or `unavailable`. |
 | explanation | POST /api/assist/explain | Server recomputes financial packet. Optional model framing does not replace numerical explanation. |
 
-BasisWeb rejected direct PDF attachments (HTTP400). `pdf-parse` reads embedded text without OCR. Photos or PDFs without a text layer return a paste/manual alternative before spending a gateway call. Do not advertise scans/photos as working. The optional direct Anthropic adapter accepts attachments but is not the verified production provider.
+Round 6: without consent, or with AI off, a PDF's embedded text is read on Headroom's server with the same deterministic reader as TXT (nothing is sent). BasisWeb rejected direct PDF attachments (HTTP400). `pdf-parse` reads embedded text without OCR. Photos or PDFs without a text layer return a paste/manual alternative before spending a gateway call. Do not advertise scans/photos as working. The optional direct Anthropic adapter accepts attachments but is not the verified production provider.
 
 Extraction limits: 3 MB, 5 pages, 50,000 extracted characters, 4,000 output tokens, 40-second provider timeout. Proposals: 4,000 input characters, 2,000 output tokens, 20 seconds. Explanation: 1,200 output tokens, 15 seconds. No automatic retry/model switch.
 
@@ -61,3 +62,18 @@ The parser is externalized with `pdf-parse` and `@napi-rs/canvas`. [Maintainer d
 ## Insurance lookup
 
 Benchmark/county-name lookup uses bundled CMS year/county data. County candidates are not confirmed eligibility results. ZIP lookup requires a separate `MARKETPLACE_API_KEY`; it is not configured or live-tested. Never substitute state averages or a different year's data. Manual notice entry remains available.
+
+## Round 6 additions (Claude 3)
+
+- Migration `202611180006_round6_ops.sql` (not yet applied): `developer` analytics data kind; `ai_calls_daily` + `headroom_count_ai_call` (feature, provider, outcome, latency, token totals; no content). Reserve/settle count every outcome, including `quota_reached`.
+- Reports (server secret from a private shell, never committed): `node scripts/analytics-report.mjs 30` (round 6 funnel with date range, own-data denominators, zero state; sample/developer separated) and `node scripts/ops-report.mjs 7` (provider availability, outcome classes, quota refusals, mean/max latency, tokens; BasisWeb cost stays "unknown").
+- No new environment variables. `AI_FEATURES=extraction,proposal,explanation` already covers intake (it uses `proposal`).
+
+### Bounded provider evaluation (Codex, with the private key; synthetic inputs only)
+
+1. Deploy the merged build with the existing BasisWeb env; apply migration 006.
+2. Messages (6 provider calls): `EVAL_CONSENT=1 NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… BASE_URL=https://<deployment> node scripts/ai-eval.mjs --label=provider-messages --only=m`
+3. Documents (5 provider calls; the scan spends none): same with `--label=provider-documents --only=d`. The per-guest cap is 10 calls/day, so run step 3 the next day or with a second anonymous guest (the script signs in a new one each run).
+4. Hold-out (3 messages + 2 docs): `--corpus=corpus-holdout.json --label=provider-holdout`.
+5. Commit the three `docs/artifacts/round6/eval/results/provider-*.json` files and update `docs/artifacts/round6/ai-evaluation.md`. Check `node scripts/ops-report.mjs 1` shows the calls with latency and no unknown-usage surprises. Do not repeat after a clean run.
+

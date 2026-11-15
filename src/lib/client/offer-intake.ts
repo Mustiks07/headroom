@@ -21,13 +21,14 @@ const dollars = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFr
 
 type Token = { kind: "usd" | "other" | "pct"; start: number; end: number; raw: string; cents: number | null; pct: number | null };
 
-const MONEY = /(US\$|\$|USD\s?)\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?\s?(k|thousand)?\b|\b(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?\s?(k|thousand)?\s?(?:dollars|usd)\b|(€|£|EUR\s?|GBP\s?|CAD\s?|C\$|A\$)\s?\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\s?(?:euros?|pounds?|EUR|GBP)\b|\b(\d{1,3})\s?%/gi;
+const MONEY = /(US\$|\$|USD\s?)\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?\s?(k|thousand)?\b|\b(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?\s?(k|thousand)?\s?(?:dollars|usd)\b|(€|£|EUR\s?|GBP\s?|CAD\s?|C\$|A\$)\s?\d[\d,]*(?:\.\d{1,2})?|\b\d[\d,]*(?:\.\d{1,2})?\s?(?:euros?|pounds?|EUR|GBP)\b|\b(\d{1,3})\s?%|\b((?:the other |one )?half)\b(?! (?:of|an?) )/gi;
 
 function tokens(text: string): Token[] {
   const out: Token[] = [];
   for (const m of text.matchAll(MONEY)) {
     const start = m.index!, raw = m[0].trim(), end = start + m[0].length;
     if (m[9] !== undefined) { const pct = Number(m[9]); if (pct > 0 && pct <= 100) out.push({ kind: "pct", start, end, raw, cents: null, pct }); continue; }
+    if (m[10] !== undefined) { out.push({ kind: "pct", start, end, raw, cents: null, pct: 50 }); continue; }
     if (m[8] !== undefined || /euro|pound|EUR|GBP/i.test(raw) && !/\$/.test(raw)) { out.push({ kind: "other", start, end, raw, cents: null, pct: null }); continue; }
     const whole = (m[2] ?? m[5])!.replace(/,/g, ""), frac = (m[3] ?? m[6] ?? "").padEnd(2, "0"), mult = (m[4] ?? m[7]) ? 1000 : 1;
     const cents = mult === 1 ? Number(whole) * 100 + Number(frac || 0) : Math.round(Number(`${whole}.${frac || 0}`) * 1000 * 100);
@@ -115,6 +116,9 @@ export function parseOfferText(text: string, userDate: string, draftId: string):
   // other stated payments is the total, not a third payment.
   for (const g of groups) {
     if (g.some(x => x.kind === "total")) continue;
+    // "$6,000 — half when we start and half when it's done": with shares stated, the one undated dollar amount is the total.
+    const usdPays = g.filter(x => x.kind === "payment" && x.t.kind === "usd" && x.t.cents);
+    if (g.some(x => x.t.kind === "pct") && usdPays.length === 1 && !resolveDate(usdPays[0].win, userDate) && !CONDITION.test(usdPays[0].win)) { usdPays[0].kind = "total"; continue; }
     const pays = g.filter(x => x.kind === "payment" && x.t.kind === "usd" && x.t.cents);
     for (const x of pays) {
       const others = pays.filter(y => y !== x);

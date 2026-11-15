@@ -142,10 +142,35 @@ export function getLocalEntitlement(): { mode: "demo" | "test"; expiresAt?: stri
   }
 }
 
+/**
+ * Developer context: localhost, an origin other than the configured production URL, or a browser
+ * opted in with `?dev=1` (stored as headroom.developer=1; `?dev=0` clears it).
+ */
+export function isDeveloperContext(): boolean {
+  try {
+    if (typeof window === "undefined") return false;
+    const q = new URLSearchParams(window.location.search).get("dev");
+    if (q === "1") localStorage.setItem("headroom.developer", "1");
+    if (q === "0") localStorage.removeItem("headroom.developer");
+    if (localStorage.getItem("headroom.developer") === "1") return true;
+    if (/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(window.location.hostname)) return true;
+    const prod = process.env.NEXT_PUBLIC_APP_URL;
+    return !!prod && new URL(prod).origin !== window.location.origin;
+  } catch { return false; }
+}
+
+/** A saved plan was opened again: bucketed by time since it was last saved (no ids or dates are sent). */
+export function trackPlanReopened(updatedAt: string, dataKind: import("./analytics-events").AnalyticsDataKind, now = new Date()): Promise<void> {
+  const days = (now.getTime() - new Date(updatedAt).getTime()) / 86_400_000;
+  return trackEvent(days >= 7 ? "plan_reopened_after_7_days" : days >= 1 ? "plan_reopened_after_1_day" : "plan_reopened_same_day", { dataKind });
+}
+
 /** Fire-and-forget anonymous event. Never throws, never sends amounts, text or identifiers. */
 export async function trackEvent(event: AnalyticsEvent, dims: { dataKind?: import("./analytics-events").AnalyticsDataKind; inputPath?: import("./analytics-events").AnalyticsInputPath } = {}): Promise<void> {
   try {
-    await apiFetch("/api/analytics", { method: "POST", timeoutMs: 4000, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, ...dims }) });
+    // Own-data activity from a developer context (localhost, a preview deployment, or an opted-in tester) is counted as "developer", never as a user.
+    const dataKind = dims.dataKind === "own" && isDeveloperContext() ? "developer" : dims.dataKind;
+    await apiFetch("/api/analytics", { method: "POST", timeoutMs: 4000, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, ...dims, ...(dataKind ? { dataKind } : {}) }) });
   } catch { /* analytics must never affect the journey */ }
 }
 

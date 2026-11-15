@@ -1,0 +1,6 @@
+Form W-2 Wage and Tax Statement 2026 (SYNTHETIC)
+Employer: Example Clinic Inc.
+Box 1 Wages, tips, other compensation: $42,000.00
+Box 3 Social security wages: $44,000.00
+Box 5 Medicare wages and tips: $44,000.00
+Box 12 code D (401k elective deferral): $2,000.00

@@ -1,0 +1,4 @@
+Form 1099-INT 2026 (SYNTHETIC)
+Payer: Example Credit Union
+Box 1 Interest income: $412.00
+Box 8 Tax-exempt interest: $1,050.00

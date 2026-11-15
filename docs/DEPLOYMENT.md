@@ -25,6 +25,10 @@ Already applied, in order:
 4. 202611160004_workspaces.sql
 5. 202611170005_ai_budget_analytics.sql
 
+To apply next (round 6, not applied yet):
+
+6. 202611180006_round6_ops.sql (Claude 3: analytics `developer` data kind; anonymous `ai_calls_daily` counters + server-only `headroom_count_ai_call`). Apply after 005, then run `scripts/verify-rls.mjs`. Until applied, developer analytics rows and AI call counters are dropped with a logged warning; nothing else depends on it.
+
 Anonymous sessions are invisible plumbing. RLS binds user rows to guests. Decision/calendar history lives inside workspace documents. Quota/spend/analytics functions are server-only. Migration005 applied November15; 26 live isolation checks passed. Do not rerun migrations or relax policies to mask client errors.
 
 Only for a new environment: apply exact files in order, enable anonymous sessions, set origin and run scripts/verify-rls.mjs with private env.

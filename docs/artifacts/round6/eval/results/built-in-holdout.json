@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "label": "built-in-holdout",
+    "base": "http://<host>",
+    "corpusVersion": "round6-holdout-1.0",
+    "ranAt": "2026-11-15T01:01:39.670Z",
+    "consent": false,
+    "modes": [
+      "built-in"
+    ],
+    "cases": 5,
+    "correct": 24,
+    "incorrect": 2,
+    "missing": 2,
+    "extra": 2,
+    "expectedChecks": 28,
+    "accuracy": 85.7,
+    "latencyMs": {
+      "median": 5,
+      "max": 54
+    }
+  },
+  "results": [
+    {
+      "id": "h1-offer-upfront",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 54,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 10,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "h2-pay-friday",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 5,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [],
+      "score": {
+        "correct": 7,
+        "incorrect": 0,
+        "missing": 0,
+        "extra": 0
+      }
+    },
+    {
+      "id": "h3-revised-offer",
+      "type": "message",
+      "httpStatus": 200,
+      "ms": 5,
+      "mode": "built-in",
+      "providerStatus": "not_consented",
+      "notes": [
+        "missing payment 1 date",
+        "1 extra payment(s)"
+      ],
+      "score": {
+        "correct": 6,
+        "incorrect": 0,
+        "missing": 1,
+        "extra": 1
+      }
+    },
+    {
+      "id": "h4-pay-stub",
+      "type": "document",
+      "format": "text",
+      "httpStatus": 200,
+      "ms": 6,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [
+        "income.grossWages: expected 3500000, got 350000",
+        "income.grossWages period: expected year_to_date, got unknown",
+        "1 extra field(s): "
+      ],
+      "score": {
+        "correct": 0,
+        "incorrect": 2,
+        "missing": 0,
+        "extra": 1
+      }
+    },
+    {
+      "id": "h5-1099-int",
+      "type": "document",
+      "format": "text",
+      "httpStatus": 200,
+      "ms": 5,
+      "mode": "built-in",
+      "status": "review_required",
+      "notes": [
+        "missing income.taxableInterest"
+      ],
+      "score": {
+        "correct": 1,
+        "incorrect": 0,
+        "missing": 1,
+        "extra": 0
+      }
+    }
+  ]
+}

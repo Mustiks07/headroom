@@ -82,6 +82,23 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
     media = { kind: "image", data: Buffer.from(req.bytes), mediaType: detected.mediaType };
   }
 
+  // Without a provider (AI off) or without consent: read the PDF's embedded text on our server with the
+  // same deterministic reader as TXT. Nothing leaves Headroom; scans/photos still need paste or manual entry.
+  if (media.kind === "pdf" && (!aiFeatureEnabled("extraction") || !req.consentToProvider)) {
+    let pages: Array<{ page: number; text: string }>;
+    try { pages = await readPdfText(media.data); } catch {
+      return { status: 200, result: { status: "unavailable", fields: [], warnings: ["The text in this PDF could not be read. Paste the relevant text or enter the figures manually."] } };
+    }
+    const text = pages.map(p => p.text).join("\n");
+    if (!text.trim()) return { status: 200, result: { status: "unavailable", fields: [],
+      warnings: ["This PDF has no readable text layer (for example a scan). Paste the relevant text or enter the figures manually."] } };
+    const result = extractFromText(text, documentId, "Uploaded PDF");
+    const kind = documentKindCode(text);
+    const note = aiFeatureEnabled("extraction") ? "Read on Headroom's server without the AI assistant (you didn't allow sending it). Only clearly labelled figures are found."
+      : "Read on Headroom's server without AI. Only clearly labelled figures are found.";
+    return { status: 200, result: { ...result, warnings: [note, ...result.warnings], document: { documentId, kind: kind as DocumentKind },
+      facts: toExtractedFacts(result, documentId, kind, "deterministic_text", detectAsOfDate(text)) } };
+  }
   if (!aiFeatureEnabled("extraction")) return { status: 200, result: { status: "unavailable", fields: [], warnings: [UNAVAILABLE_MESSAGE] } };
   if (!req.consentToProvider) {
     throw new HttpError(400, "CONSENT_REQUIRED", "Confirm that this document may be sent to the document-analysis provider before it is read.");
