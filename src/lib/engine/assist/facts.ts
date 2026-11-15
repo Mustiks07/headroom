@@ -23,7 +23,7 @@ import type { HouseholdWorkspace } from "@/domain/household-workspace";
 
 export type FactField =
   | "business_net_profit" | "business_gross_receipts" | "business_expenses"
-  | "wages_gross" | "wages_box1" | "wages_pretax_deductions" | "interest"
+  | "wages_gross" | "wages_box1" | "wages_ss" | "wages_medicare" | "wages_pretax_deductions" | "interest_taxable" | "interest_tax_exempt"
   | "premium_monthly" | "benchmark_monthly" | "advance_ptc_monthly"
   | "offer_total_price" | "offer_payment" | "invoice_amount" | "payment_received" | "sep_contribution" | "bank_deposit";
 
@@ -40,7 +40,8 @@ export interface ImportedFact {
   personId: string | null;
   /** The tax year the amount belongs to (null = not stated); a prior year is a number like 2025. */
   taxYear: number | null;
-  period: { kind: "annual" | "year_to_date" | "monthly" | "one_time" | "unknown"; through: string | null; months: number[] | null };
+  /** months = months the amount applies to; monthsConfirmed = the user confirmed it applies to exactly those months. */
+  period: { kind: "annual" | "year_to_date" | "monthly" | "one_time" | "unknown"; through: string | null; months: number[] | null; monthsConfirmed?: boolean };
   basis: "gross" | "net" | "unknown";
   /** For payments: received money vs an amount still expected. */
   money: "received" | "expected" | "unknown";
@@ -50,6 +51,11 @@ export interface ImportedFact {
   link: { projectId: string; lineId: string | null } | null;
 }
 
+export type FactNeed = "person" | "tax_year" | "months" | "period" | "as_of_date" | "date" | "project_line" | "managed_inclusion" | "same_payment";
+const NEED_OF: Record<string, FactNeed> = { PERSON_UNKNOWN: "person", YEAR_UNKNOWN: "tax_year", MONTHS_UNKNOWN: "months", MONTHS_UNCONFIRMED: "months",
+  PERIOD_UNKNOWN: "period", NOT_ANNUAL_WAGES: "period", NOT_ANNUAL: "period", THROUGH_UNKNOWN: "as_of_date", DATE_UNKNOWN: "date", LINE_UNKNOWN: "project_line",
+  MANAGED_PAYMENT_INSIDE: "managed_inclusion", POSSIBLE_SAME_PAYMENT: "same_payment" };
+
 export type FactVerdict = "usable" | "needs_confirmation" | "needs_resolution" | "reference_only" | "not_income" | "duplicate";
 
 export interface FactCheck {
@@ -58,6 +64,8 @@ export interface FactCheck {
   issues: Array<{ code: string; message: string }>;
   /** Where it can go once confirmed, if fully determined by its metadata (not by its amount). */
   destination: string | null;
+  /** What the user must supply before it can be applied (derived from the issues). */
+  needs: FactNeed[];
 }
 
 export interface FactCheckReport {
@@ -74,12 +82,17 @@ export const METADATA_NEVER_FROM_AMOUNT = [
 ] as const;
 
 const TRANSFER = /\b(transfer|xfer|between (my |your )?accounts|from savings|to savings|own account|loan|refund|reimburse|reversal|owner contribution|personal deposit)\b/i;
-const PERSONAL: FactField[] = ["business_net_profit", "business_gross_receipts", "business_expenses", "wages_gross", "wages_box1", "wages_pretax_deductions", "interest", "sep_contribution"];
+const PERSONAL: FactField[] = ["business_net_profit", "business_gross_receipts", "business_expenses", "wages_gross", "wages_box1", "wages_ss", "wages_medicare",
+  "wages_pretax_deductions", "interest_taxable", "interest_tax_exempt", "sep_contribution"];
+/** Wage boxes and interest kinds keep their own identity: they enter the calculation differently (W-2 box 1 vs gross pay; MAGI adds tax-exempt interest). */
+const OTHER_INCOME_DEST: Partial<Record<FactField, string>> = { wages_gross: "grossWages", wages_box1: "w2Box1", wages_ss: "socialSecurityWages", wages_medicare: "medicareWages",
+  wages_pretax_deductions: "payrollPretaxDeductions", interest_taxable: "taxableInterest", interest_tax_exempt: "taxExemptInterest" };
 const YEARLY: FactField[] = [...PERSONAL, "premium_monthly", "benchmark_monthly", "advance_ptc_monthly"];
 const COVERAGE: FactField[] = ["premium_monthly", "benchmark_monthly", "advance_ptc_monthly"];
 
 const FIELD_MAP: Record<string, FactField> = { "income.scheduleCProfit": "business_net_profit", "income.grossWages": "wages_gross", "income.w2Box1": "wages_box1",
-  "income.payrollPretaxDeductions": "wages_pretax_deductions", "income.taxableInterest": "interest", "income.taxExemptInterest": "interest",
+  "income.payrollPretaxDeductions": "wages_pretax_deductions", "income.taxableInterest": "interest_taxable", "income.taxExemptInterest": "interest_tax_exempt",
+  "income.socialSecurityWages": "wages_ss", "income.medicareWages": "wages_medicare",
   "income.existingSepContribution": "sep_contribution", "coverage.enrollmentPremium": "premium_monthly", "coverage.benchmarkPremium": "benchmark_monthly",
   "coverage.advancePtc": "advance_ptc_monthly", "opportunity.grossRevenueCents": "offer_total_price", "opportunity.incrementalExpensesCents": "business_expenses",
   "project.paymentReceived": "payment_received" };
@@ -88,8 +101,10 @@ const FIELD_MAP: Record<string, FactField> = { "income.scheduleCProfit": "busine
 export interface FactReviewHints {
   /** Project payment a received amount belongs to. */
   links?: Record<string, { projectId: string; lineId: string | null }>;
-  /** Coverage months a monthly amount applies to. */
+  /** Coverage months an amount applies to. */
   months?: Record<string, number[]>;
+  /** The user confirmed the amount applies to exactly those months. */
+  monthsConfirmed?: Record<string, boolean>;
   /** Whose figure it is, when the document did not say. */
   persons?: Record<string, string>;
   /** Classification of a bank deposit by the user. */
@@ -110,10 +125,10 @@ export function normalizeExtractedFacts(facts: ExtractedFact[], hints: FactRevie
     const paired = field === "payment_received" ? dateIn(f.documentId, "project.paymentReceivedDate")
       : field === "offer_total_price" ? dateIn(f.documentId, "opportunity.plannedReceiptDate") : undefined;
     const date = paired && paired.value.kind === "date" ? paired.value.date : null;
-    const isCoverage = COVERAGE.includes(field);
     out.push({ id: f.id, documentId: f.documentId, documentKind: f.documentKind, field, valueCents: f.value.amountCents, date,
       personId: hints.persons?.[f.id] ?? f.personCandidate, taxYear: f.taxYear,
-      period: { kind: isCoverage ? "monthly" : f.documentKind === "w2" ? "annual" : f.value.period, through: f.asOfDate, months: hints.months?.[f.id] ?? null },
+      // The document's own period is kept (a W-2 is a full year by definition); coverage is never forced to monthly.
+      period: { kind: f.documentKind === "w2" ? "annual" : f.value.period, through: f.asOfDate, months: hints.months?.[f.id] ?? null, monthsConfirmed: hints.monthsConfirmed?.[f.id] ?? false },
       basis: field === "business_net_profit" ? (/gross|total income|revenue/i.test(f.source.excerpt ?? "") ? "gross" : "net") : hints.basis?.[f.id] ?? "unknown",
       money: field === "payment_received" || field === "sep_contribution" ? "received" : field === "offer_total_price" ? "expected" : "unknown",
       review: f.review === "confirmed" ? "user_confirmed" : "extracted", excerpt: f.source.excerpt, link: hints.links?.[f.id] ?? null });
@@ -158,11 +173,11 @@ export function checkImportedFacts(ws: HouseholdWorkspace, facts: ImportedFact[]
     // Same document line again: no-op.
     const prev = seen.get(f.id);
     if (prev) {
-      if (prev.valueCents === f.valueCents && prev.date === f.date) { checks.push({ factId: f.id, verdict: "duplicate", issues: [{ code: "SAME_LINE", message: "The same document line was imported twice; it is counted once." }], destination: null }); continue; }
+      if (prev.valueCents === f.valueCents && prev.date === f.date) { checks.push({ factId: f.id, verdict: "duplicate", issues: [{ code: "SAME_LINE", message: "The same document line was imported twice; it is counted once." }], destination: null, needs: [] }); continue; }
       add("SAME_ID_DIFFERENT_VALUE", "Two different values were read from the same document line; check the document."); worst("needs_resolution");
     }
     seen.set(f.id, f);
-    if (alreadyApplied(ws, f)) { checks.push({ factId: f.id, verdict: "duplicate", issues: [{ code: "ALREADY_APPLIED", message: "This document figure is already part of your plan." }], destination: null }); continue; }
+    if (alreadyApplied(ws, f)) { checks.push({ factId: f.id, verdict: "duplicate", issues: [{ code: "ALREADY_APPLIED", message: "This document figure is already part of your plan." }], destination: null, needs: [] }); continue; }
 
     if (f.valueCents === null) { add("NO_VALUE", "No amount was read; nothing is assumed."); worst("needs_resolution"); }
     if (f.valueCents !== null && f.valueCents < 0 && f.field !== "business_net_profit") { add("NEGATIVE", "A negative amount here is not supported."); worst("needs_resolution"); }
@@ -198,18 +213,25 @@ export function checkImportedFacts(ws: HouseholdWorkspace, facts: ImportedFact[]
       case "business_gross_receipts": case "business_expenses":
         add("COMPONENT_ONLY", "Receipts and expenses are used only as the rest-of-year parts of a year-to-date forecast, not as profit."); worst("needs_resolution");
         break;
-      case "wages_gross": case "wages_box1": case "wages_pretax_deductions":
+      case "wages_gross": case "wages_box1": case "wages_ss": case "wages_medicare": case "wages_pretax_deductions":
         if (f.period.kind !== "annual") { add("NOT_ANNUAL_WAGES", "A pay stub shows one pay period or the year so far; enter the expected full-year pay. Pay is not multiplied out automatically."); worst("needs_resolution"); }
-        else destination = `otherIncomes.${f.field === "wages_gross" ? "grossWages" : f.field === "wages_box1" ? "w2Box1" : "payrollPretaxDeductions"}`;
+        else destination = `otherIncomes.${OTHER_INCOME_DEST[f.field]}`;
         break;
-      case "interest":
-        if (f.period.kind !== "annual") { add("NOT_ANNUAL", "Enter the expected full-year interest."); worst("needs_resolution"); } else destination = "otherIncomes.taxableInterest";
+      case "interest_taxable": case "interest_tax_exempt":
+        if (f.period.kind !== "annual") { add("NOT_ANNUAL", "Enter the expected full-year interest."); worst("needs_resolution"); } else destination = `otherIncomes.${OTHER_INCOME_DEST[f.field]}`;
         break;
-      case "premium_monthly": case "benchmark_monthly": case "advance_ptc_monthly":
+      case "premium_monthly": case "benchmark_monthly": case "advance_ptc_monthly": {
+        const target = f.field === "premium_monthly" ? "enrollmentPremium" : f.field === "benchmark_monthly" ? "benchmarkPremium" : "advancePtc";
         if (!f.period.months?.length) { add("MONTHS_UNKNOWN", "Which months does this amount apply to? Months the document does not show are not filled in."); worst("needs_resolution"); }
-        else destination = `coverage[${f.period.months.join(",")}].${f.field === "premium_monthly" ? "enrollmentPremium" : f.field === "benchmark_monthly" ? "benchmarkPremium" : "advancePtc"}`;
+        else if (!f.period.monthsConfirmed) { add("MONTHS_UNCONFIRMED", `Confirm that this amount applies to exactly months ${f.period.months.join(", ")}.`); worst("needs_confirmation"); }
+        if (f.period.kind === "annual") {
+          add("ANNUAL_AMOUNT", "This is an amount for the whole year or several months; the plan stores monthly amounts. It is divided evenly only over the months you confirm, and only if it was the same each month.");
+          if (!f.period.monthsConfirmed) worst("needs_resolution");
+        } else if (f.period.kind !== "monthly") { add("PERIOD_UNKNOWN", "Is this a monthly amount or a total for several months?"); worst("needs_resolution"); }
+        if (f.period.months?.length && f.period.monthsConfirmed) destination = `coverage[${f.period.months.join(",")}].${target}${f.period.kind === "annual" ? ` (÷${f.period.months.length})` : ""}`;
         
         break;
+      }
       case "offer_total_price": case "offer_payment": case "invoice_amount":
         destination = "project.expected";
         if (f.money === "received" || f.documentKind === "invoice") add("EXPECTED_ONLY", "An invoice or offer is money expected; record a payment as received only from a payment confirmation.");
@@ -245,7 +267,8 @@ export function checkImportedFacts(ws: HouseholdWorkspace, facts: ImportedFact[]
         break;
     }
     const final = verdict as FactVerdict;
-    checks.push({ factId: f.id, verdict: final, issues, destination: final === "reference_only" || final === "not_income" ? null : destination });
+    checks.push({ factId: f.id, verdict: final, issues, destination: final === "reference_only" || final === "not_income" ? null : destination,
+      needs: [...new Set(issues.map(i => NEED_OF[i.code]).filter((x): x is FactNeed => !!x))] });
   }
 
   // Cross-checks between facts.
@@ -263,6 +286,13 @@ export function checkImportedFacts(ws: HouseholdWorkspace, facts: ImportedFact[]
       conflicts.push({ factIds: [a.id, b.id], message: `The full-year profit (${(a.valueCents / 100).toFixed(2)} USD) is lower than the profit already earned this year (${(b.valueCents / 100).toFixed(2)} USD). Is a loss expected for the rest of the year?` });
     if (a.period.kind === "annual" && b.period.kind === "year_to_date" && a.id < b.id)
       conflicts.push({ factIds: [a.id, b.id], message: "There is both a full-year profit and a year-to-date profit for the same year. The plan uses one method; they are never added." });
+  }
+  // W-2 boxes for the same person/year: taxable wages (box 1) = gross pay − pre-tax deductions in the supported payroll model.
+  const w2 = (field: FactField, a: ImportedFact) => uniq.find(x => x.field === field && x.personId === a.personId && x.taxYear === a.taxYear && x.period.kind === "annual");
+  for (const g of uniq.filter(x => x.field === "wages_gross" && x.personId && x.taxYear !== null && x.period.kind === "annual")) {
+    const b1 = w2("wages_box1", g), pre = w2("wages_pretax_deductions", g);
+    if (b1 && pre && g.valueCents !== null && b1.valueCents !== null && pre.valueCents !== null && Math.abs(g.valueCents - pre.valueCents - b1.valueCents) > 100)
+      conflicts.push({ factIds: [g.id, b1.id, pre.id], message: "W-2 box 1 does not equal gross pay minus pre-tax deductions. They are kept as separate figures; check which line each came from." });
   }
   for (const f of uniq) for (const g of uniq) {
     if (f.field !== "advance_ptc_monthly" || g.field !== "premium_monthly" || f.taxYear !== g.taxYear || f.valueCents === null || g.valueCents === null) continue;

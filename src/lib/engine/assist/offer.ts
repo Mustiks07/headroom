@@ -14,6 +14,7 @@ import { workspaceToEngineInput } from "../household/adapter";
 import { projectHousehold } from "../household/projection";
 import { engineWorkspaceFingerprint } from "../household";
 import { formatUsd } from "../money";
+import { money, type MoneyResult } from "../descriptors";
 import { EngineStop, type YearModel } from "../model";
 import { ENGINE_VERSION, RULES_VERSION } from "../rules";
 import { profitHeadroomDollars } from "../search";
@@ -61,6 +62,8 @@ export interface ReadyOfferEvaluation {
   engineVersion: string;
   rulesVersion: string;
   warnings: string[];
+  /** Every money figure with its meaning, baseline, year/date and precision (round 6 descriptors). */
+  results: MoneyResult[];
 }
 export type OfferEvaluation = ReadyOfferEvaluation | BlockedComparison;
 
@@ -125,7 +128,20 @@ export async function evaluateOfferAsOffered(raw: HouseholdWorkspace, projectId:
     const warnings = [...modelWarnings([...models.values()], derived), ...base!.warnings];
     const untouched = YEARS.filter((_y, yi) => !touched.includes(yi as 0 | 1));
     if (untouched.length) warnings.push(`${untouched.join(", ")} is not affected by this offer as offered, so its facts are not needed here. Moving a payment into ${untouched.join(", ")} is a different question (two-year terms).`);
-    return { status: "ready", projectId, title: project.title, receivedCents, unpaidCents: receipts.reduce((a, x) => a + x.amountCents, 0), years, cashChangeCents: cash,
+    const basis = { kind: "decline_unpaid_terms" as const, label: project.status === "agreed"
+      ? `Declining the unpaid part of "${project.title}" (refunds or costs of ending it are not known and not counted)` : `Your plan without the unpaid terms of "${project.title}"` };
+    const estimated = derived.years.some(y => y.incomes.some(r => Object.values(r).some(v => v && typeof v === "object" && "status" in v && (v as { status: string }).status === "estimated")));
+    const precision: MoneyResult["precision"] = estimated ? "estimated_inputs" : "exact";
+    const untouchedNote = untouched.length ? [`${untouched.join(", ")} is not changed by this offer as written.`] : [];
+    let cum = 0;
+    const results: MoneyResult[] = [
+      money("settled_cash_two_year", cash, basis, { precision, conditions: untouchedNote }),
+      ...years.flatMap(y => [money("settled_cash_year", y.cashChangeCents, basis, { year: y.year, precision }),
+        money("credit_change", y.premiumTaxCreditChangeCents, basis, { year: y.year, precision })]),
+      ...[...receipts].sort((a, b) => a.date.localeCompare(b.date)).map(r => { cum += r.amountCents;
+        return money("project_gross_by_date", receivedCents + cum, { kind: "none", label: `Payment of ${formatUsd(r.amountCents)}${receivedCents ? ` (plus ${formatUsd(receivedCents)} already received)` : ""}` }, { date: r.date }); }),
+    ];
+    return { status: "ready", results, projectId, title: project.title, receivedCents, unpaidCents: receipts.reduce((a, x) => a + x.amountCents, 0), years, cashChangeCents: cash,
       verdict, reasons, baseline: { label: `Your plan without the unpaid terms of "${project.title}"`,
         description: `Your profit forecast, agreed projects${receivedCents ? `, ${formatUsd(receivedCents)} already received from "${project.title}"` : ""} and SEP-IRA contributions as recorded.` },
       fingerprint: await engineWorkspaceFingerprint(ws), engineVersion: ENGINE_VERSION, rulesVersion: RULES_VERSION, warnings: [...new Set(warnings)] };

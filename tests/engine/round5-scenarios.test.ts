@@ -36,7 +36,7 @@ describe("round 5 scenarios", () => {
     // Contracts 29c6ab4 + 36edf1e: a stored variant keeps both comparisons, robustness, client agreement and money by date.
     const stored = DealVariantSchema.parse(rec);
     expect([stored.comparisons, stored.robustness, stored.clientAgreement, stored.moneyByDate])
-      .toEqual([rec.comparisons, rec.robustness, rec.clientAgreement, rec.moneyByDate]);
+      .toEqual([{ versusDeclineCents: rec.comparisons.versusDeclineCents, versusOfferedCents: rec.comparisons.versusOfferedCents }, rec.robustness, rec.clientAgreement, rec.moneyByDate]);
   });
 
   it("2. ordinary offer: accept as offered — no manoeuvre, no 2027 facts needed", async () => {

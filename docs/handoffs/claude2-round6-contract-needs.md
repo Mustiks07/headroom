@@ -86,3 +86,8 @@ monthsConfirmed: boolean;          // the user confirmed the amount applies to e
 ```
 
 The engine's `checkExtractedFacts` returns per fact `{ factId, verdict, issues: [{ code, message }], destination, needs: Array<"person" | "tax_year" | "months" | "period" | "project_line" | "as_of_date" | "managed_inclusion"> }` plus `conflicts` and `confirmableTogether`. Please make this the field-level result of the shared import contract (`ImportValidation`). The UI blocks a group apply while any fact in the group is `needs_resolution`.
+
+## 6. Two small additions to stored variants (found while implementing)
+
+- `VariantComparisonsSchema.versusOriginalOfferCents: CentsSchema.nullable().optional()`. This is the option against the client's original offer (`project.originalOffer`) when it differs from the current offer. The engine fills it; today it is stripped on save.
+- `DealVariantSchema.results: z.array(MoneyResultSchema).max(40).optional()`: the descriptors of §1 for that option. Storing them lets PDF and history render the same labels.

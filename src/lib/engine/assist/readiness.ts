@@ -57,6 +57,12 @@ export interface EngineReadinessQuestion extends ReadinessQuestion {
   priority: number;
   /** A document that typically answers it (never a past-year form for a future amount). */
   documentHint: string | null;
+  /** Round 6 (requested contract fields): stable semantic key, what the fact is, blocking vs refining, sources, effect of "I don't know". */
+  key: string;
+  meaning: string;
+  blocking: "blocks_result" | "refines_result";
+  acceptableSources: string[];
+  ifUnknown: string;
 }
 
 export type ReadinessPrecision = "no_result" | "exact" | "estimated" | "range_stable" | "range_changes_answer" | "range_not_yet_checked";
@@ -73,7 +79,40 @@ export interface EngineInputReadiness extends InputReadiness {
   notNeeded: string[];
 }
 
-type Q = Omit<EngineReadinessQuestion, "path" | "answer" | "allowUnknown" | "sourceRef">;
+type Q = Omit<EngineReadinessQuestion, "path" | "answer" | "allowUnknown" | "sourceRef" | "key" | "meaning" | "blocking" | "acceptableSources" | "ifUnknown">;
+
+/** Plain meaning and the effect of leaving a fact unknown, by question family (the id prefix). */
+const MEANING: Array<[RegExp, string, string | null]> = [
+  [/^scope:/, "Whether the household has tax items Headroom does not calculate.", null],
+  [/^ptc-eligible:/, "Whether the family can get the premium tax credit at all (Marketplace enrollment, no affordable employer or government offer).", null],
+  [/^sehi-eligible:/, "Whether health premiums can reduce self-employment income (no subsidized employer plan available).", null],
+  [/^people:|^family:|^start:household/, "Who is in the tax family; it sets the poverty line used for the credit.", null],
+  [/^forecast:|^forecast-fact:|^start:profit|^asof:/, "Business profit for the year without the projects listed separately.", null],
+  [/^inclusion:/, "Whether the profit forecast already contains the listed projects (they would be counted twice).", null],
+  [/^wages:/, "Wages that count in household income for the credit.", null],
+  [/^interest:/, "Taxable and tax-exempt interest; both count in household income for the credit.", null],
+  [/^coverage:|^benchmark:|^start:coverage/, "Marketplace premium, benchmark premium and advance credit for the months covered.", null],
+  [/^ctc:/, "Whether a dependent is a qualifying child for the child tax credit.", null],
+  [/^cash-method/, "Whether income counts in the year it is received.", null],
+  [/^timing/, "Written confirmation that a January payment is not available earlier.", "Options that move money into 2027 are not searched; the other options are still calculated."],
+  [/^sep-cash/, "Cash the household could put into a SEP-IRA.", "No additional SEP-IRA option is searched; other options are still calculated."],
+  [/^range:/, "A declared income range that changes the answer.", "The result is shown at your entered value and marked conditional on that value."],
+  [/^offer|^project|^start:offer|^offer-choice/, "The client's offer: total price, payment dates, deposit already received, project costs.", null],
+  [/^conflict:/, "Two documents disagree on the same figure.", null],
+];
+function semantics(q: Q): Pick<EngineReadinessQuestion, "key" | "meaning" | "blocking" | "acceptableSources" | "ifUnknown"> {
+  const m = MEANING.find(([re]) => re.test(q.id));
+  const estimateOk = /^(forecast|start:profit|wages|interest)/.test(q.id);
+  return {
+    key: q.id,
+    meaning: m?.[1] ?? q.reason,
+    blocking: q.blocks === "calculation" ? "blocks_result" : "refines_result",
+    acceptableSources: [...(q.documentHint ? [q.documentHint] : []), ...(estimateOk ? ["Your own estimate (marked as an estimate)"] : [])],
+    ifUnknown: m?.[2] ?? (q.blocks === "calculation"
+      ? "No result can be calculated for this decision until it is answered; Headroom does not assume $0 or guess."
+      : "The result is calculated without it and says what is not covered."),
+  };
+}
 /** Internal question draft (answer = detailed spec). */
 type Draft = Omit<Q, "answerDetail"> & { answer: AnswerSpec };
 const fin = ({ answer, ...rest }: Draft): EngineReadinessQuestion => finishQuestion({ ...rest, answerDetail: answer });
@@ -83,7 +122,7 @@ function finishQuestion(q: Q): EngineReadinessQuestion {
   const d = q.answerDetail;
   const choices = d.kind === "choice" ? d.options.map(o => ({ id: o.value, label: o.label }))
     : d.kind === "integer" ? Array.from({ length: d.max - d.min + 1 }, (_x, i) => ({ id: String(d.min + i), label: String(d.min + i) })) : undefined;
-  return { ...q, path: q.paths[0], answer: { kind: COARSE[d.kind], ...(choices ? { choices } : {}) },
+  return { ...q, ...semantics(q), path: q.paths[0], answer: { kind: COARSE[d.kind], ...(choices ? { choices } : {}) },
     allowUnknown: q.blocks === "decision" || d.kind === "range", sourceRef: null };
 }
 
