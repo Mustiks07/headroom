@@ -40,6 +40,8 @@ You own `src/app/**` except API, `src/components/**`, `src/features/**`, `public
 
 ## 5. Polish every judge-facing screen in selected C
 
+**User correction, November15:** only the hero currently feels designed; the lower landing and other screens are visually insufficient. The existing repeated card composition is not approved. Preserve C's identity and hero assets, but redesign the lower-page narrative, review, terms, client-response and current-plan compositions with stronger typography, information hierarchy and purpose-specific layouts. Read `docs/design/c-round6/README.md` and inspect both generated boards before implementing the visual continuation. These are new composition proposals with explicit semantic corrections, never a screenshot pasted over the app or hardcoded financial results. Keep all functional requirements from this assignment.
+
 - Compare home, review, result and mobile against `docs/design/c-open` images. Preserve cobalt/chrome/lime/Geist; keep chrome on landing only. Financial result pages prioritize reading.
 - Remove repetitive “demo/synthetic/example” chrome from own-data journeys; keep a single truthful context label on fixture journeys. Pricing must distinguish a proposed price from a completed payment; every function stays accessible for judges.
 - Short, purposeful motion: <=450ms initial hero, 180–220ms panel/disclosure, small translations; reduced motion removes it. No fake money count-up, looping scene or fake loading progress.
