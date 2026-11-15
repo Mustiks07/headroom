@@ -1,5 +1,5 @@
 import { appendDecisionRecord } from "@/lib/client/deal-state";
-import { ensureOriginalOffer } from "@/lib/client/workspace-commands";
+import { ensureOriginalOffer, noteAcceptedTerms } from "@/lib/client/workspace-commands";
 import type { CaseInput, MoneyFact, ScenarioResult, TaxYear } from "@/domain/contracts";
 import { dealSearchFingerprint } from "@/domain/deal-planning";
 import { engineWorkspaceFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
@@ -218,6 +218,8 @@ export async function recordClientAgreement(w0: HouseholdWorkspace, packageId: s
   }
   pkg.status = "client_agreed";
   const at = now();
+  // Claude 3 seam (round 6): version history — the agreed terms become an accepted version; the original offer stays.
+  noteAcceptedTerms(w, p.id, at, { kind: "package", sourceId: pkg.id }, w0.projects.find(x => x.id === p.id));
   // Claude 3 seam (round 5): keep the decision-time snapshot as a historical record for its own export.
   appendDecisionRecord(w, w0, w0.dealPlanning!.packages.find(x => x.id === packageId)!, "client_agreed", at);
   const event: WorkspaceEvent = { id: eventId, at, kind: "deal_status_changed",
@@ -293,6 +295,8 @@ export function workspaceFromCase(input: CaseInput, forecasts: ProfitForecast[],
     evidence, events: [{ id: newId("evt-created"), at, kind: "workspace_created", description: "Created the household plan from your figures.", refs: {}, previousFingerprint: null, nextFingerprint: null }],
     calculation: null, origin: { kind: "new" },
   };
+  // Claude 3 seam (round 6): the first save keeps the entered offer as the original offer.
+  for (const p of draft.projects) ensureOriginalOffer(draft, p.id, at, { kind: "user_entered", sourceId: "manual-entry" }, "user_confirmed");
   return HouseholdWorkspaceSchema.parse(draft);
 }
 

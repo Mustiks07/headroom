@@ -4,7 +4,9 @@ import {
   captureSepBudgetContributions, HouseholdWorkspaceSchema, withEvent, type HouseholdWorkspace, type Project, type ProjectLine, type WorkspaceEvent,
 } from "@/domain/household-workspace";
 import type { OriginalOffer } from "@/domain/decision-context";
-import { engineWorkspaceFingerprint } from "@/lib/engine";
+import type { OfferVersion } from "@/domain/decision-context";
+import { engineWorkspaceFingerprint, validateAndApply } from "@/lib/engine";
+import { localCalendarDate } from "@/features/format";
 import { HeadroomError } from "./errors";
 
 /**
@@ -15,6 +17,14 @@ import { HeadroomError } from "./errors";
 
 export class CommandError extends HeadroomError {
   constructor(code: string, message: string) { super(code, message, 409); this.name = "CommandError"; }
+}
+
+/** The shared semantic validator refused the proposal at save time (same blockers the preview shows). */
+export class CommandBlockedError extends CommandError {
+  constructor(readonly blockers: Array<{ path: string; reason: string }>) {
+    super("BLOCKED", blockers[0]?.reason ?? "This change can't be saved.");
+    this.name = "CommandBlockedError";
+  }
 }
 
 const dollars = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -57,7 +67,54 @@ export function ensureOriginalOffer(ws: HouseholdWorkspace, projectId: string, a
   return true;
 }
 
-export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { idBase: string; sourceId: string; at: string; origin?: "user_entered" | "document" | "assistant_text" }): { description: string; kind: WorkspaceEvent["kind"]; refs: WorkspaceEvent["refs"] } {
+/** Project terms as they stand (received + still expected, not cancelled) as an offer-version payment list. */
+function currentTerms(project: Project): { priceCents: number; payments: OfferVersion["payments"] } {
+  const payments = project.receipts.filter(l => l.actual || (l.expected && !l.cancelledAt))
+    .map(l => l.actual ? { amountCents: l.actual.amountCents, date: l.actual.date, received: true } : { amountCents: l.expected!.amountCents, date: l.expected!.date, received: false })
+    .filter(x => x.amountCents > 0).sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")).slice(0, 12);
+  return { priceCents: payments.reduce((t, x) => t + x.amountCents, 0), payments };
+}
+
+function appendVersion(project: Project, v: Omit<OfferVersion, "version">): OfferVersion {
+  const versions = project.offerVersions ??= [];
+  const version = { ...v, version: (versions.at(-1)?.version ?? 1) + 1 };
+  versions.push(version);
+  project.offerVersions = versions.slice(-20);
+  return version;
+}
+
+const freeLineId = (project: Project, base: string) => {
+  const ids = new Set([...project.receipts, ...project.expenses].map(l => l.id));
+  for (let n = 1; ; n++) { const id = `${base.slice(0, 92)}${n === 1 ? "" : `-${n}`}`; if (!ids.has(id)) return id; }
+};
+
+/** Before the first change of terms/payments: keep the original offer and start the version list. */
+function captureOffer(ws: HouseholdWorkspace, project: Project, ctx: { at: string }, from?: Project) {
+  ensureOriginalOffer(ws, project.id, ctx.at, undefined, undefined, from);
+  if (!project.offerVersions?.length && project.originalOffer) {
+    const o = project.originalOffer;
+    project.offerVersions = [{ version: 1, kind: "original", recordedAt: o.recordedAt, priceCents: o.priceCents,
+      payments: o.payments.map(x => ({ ...x, received: false })), status: project.status === "agreed" ? "accepted" : "open",
+      source: { kind: o.source.kind, sourceId: o.source.sourceId }, note: null }];
+  }
+}
+
+/**
+ * Mark the open terms of a project accepted and append the accepted version (from the project lines as
+ * they stand). Shared by the `accepted` client response and recordClientAgreement (saved option).
+ */
+export function noteAcceptedTerms(ws: HouseholdWorkspace, projectId: string, at: string,
+  source: OfferVersion["source"] = { kind: "package", sourceId: null }, before?: Project): { priceCents: number } {
+  const p = ws.projects.find(x => x.id === projectId);
+  if (!p) throw new CommandError("UNKNOWN_TARGET", "That project is no longer in the plan.");
+  captureOffer(ws, p, { at }, before);
+  for (const v of p.offerVersions ?? []) if (v.status === "open") v.status = "accepted";
+  const t = currentTerms(p);
+  appendVersion(p, { kind: "accepted_terms", recordedAt: at, priceCents: t.priceCents, payments: t.payments, status: "accepted", source, note: null });
+  return t;
+}
+
+export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { idBase: string; sourceId: string; at: string; origin?: "user_entered" | "document" | "assistant_text"; userDate?: string }): { description: string; kind: WorkspaceEvent["kind"]; refs: WorkspaceEvent["refs"] } {
   switch (cmd.type) {
     case "update_expected_payment": {
       const { title, l } = line(ws, cmd.projectId, cmd.lineId);
@@ -162,8 +219,77 @@ export function applyCommand(ws: HouseholdWorkspace, cmd: ChangeCommand, ctx: { 
       }
       return { kind: "deal_planning_updated", refs: { projectId: cmd.projectId }, description: "Updated the allowed terms for this project." };
     }
-    case "record_partial_receipt": case "settle_lower_total": case "record_client_response":
-      throw new CommandError("NOT_AVAILABLE_YET", "This change type is published in the round 6 contract and implemented in the next commit.");
+    case "record_partial_receipt": case "settle_lower_total": {
+      const p = ws.projects.find(x => x.id === cmd.projectId);
+      const { title, l } = line(ws, cmd.projectId, cmd.lineId);
+      const today = ctx.userDate ?? ctx.at.slice(0, 10);
+      if (l.actual) {
+        if (l.actual.amountCents === cmd.amountCents && l.actual.date === cmd.date) throw new CommandError("ALREADY_RECORDED", "This payment is already recorded with the same amount and date.");
+        throw new CommandError("ALREADY_RECEIVED", "This payment already has a recorded amount. Use a correction with a reason to change it.");
+      }
+      if (!l.expected || l.cancelledAt || !p!.receipts.includes(l)) throw new CommandError("NOT_EXPECTED", "This payment is not expected any more.");
+      if (cmd.date > today) throw new CommandError("FUTURE_RECEIPT", `Money received cannot be dated after today (${today}).`);
+      if (cmd.amountCents >= l.expected.amountCents) throw new CommandError("NOT_LESS_THAN_EXPECTED", `${dollars(cmd.amountCents)} is not less than the expected ${dollars(l.expected.amountCents)}; record it as the full payment instead.`);
+      captureOffer(ws, p!, ctx);
+      l.actual = { amountCents: cmd.amountCents, date: cmd.date, recordedAt: ctx.at, sourceId: ctx.sourceId };
+      if (cmd.type === "settle_lower_total") {
+        return { kind: "payment_settled_lower", refs: { projectId: cmd.projectId, lineId: cmd.lineId },
+          description: `Settled “${title}” for ${dollars(cmd.amountCents)} received on ${cmd.date} instead of the expected ${dollars(l.expected.amountCents)}; nothing more is expected for this payment. ${cmd.reason}` };
+      }
+      if (cmd.remainderDate < today) throw new CommandError("REMAINDER_IN_PAST", `The remaining amount can't be expected before today (${today}).`);
+      if (cmd.remainderDate < cmd.date) throw new CommandError("REMAINDER_BEFORE_RECEIPT", "The remaining amount can't be due before the part that was received.");
+      const rest = l.expected.amountCents - cmd.amountCents;
+      const restId = freeLineId(p!, `${cmd.lineId}-rest`);
+      p!.receipts.push({ id: restId, label: `Rest of ${l.label ?? "the payment"}`.slice(0, 200), expected: { amountCents: rest, date: cmd.remainderDate },
+        actual: null, cancelledAt: null, sourceId: ctx.sourceId, corrections: [] });
+      return { kind: "partial_receipt_recorded", refs: { projectId: cmd.projectId, lineId: cmd.lineId },
+        description: `Received ${dollars(cmd.amountCents)} of ${dollars(l.expected.amountCents)} on ${cmd.date} for “${title}”; the remaining ${dollars(rest)} is expected on ${cmd.remainderDate}.` };
+    }
+    case "record_client_response": {
+      const p = ws.projects.find(x => x.id === cmd.projectId);
+      if (!p) throw new CommandError("UNKNOWN_TARGET", "That project is no longer in the plan.");
+      const today = ctx.userDate ?? ctx.at.slice(0, 10);
+      if (cmd.respondedOn > today) throw new CommandError("FUTURE_RESPONSE", `A client response can't be dated after today (${today}).`);
+      if (p.status === "cancelled") throw new CommandError("PROJECT_CLOSED", `“${p.title}” was declined; add a new offer instead.`);
+      captureOffer(ws, p, ctx);
+      const open = (p.offerVersions ?? []).filter(v => v.status === "open");
+      const source = { kind: ctx.origin ?? "user_entered", sourceId: ctx.sourceId } as const;
+      const packages = ws.dealPlanning?.packages.filter(k => k.projectId === p.id) ?? [];
+      if (cmd.response === "accepted") {
+        // A saved option is agreed through recordClientAgreement (fingerprint check, terms applied, decision record), which calls noteAcceptedTerms.
+        if (cmd.packageId) throw new CommandError("USE_PACKAGE_AGREEMENT", "Record the client's agreement on the saved option, so its terms and decision record are kept.");
+        if (p.status === "agreed" && !open.length) throw new CommandError("ALREADY_RECORDED", "These terms are already recorded as agreed.");
+        const t = noteAcceptedTerms(ws, p.id, ctx.at, source);
+        p.status = "agreed"; p.statusChangedAt = ctx.at;
+        return { kind: "client_response_recorded", refs: { projectId: p.id }, description: `The client accepted the terms for “${p.title}” on ${cmd.respondedOn} (${dollars(t.priceCents)} in total).` };
+      }
+      if (cmd.response === "rejected") {
+        const kept = p.receipts.filter(l => l.actual).reduce((t, l) => t + l.actual!.amountCents, 0);
+        for (const l of p.receipts) if (!l.actual && !l.cancelledAt) l.cancelledAt = ctx.at;
+        open.forEach(v => { v.status = "rejected"; });
+        for (const k of packages) if (k.status === "draft" || k.status === "terms_shared_by_user") k.status = "superseded";
+        p.status = "cancelled"; p.statusChangedAt = ctx.at;
+        return { kind: "client_response_recorded", refs: { projectId: p.id },
+          description: `The client declined “${p.title}” on ${cmd.respondedOn}. Unpaid expected payments were cancelled${kept ? `; ${dollars(kept)} already received stays recorded` : ""}.` };
+      }
+      if (!cmd.counter) throw new CommandError("COUNTER_REQUIRED", "Enter the client's counteroffer terms.");
+      const received = p.receipts.filter(l => l.actual).reduce((t, l) => t + l.actual!.amountCents, 0);
+      const unpaid = cmd.counter.unpaid.reduce((t, x) => t + x.amountCents, 0);
+      if (cmd.counter.totalPriceCents !== null && cmd.counter.totalPriceCents !== received + unpaid)
+        throw new CommandError("PRICE_MISMATCH", `The counteroffer's payments (${dollars(unpaid)} still to pay${received ? ` + ${dollars(received)} already received` : ""}) don't add up to its total of ${dollars(cmd.counter.totalPriceCents)}.`);
+      if (cmd.counter.unpaid.some(x => x.date < today)) throw new CommandError("UNPAID_IN_PAST", `A payment still to come can't be dated before today (${today}).`);
+      for (const l of p.receipts) if (!l.actual && !l.cancelledAt) l.cancelledAt = ctx.at;
+      open.forEach(v => { v.status = "superseded"; });
+      for (const k of packages) if (k.status === "draft" || k.status === "terms_shared_by_user") k.status = "superseded";
+      const v = appendVersion(p, { kind: "client_counteroffer", recordedAt: ctx.at, priceCents: received + unpaid,
+        payments: [...p.receipts.filter(l => l.actual).map(l => ({ amountCents: l.actual!.amountCents, date: l.actual!.date, received: true })),
+          ...cmd.counter.unpaid.map(x => ({ amountCents: x.amountCents, date: x.date, received: false }))].slice(0, 12), status: "open", source, note: cmd.counter.note });
+      cmd.counter.unpaid.forEach((x, i) => p.receipts.push({ id: freeLineId(p, `${p.id}-v${v.version}-p${i + 1}`), label: `Counteroffer payment ${i + 1}`,
+        expected: { amountCents: x.amountCents, date: x.date }, actual: null, cancelledAt: null, sourceId: ctx.sourceId, corrections: [] }));
+      p.status = "proposed"; p.statusChangedAt = ctx.at;
+      return { kind: "client_response_recorded", refs: { projectId: p.id },
+        description: `The client countered on ${cmd.respondedOn}: ${dollars(received + unpaid)} in total, ${cmd.counter.unpaid.map(x => `${dollars(x.amountCents)} on ${x.date}`).join(", ")}${received ? ` (${dollars(received)} already received is kept)` : ""}. The original offer is kept.` };
+    }
   }
 }
 
@@ -177,7 +303,9 @@ export type ProposalApplyResult = { workspace: HouseholdWorkspace; events: Works
  * PROPOSAL_STALE — preview again), no open ambiguities, every command valid — or nothing.
  * One revision; one event per command with ids derived from the proposal (retries are no-ops).
  */
-export async function applyChangeProposal(ws: HouseholdWorkspace, proposal: ChangeProposal, at = new Date().toISOString()): Promise<ProposalApplyResult> {
+export async function applyChangeProposal(ws: HouseholdWorkspace, proposal: ChangeProposal, at = new Date().toISOString(),
+  opts: { userDate?: string } = {}): Promise<ProposalApplyResult> {
+  const userDate = opts.userDate ?? localCalendarDate(new Date(at));
   if (proposal.ambiguities.length) throw new CommandError("AMBIGUOUS", "Answer the open questions before confirming this change.");
   if (!proposal.commands.length) throw new CommandError("NO_COMMANDS", "There is nothing to apply.");
   const already = proposal.commands.map((_, i) => `evt-${proposal.id}-${i}`.slice(0, 100));
@@ -185,13 +313,17 @@ export async function applyChangeProposal(ws: HouseholdWorkspace, proposal: Chan
   if (proposal.base.workspaceId !== ws.id || proposal.base.revision !== ws.revision || proposal.base.fingerprint !== await proposalBaseFingerprint(ws)) {
     throw new CommandError("PROPOSAL_STALE", "Your plan changed since this change was proposed. Review the updated preview before confirming.");
   }
+  // The same business checks as the preview (Claude 2's validator): a schema-valid, fresh proposal still
+  // can't save a future receipt, a wrong person/year, a received payment moved, or totals that don't add up.
+  const semantic = validateAndApply(ws, proposal, userDate, at);
+  if (semantic.blockers.length) throw new CommandBlockedError(semantic.blockers);
   let next = structuredClone(ws);
   const excerpt = proposal.evidence[0]?.excerpt;
   const sourceId = addEvidence(next, `assist-${proposal.id}`.slice(0, 100),
     `${proposal.provenance === "ai_model" ? "Proposed by the assistant from" : "From"} your message${excerpt ? `: “${excerpt.slice(0, 120)}”` : ""} (confirmed ${at.slice(0, 10)})`);
   const events: WorkspaceEvent[] = [];
   proposal.commands.forEach((cmd, i) => {
-    const r = applyCommand(next, cmd, { idBase: `${proposal.id}-${i}`, sourceId, at, origin: proposal.provenance === "manual" ? "user_entered" : "assistant_text" });
+    const r = applyCommand(next, cmd, { idBase: `${proposal.id}-${i}`, sourceId, at, userDate, origin: proposal.provenance === "manual" ? "user_entered" : "assistant_text" });
     const event: WorkspaceEvent = { id: already[i], at, kind: r.kind, description: r.description.slice(0, 500), refs: r.refs, previousFingerprint: proposal.base.fingerprint, nextFingerprint: null };
     next = withEvent(next, event);
     events.push(event);
@@ -205,10 +337,26 @@ export async function applyChangeProposal(ws: HouseholdWorkspace, proposal: Chan
  * Confirm + save a proposal in one step: apply (with freshness checks) and commit atomically.
  * Retrying after a lost acknowledgement returns the stored revision (same event ids, same content).
  */
-export async function commitProposal(repo: import("./workspace-repository").WorkspaceRepository, ws: HouseholdWorkspace, proposal: ChangeProposal) {
+export async function commitProposal(repo: import("./workspace-repository").WorkspaceRepository, ws: HouseholdWorkspace, proposal: ChangeProposal,
+  opts: { userDate?: string } = {}) {
   const { commitWorkspaceChange } = await import("./workspace-repository");
-  const { workspace, events } = await applyChangeProposal(ws, proposal);
+  const { workspace, events } = await applyChangeProposal(ws, proposal, new Date().toISOString(), opts);
   if (workspace === ws) return { saved: ws, events, alreadyApplied: true };
   const { saved } = await commitWorkspaceChange(repo, ws, workspace, events[0]);
   return { saved, events, alreadyApplied: false };
+}
+
+/**
+ * Manual forms use the same path as confirmed AI/text proposals: build a `manual` proposal on the
+ * current revision and commit it (stale check, semantic validator, stable event ids, atomic save).
+ * `id` must be stable per user action (e.g. the form's draft id) so a double submit is a no-op.
+ */
+export async function manualProposal(ws: HouseholdWorkspace, id: string, commands: ChangeCommand[], intent: ChangeProposal["intent"] = "update"): Promise<ChangeProposal> {
+  return { id: id.slice(0, 120), createdAt: new Date().toISOString(), base: { workspaceId: ws.id, revision: ws.revision, fingerprint: await proposalBaseFingerprint(ws) },
+    intent, commands, ambiguities: [], resolvedDates: [], evidence: [], provenance: "manual", status: "proposed" };
+}
+
+export async function commitCommands(repo: import("./workspace-repository").WorkspaceRepository, ws: HouseholdWorkspace, id: string, commands: ChangeCommand[],
+  opts: { userDate?: string } = {}) {
+  return commitProposal(repo, ws, await manualProposal(ws, id, commands), opts);
 }
