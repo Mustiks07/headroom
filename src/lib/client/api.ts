@@ -27,7 +27,7 @@ export { subscribeToLocalPlanChanges } from "./local-repository";
 export {
   extractDocument, exportPlanPdf, exportPlanJson, exportCaseJson, readCaseInputFromJson,
   getCapabilities, startCheckout, verifyCheckout, getLocalEntitlement, trackEvent, exportForecastPdf,
-  exportDecisionPdf, exportCalendarIcs, clientDraftFile, proposeChange, explainResult, explainWorkspace, lookupLocation, lookupBenchmark,
+  exportDecisionPdf, exportCalendarIcs, clientDraftFile, proposeChange, intakeOffer, explainResult, explainWorkspace, lookupLocation, lookupBenchmark,
 } from "./features";
 export { toExtractedFacts, mergeIntoDraft, applyConfirmedFacts, emptyImportDraft } from "./import-draft";
 export type { ExtractionResponse, FactDecision, GroupApplyResult } from "./import-draft";
@@ -48,3 +48,7 @@ export type { Capabilities, CheckoutResult } from "./features";
 export { EXTRACTION_FIELDS, type ExtractionFieldPath, type ProposedFieldValue, type AmountPeriod } from "./extraction-fields";
 export { ANALYTICS_EVENTS, type AnalyticsEvent } from "./analytics-events";
 export { HeadroomError, PlanConflictError, PlanIntegrityError, StorageUnavailableError } from "./errors";
+// Round 6: first-offer intake, onboarding draft, typed answers, lifecycle commands.
+export { parseOfferText, questionsForOffers, loadOnboardingDraft, saveOnboardingDraft, clearOnboardingDraft, draftFromIntake, openQuestions, answerQuestion,
+  offerCommand, onboardingToWorkspace, counterofferCommand, ONBOARDING_STORAGE_KEY } from "./offer-intake";
+export { manualProposal, commitCommands, noteAcceptedTerms, CommandBlockedError } from "./workspace-commands";

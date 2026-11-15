@@ -217,6 +217,23 @@ export async function explainWorkspace(workspace: import("@/domain/household-wor
     token: options.consentToProvider ? await cloudToken() : undefined, body: JSON.stringify({ workspace, subject, refId, consentToProvider: !!options.consentToProvider }) }));
 }
 
+/**
+ * First offer / counteroffer from an ordinary pasted message. Without consent nothing leaves Headroom's
+ * server except to its own reading; with consent the configured AI provider reads the text. If the
+ * request itself fails (offline), the browser reads the text with the same built-in parser.
+ */
+export async function intakeOffer(request: import("@/domain/intake").IntakeRequest): Promise<import("@/domain/intake").IntakeResult> {
+  try {
+    return await readJson(await apiFetch("/api/assist/intake", { method: "POST", timeoutMs: 35_000, headers: { "Content-Type": "application/json" },
+      token: request.consentToProvider ? await cloudToken() : undefined, body: JSON.stringify(request) }));
+  } catch {
+    const { parseOfferText } = await import("./offer-intake");
+    const r = parseOfferText(request.text, request.userDate, `draft-local-${Date.now()}`);
+    return { ...r, providerStatus: request.consentToProvider ? "unavailable" : "not_consented",
+      notes: [request.consentToProvider ? "Headroom couldn't reach the server; this is the built-in reading in your browser." : "Read in your browser; nothing was sent.", ...r.notes] };
+  }
+}
+
 /** Insurance: county candidates for a ZIP (official Marketplace API when configured) or a state + county name. */
 export async function lookupLocation(query: { zip: string } | { state: string; q: string }): Promise<import("@/domain/insurance").LocationLookup> {
   const qs = new URLSearchParams("zip" in query ? { zip: query.zip } : { state: query.state, q: query.q });
