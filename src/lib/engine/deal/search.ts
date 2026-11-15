@@ -925,14 +925,14 @@ function variantResults(v: EngineDealVariant, x: { agreedProject: boolean; title
   const conditions = [...(v.clientAgreement.required && v.clientAgreement.note ? [v.clientAgreement.note] : []),
     ...(!v.robustness.holds ? [v.robustness.basis === "declared_ranges" ? "Meets the goal at your entered income, not across your whole declared range." : `Keeps a credit with less than ${formatUsd(FRAGILE_ROOM_DOLLARS * 100)} of extra profit to spare.`] : [])];
   const out: MoneyResult[] = [
-    money("settled_cash_two_year", v.comparisons.versusDeclineCents, { kind: "decline_unpaid_terms", label: x.agreedProject
+    money("settled_two_year_cash", v.comparisons.versusDeclineCents, { kind: "decline_unpaid_terms", label: x.agreedProject
       ? `Declining the unpaid part of "${x.title}" (refunds or costs of ending it are not known and not counted)` : `Your plan without the unpaid terms of "${x.title}"` }, { precision, conditions }),
   ];
-  if (v.comparisons.versusOfferedCents !== null) out.push(money("settled_cash_two_year", v.comparisons.versusOfferedCents,
+  if (v.comparisons.versusOfferedCents !== null) out.push(money("settled_two_year_cash", v.comparisons.versusOfferedCents,
     { kind: x.agreedProject ? "agreed_terms" : "latest_client_offer", label: x.agreedProject ? `The agreed terms of "${x.title}"` : `"${x.title}" as currently offered` }, { precision, conditions }));
-  if (v.comparisons.versusOriginalOfferCents !== null) out.push(money("settled_cash_two_year", v.comparisons.versusOriginalOfferCents,
+  if (v.comparisons.versusOriginalOfferCents !== null) out.push(money("settled_two_year_cash", v.comparisons.versusOriginalOfferCents,
     { kind: "original_offer", label: `The client's original offer for "${x.title}"` }, { precision, conditions }));
-  out.push(money("retirement_added", v.retirementAddedCents, { kind: "none", label: "Retirement savings, not spendable" }, { horizon: null }));
+  out.push(money("retirement_principal", v.retirementAddedCents, { kind: "none", label: "Retirement savings, not spendable" }, { horizon: null }));
   for (const m of v.moneyByDate) {
     out.push(money("project_gross_by_date", m.receivedCents, { kind: "none", label: m.event }, { date: m.date }));
     out.push(money("project_available_by_date", m.availableCents, { kind: "decline_unpaid_terms", label: m.event }, { date: m.date, precision: precision === "conditional" ? "conditional" : "estimated_inputs",
