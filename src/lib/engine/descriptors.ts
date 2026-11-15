@@ -8,7 +8,7 @@ import type { TaxYear } from "@/domain/contracts";
 
 export const MONEY_METRICS = ["settled_cash_two_year", "settled_cash_year", "project_gross_by_date", "project_available_by_date",
   "household_balance_by_date", "retirement_added", "credit_change"] as const;
-export const COMPARISON_BASES = ["decline_unpaid_terms", "original_offer", "latest_client_offer", "agreed_terms", "plan_before_change", "none"] as const;
+export const COMPARISON_BASES = ["decline_unpaid_terms", "original_offer", "latest_client_offer", "agreed_terms", "household_proposal", "plan_before_change", "none"] as const;
 
 export interface MoneyResult {
   metric: (typeof MONEY_METRICS)[number];

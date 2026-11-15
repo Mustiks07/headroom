@@ -14,7 +14,9 @@
  * ambiguous references come back as blockers, never guessed.
  */
 import type { BlockedComparison, MoneyFact, TaxYear } from "@/domain/contracts";
-import { ChangeProposalSchema, type ChangeCommand, type ChangePreview, type ChangePreviewSummary, type ChangeProposal } from "@/domain/assistance";
+import { z } from "zod";
+import { ChangeCommandSchema, ChangeProposalSchema, type ChangeCommand, type ChangePreview, type ChangePreviewSummary, type ChangeProposal } from "@/domain/assistance";
+import { CentsSchema } from "@/domain/contracts";
 import { DealGoalSchema, DealTermsSpaceSchema, type DealGoal, type DealPlanningState } from "@/domain/deal-planning";
 import { captureSepBudgetContributions, HouseholdWorkspaceSchema, type HouseholdWorkspace, type Project, type ProjectLine, type WorkspaceEvent } from "@/domain/household-workspace";
 import { searchDealTerms } from "../deal";
@@ -22,6 +24,27 @@ import { engineWorkspaceFingerprint, evaluateHouseholdWorkspace } from "../house
 import { formatUsd } from "../money";
 
 type Change = ChangePreview["changes"][number];
+
+/**
+ * Round 6 payment commands (requested from Claude 3 in docs/handoffs/claude2-round6-contract-needs.md §4; local until published).
+ *  - record_partial_receipt: part of an expected payment arrived; the user confirms the remaining amount and its date.
+ *    The line keeps its original expectation as history, its actual is the part received; the rest becomes a new
+ *    expected line. Counted once: actual + remaining, never the original expectation as well.
+ *  - settle_line_for_less: less arrived and nothing more is expected (explicit, with a reason).
+ *  - record_refund: money paid back to the client: a business deduction in the year paid (cash method).
+ */
+const PlanDateSchema = z.string().date().refine(d => d >= "2026-01-01" && d <= "2027-12-31", "Dates must be in 2026 or 2027.");
+const IdS = z.string().min(1).max(120);
+export const PaymentCommandSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("record_partial_receipt"), projectId: IdS, lineId: IdS, amountCents: CentsSchema.positive(), date: PlanDateSchema,
+    remaining: z.object({ amountCents: CentsSchema.positive(), date: PlanDateSchema.nullable() }) }),
+  z.object({ type: z.literal("settle_line_for_less"), projectId: IdS, lineId: IdS, amountCents: CentsSchema.positive(), date: PlanDateSchema, reason: z.string().min(1).max(300) }),
+  z.object({ type: z.literal("record_refund"), projectId: IdS, amountCents: CentsSchema.positive(), date: PlanDateSchema, reason: z.string().min(1).max(300) }),
+]);
+export type PaymentCommand = z.infer<typeof PaymentCommandSchema>;
+export type EngineChangeCommand = ChangeCommand | PaymentCommand;
+export const EngineChangeProposalSchema = ChangeProposalSchema.extend({ commands: z.array(z.union([ChangeCommandSchema, PaymentCommandSchema])).max(5) });
+export type EngineChangeProposal = z.infer<typeof EngineChangeProposalSchema>;
 export interface ApplyOutcome {
   workspace: HouseholdWorkspace;
   changes: Change[];
@@ -78,7 +101,7 @@ const lineText = (l: ProjectLine) => l.actual ? `${formatUsd(l.actual.amountCent
 const shortHash = (s: string) => { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 
 /** Validate the meaning of each command and apply it to a copy. Pure. */
-export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangeProposal, userDate: string, now: string): ApplyOutcome {
+export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangeProposal | EngineChangeProposal, userDate: string, now: string): ApplyOutcome {
   const ws: HouseholdWorkspace = structuredClone(raw);
   const out: ApplyOutcome = { workspace: ws, changes: [], blockers: [], noOps: [], notes: [], events: [], touchedProjectIds: [] };
   const sourceId = `assist-${proposal.id}`.slice(0, 100);
@@ -97,7 +120,7 @@ export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangePropos
   const owner = ws.projects[0]?.ownerPersonId ?? ws.household.people.find(p => p.role === "primary")!.id;
   const dp = (): DealPlanningState => (ws.dealPlanning ??= { version: "1.0", goals: [], termSpaces: [], cashContext: null, packages: [] });
 
-  proposal.commands.forEach((c: ChangeCommand, i) => {
+  (proposal.commands as EngineChangeCommand[]).forEach((c, i) => {
     const before = out.blockers.length;
     switch (c.type) {
       case "add_offered_project": {
@@ -304,6 +327,68 @@ export function validateAndApply(raw: HouseholdWorkspace, proposal: ChangePropos
         event(i, "deal_planning_updated", `Changed the allowed terms for "${p.title}".`, { projectId: p.id });
         break;
       }
+      case "record_partial_receipt": case "settle_line_for_less": {
+        const f = findLine(i, c.projectId, c.lineId);
+        if (!f) break;
+        const { p, l, pi, li } = f;
+        if (c.date > userDate) { block(i, "date", `Money received cannot be dated after today (${userDate}).`); break; }
+        if (l.actual) {
+          const restId = `${l.id}-rest`;
+          const rest = p.receipts.find(x => x.id === restId);
+          const sameRest = c.type === "record_partial_receipt" ? rest?.expected?.amountCents === c.remaining.amountCents && rest?.expected?.date === c.remaining.date : !rest;
+          if (l.actual.amountCents === c.amountCents && l.actual.date === c.date && sameRest) { out.noOps.push({ commandIndex: i, reason: "This payment is already recorded this way." }); break; }
+          block(i, "lineId", `This payment is already recorded (${lineText(l)}). To change it, record a correction with a reason.`); break;
+        }
+        if (l.cancelledAt || !l.expected) { block(i, "lineId", "This payment is not expected any more."); break; }
+        const expected = l.expected;
+        if (c.amountCents >= expected.amountCents) { block(i, "amountCents", `${formatUsd(c.amountCents)} is not less than the expected ${formatUsd(expected.amountCents)}: record it as the payment received instead.`); break; }
+        ensureSource();
+        const prev = lineText(l);
+        if (c.type === "record_partial_receipt") {
+          if (c.remaining.date === null) { block(i, "remaining.date", "When is the rest due? Without a date its tax year is unknown, so nothing is assumed."); break; }
+          if (c.remaining.date < userDate) { block(i, "remaining.date", `The rest cannot be due before today (${userDate}); if it already arrived, record that payment.`); break; }
+          const restId = `${l.id}-rest`;
+          if (p.receipts.some(x => x.id === restId)) { block(i, "lineId", "A remaining payment from an earlier partial payment already exists; record payments against it."); break; }
+          const diff = c.amountCents + c.remaining.amountCents - expected.amountCents;
+          l.actual = { amountCents: c.amountCents, date: c.date, recordedAt: now, sourceId };
+          p.receipts.splice(li + 1, 0, { id: restId, label: `Remaining after ${formatUsd(c.amountCents)} received on ${c.date} (of ${formatUsd(expected.amountCents)} expected ${expected.date})`.slice(0, 200),
+            expected: { amountCents: c.remaining.amountCents, date: c.remaining.date }, actual: null, cancelledAt: null, sourceId, corrections: [] });
+          out.touchedProjectIds.push(p.id);
+          out.changes.push({ commandIndex: i, path: `projects[${pi}].receipts[${li}]`, label: `"${p.title}" partial payment`, before: prev,
+            after: `${formatUsd(c.amountCents)} received on ${c.date}; ${formatUsd(c.remaining.amountCents)} still expected on ${c.remaining.date}` });
+          if (diff !== 0) out.notes.push(`Received plus remaining is ${formatUsd(Math.abs(diff))} ${diff > 0 ? "more" : "less"} than the ${formatUsd(expected.amountCents)} expected: the expected total for "${p.title}" changes by that much.`);
+          if (c.date.slice(0, 4) !== c.remaining.date.slice(0, 4)) out.notes.push(`The part received counts in ${c.date.slice(0, 4)} income; the rest in ${c.remaining.date.slice(0, 4)}.`);
+          event(i, "payment_recorded", `Recorded a partial payment of ${formatUsd(c.amountCents)} for "${p.title}"; ${formatUsd(c.remaining.amountCents)} still expected on ${c.remaining.date}.`, { projectId: p.id, lineId: l.id });
+        } else {
+          l.actual = { amountCents: c.amountCents, date: c.date, recordedAt: now, sourceId };
+          l.label = `Settled for ${formatUsd(c.amountCents)} instead of ${formatUsd(expected.amountCents)}: ${c.reason}`.slice(0, 200);
+          out.touchedProjectIds.push(p.id);
+          out.changes.push({ commandIndex: i, path: `projects[${pi}].receipts[${li}].actual`, label: `"${p.title}" settled for less (${c.reason})`, before: prev,
+            after: `${formatUsd(c.amountCents)} received on ${c.date}; nothing more expected` });
+          out.notes.push(`${formatUsd(expected.amountCents - c.amountCents)} that was expected will not be received.`);
+          event(i, "payment_recorded", `"${p.title}" settled for ${formatUsd(c.amountCents)} instead of ${formatUsd(expected.amountCents)} (${c.reason}).`, { projectId: p.id, lineId: l.id });
+        }
+        break;
+      }
+      case "record_refund": {
+        const pi = ws.projects.findIndex(x => x.id === c.projectId);
+        const p = ws.projects[pi];
+        if (!p) { block(i, "projectId", "This project is not in your plan."); break; }
+        if (c.date > userDate) { block(i, "date", `A refund cannot be dated after today (${userDate}).`); break; }
+        const received = p.receipts.filter(l => l.actual).reduce((a, l) => a + l.actual!.amountCents, 0);
+        const refunded = p.expenses.filter(l => l.id.startsWith(`${p.id}-refund-`) && l.actual).reduce((a, l) => a + l.actual!.amountCents, 0);
+        const id = `${p.id}-refund-${shortHash(`${proposal.id}:${i}`)}`.slice(0, 100);
+        if (p.expenses.some(l => l.id === id)) { out.noOps.push({ commandIndex: i, reason: "This refund is already recorded." }); break; }
+        if (c.amountCents + refunded > received) { block(i, "amountCents", `Refunds would exceed the ${formatUsd(received)} received from "${p.title}".`); break; }
+        ensureSource();
+        p.expenses.push({ id, label: `Refund to the client: ${c.reason}`.slice(0, 200), expected: null, actual: { amountCents: c.amountCents, date: c.date, recordedAt: now, sourceId },
+          cancelledAt: null, sourceId, corrections: [] });
+        out.touchedProjectIds.push(p.id);
+        out.changes.push({ commandIndex: i, path: `projects[${pi}].expenses`, label: `Refund for "${p.title}" (${c.reason})`, before: null, after: `${formatUsd(c.amountCents)} paid back on ${c.date}` });
+        out.notes.push(`A refund reduces business profit in ${c.date.slice(0, 4)}, the year it is paid back (cash method).`);
+        event(i, "payment_corrected", `Recorded a ${formatUsd(c.amountCents)} refund to the client of "${p.title}" (${c.reason}).`, { projectId: p.id });
+        break;
+      }
     }
   });
   const parsed = HouseholdWorkspaceSchema.safeParse(ws);
@@ -348,7 +433,7 @@ async function agreedMeets(ws: HouseholdWorkspace, projectId: string): Promise<{
  * Preview a proposal on a copy of the workspace. Nothing is saved. `userDate` is the user's calendar
  * date (their time zone); without it the proposal's creation date (UTC) is used and noted.
  */
-export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeProposal, opts: {
+export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeProposal | EngineChangeProposal, opts: {
   userDate?: string; now?: string;
   /**
    * The function that will save the confirmed proposal (Claude 3's `applyChangeProposal`). When given, the
@@ -357,7 +442,7 @@ export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeP
    */
   apply?: (ws: HouseholdWorkspace, proposal: ChangeProposal) => Promise<{ workspace: HouseholdWorkspace }>;
 } = {}): Promise<EngineChangePreview | BlockedComparison> {
-  const pr = ChangeProposalSchema.safeParse(proposalRaw);
+  const pr = EngineChangeProposalSchema.safeParse(proposalRaw);
   if (!pr.success) return { status: "needs_data", code: "INVALID_REQUEST", message: "The proposed change is not valid.", fields: pr.error.issues.map(i => ({ path: `proposal.${i.path.join(".")}`, reason: i.message })) };
   const proposal = pr.data;
   const parsedWs = HouseholdWorkspaceSchema.safeParse(ws);
@@ -380,8 +465,10 @@ export async function previewChange(ws: HouseholdWorkspace, proposalRaw: ChangeP
     if (mine && mine !== rd.date) blockers.push({ path: "resolvedDates", reason: `"${rd.phrase}" is ${mine} from ${userDate}, not ${rd.date}. Check the date.` });
   }
 
-  if (opts.apply && !blockers.length) {
-    try { applied.workspace = (await opts.apply(parsedWs.data, proposal)).workspace; }
+  // The saving function is used when every command is a contract command it knows; payment commands (round 6) are applied here until published.
+  const contractOnly = ChangeProposalSchema.safeParse(proposal);
+  if (opts.apply && !blockers.length && contractOnly.success) {
+    try { applied.workspace = (await opts.apply(parsedWs.data, contractOnly.data)).workspace; }
     catch (e) { blockers.push({ path: "proposal", reason: `This change cannot be saved: ${e instanceof Error ? e.message : String(e)}` }); }
   }
   const before = await summary(parsedWs.data);

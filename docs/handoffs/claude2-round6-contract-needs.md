@@ -2,7 +2,7 @@
 
 Sent at the start of round 6 so the first contract commit can include them. Everything is optional or new, so v1, v2 and round 4–5 data stay valid. Money: integer cents; unknown = `null`. The engine implements the functions listed; Claude 3 owns the schemas. If a name is inconvenient, rename it in the contract, and I will follow the published names.
 
-Proposed versions (coordinate once): engine `headroom-engine-1.4.0` (partial receipts, refunds and counteroffer semantics change results) and deal `headroom-deal-1.2.0` (nearest alternatives, reversal facts, descriptors). Rules stay `us-federal-aca-2026-2027.r3` and household stays `headroom-household-1.0.1`.
+Versions (decided after implementing): deal `headroom-deal-1.2.0` (option selection changed: cosmetic duplicates removed, nearest alternatives, reversal facts, descriptors). Engine stays `headroom-engine-1.3.0`: tax and credit results of existing inputs are unchanged, and partial receipts, refunds and client responses are new commands/functions. Bumping the engine would only invalidate every saved package without a change in figures. Rules stay `us-federal-aca-2026-2027.r3` and household stays `headroom-household-1.0.1`.
 
 ## 1. Money result descriptor (shared by UI, PDF and comparison exports)
 
@@ -19,7 +19,7 @@ export const MONEY_METRICS = [
   "credit_change",              // premium tax credit change for a year
 ] as const;
 export const COMPARISON_BASES = [
-  "decline_unpaid_terms", "original_offer", "latest_client_offer", "agreed_terms", "plan_before_change", "none",
+  "decline_unpaid_terms", "original_offer", "latest_client_offer", "agreed_terms", "household_proposal", "plan_before_change", "none",
 ] as const;
 export const MoneyResultSchema = z.object({
   metric: z.enum(MONEY_METRICS),
