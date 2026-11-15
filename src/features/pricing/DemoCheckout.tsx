@@ -50,9 +50,9 @@ export function DemoCheckout() {
       if (mode === "demo") {
         try { localStorage.setItem(ENTITLEMENT_KEY, JSON.stringify({ mode: "demo" })); } catch { /* ignore */ }
         setActive("demo");
-        setMessage("Demo access is active in this browser. No payment was collected.");
+        setMessage("Plan access is active in this browser. No payment was collected.");
       } else {
-        setMessage("The test checkout couldn't be started. You can use the demo checkout instead.");
+        setMessage("The test checkout couldn't be started. You can continue without payment instead.");
       }
     } finally {
       setBusy(false);
@@ -65,12 +65,12 @@ export function DemoCheckout() {
   }
 
   if (active) return <div className="notice ok" role="status">
-    <strong>{active === "test" ? "Stripe test purchase is active in this browser." : "Demo access is active in this browser."}</strong>{" "}
+    <strong>{active === "test" ? "Stripe test purchase is active in this browser." : "Plan access is active in this browser."}</strong>{" "}
     {active === "test" ? "This was a Stripe test-mode transaction: no real money moved and it is not counted as revenue."
       : "No payment was collected and nothing was recorded as a purchase."}
     {message && <p className="hint">{message}</p>}
     <div className="row gap"><Link className="btn small primary" href="/check">Check my subsidy</Link>
-      <button type="button" className="link-btn" onClick={reset}>Reset demo</button></div>
+      <button type="button" className="link-btn" onClick={reset}>Reset access preview</button></div>
   </div>;
 
   if (!open) return <>
@@ -79,13 +79,13 @@ export function DemoCheckout() {
   </>;
 
   return <div className="checkout" role="group" aria-labelledby="checkout-title">
-    <p id="checkout-title" className="checkout-flag">Demo checkout. No payment will be collected.</p>
+    <p id="checkout-title" className="checkout-flag">No payment will be collected.</p>
     <dl className="summary-list">
       <div><dt>Plan</dt><dd>Household plan, 12 months</dd></div>
-      <div><dt>Price</dt><dd>$99.00 — not charged in this demo</dd></div>
+      <div><dt>Price</dt><dd>$99.00 / year — $0 charged today</dd></div>
     </dl>
     <div className="row gap wrap">
-      <button type="button" className="btn primary" disabled={busy} onClick={() => complete("demo")}>Complete demo checkout</button>
+      <button type="button" className="btn primary" disabled={busy} onClick={() => complete("demo")}>Continue without payment</button>
       {caps?.checkoutMode === "stripe_test" && <button type="button" className="btn secondary" disabled={busy} onClick={() => complete("stripe_test")}>
         Try Stripe test mode (test card only)</button>}
       <button type="button" className="btn ghost" onClick={() => setOpen(false)}>Cancel</button>

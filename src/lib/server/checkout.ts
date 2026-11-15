@@ -34,7 +34,7 @@ export async function demoCheckout(ownerId: string | null): Promise<CheckoutResu
   const expiresAt = new Date(Date.now() + YEAR_MS).toISOString();
   const recorded = await recordEntitlement(ownerId, "demo", null, expiresAt);
   return { mode: "demo", unlocked: true, isRealPayment: false, expiresAt, recorded: recorded ? "cloud" : "browser_only",
-    label: `Demo checkout: everything is unlocked for this contest. No card was collected and no payment was made. Planned price: ${PRICE_LABEL}.` };
+    label: `Plan access is active. No card was collected and no payment was made. Planned annual price: ${PRICE_LABEL}.` };
 }
 
 async function stripe(path: string, init: { method?: string; form?: Record<string, string> } = {}) {

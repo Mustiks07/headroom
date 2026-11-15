@@ -100,10 +100,10 @@ describe("documents → reviewed facts → one atomic apply", () => {
 });
 
 describe("text → proposal → preview → confirm", () => {
-  it("“The remaining payment moved to January 8, 2027” → one exact command; confirm once; retries are no-ops; stale is refused", async () => {
+  it("a named payment → one exact command; confirm once; retries are no-ops; stale is refused", async () => {
     const repo = createLocalWorkspaceRepository({ store: new MemoryStore() });
     const ws = await repo.save(structuredClone(workspaceFixture) as HouseholdWorkspace, null);
-    const res = await json(propose, { request: await request(ws, "The remaining payment moved to January 8, 2027"), consentToProvider: false });
+    const res = await json(propose, { request: await request(ws, "The bakery payment moved to January 8, 2027"), consentToProvider: false });
     const { proposal, providerUsed } = await res.json() as { proposal: ChangeProposal; providerUsed: boolean };
     expect(providerUsed).toBe(false);
     expect(proposal.commands).toEqual([{ type: "update_expected_payment", projectId: "proj-a", lineId: "a-pay-2", newAmountCents: null, newDate: "2027-01-08" }]);
@@ -122,6 +122,11 @@ describe("text → proposal → preview → confirm", () => {
   it("asks instead of guessing; relative dates use the user's date", async () => {
     const ws = structuredClone(workspaceFixture) as HouseholdWorkspace;
     const req = await request(ws, "Received $3,000 next Friday");
+    const remaining = (await (await json(propose, { request: await request(ws, "The remaining payment moved to January 8, 2027"), consentToProvider: false })).json()).proposal;
+    expect(remaining.commands).toEqual([]);
+    expect(remaining.ambiguities[0].id).toBe("which_payment");
+    const paid = (await (await json(propose, { request: await request(ws, "The client paid me $2,000 for the bakery on November 14, 2026"), consentToProvider: false })).json()).proposal;
+    expect(paid.commands).toEqual([{ type: "record_receipt", projectId: "proj-a", lineId: "a-pay-2", amountCents: 200_000, date: "2026-11-14" }]);
     expect(resolveDate("next Friday", "2026-11-16")).toMatchObject({ date: "2026-11-20", relative: true });
     const { proposal } = await (await json(propose, { request: req, consentToProvider: false })).json() as { proposal: ChangeProposal };
     expect(proposal.commands).toEqual([]);
@@ -133,6 +138,8 @@ describe("text → proposal → preview → confirm", () => {
     expect(sep.commands).toEqual([{ type: "record_sep_contribution", personId: "primary", taxYear: 2026, amountCents: 150_000, paidDate: "2026-12-20" }]);
     const unclear = (await (await json(propose, { request: await request(ws, "Paid $1,500 into SEP on February 2, 2027"), consentToProvider: false })).json()).proposal as ChangeProposal;
     expect(unclear.ambiguities.map(a => a.id)).toEqual(["tax_year", "person"]); // Feb 2027 could be for 2026 or 2027; two adults
+    const afterApril = (await (await json(propose, { request: await request(ws, "Paid $1,500 into my SEP on May 2, 2027"), consentToProvider: false })).json()).proposal as ChangeProposal;
+    expect(afterApril.ambiguities.map(a => a.id)).toContain("tax_year"); // An extension can permit a prior-year contribution.
   });
 
   it("provider failure, budget limit and invented figures fall back to deterministic output", async () => {
@@ -147,7 +154,7 @@ describe("text → proposal → preview → confirm", () => {
     const timeout = await (await json(propose, body)).json();
     expect(timeout).toMatchObject({ providerUsed: false, proposal: { provenance: "pattern" } });
     expect(timeout.notes[0]).toMatch(/didn't respond/);
-    expect(rpc.mock.calls.filter(c => c[0] === "headroom_settle_ai_spend").at(-1)![1]).toMatchObject({ p_actual: 0 });
+    expect(rpc.mock.calls.filter(c => c[0] === "headroom_settle_ai_spend")).toHaveLength(0); // unknown usage retains the reservation
     rpc.mockImplementationOnce(async () => ({ data: [{ reservation_id: null, outcome: "global_budget" }], error: null }));
     const limited = await (await json(propose, body)).json();
     expect(limited.providerUsed).toBe(false);

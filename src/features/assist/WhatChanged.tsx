@@ -8,13 +8,13 @@ import { engineWorkspaceFingerprint, previewChange, type EngineChangePreview } f
 import {
   applyChangeProposal, CommandError, answerAmbiguity, buildAssistanceContext, commitProposal, getCapabilities, proposeChange, trackEvent,
 } from "@/lib/client/api";
-import { humanizeDates, money, shortDate, signedMoney } from "@/features/format";
+import { humanizeDates, localCalendarDate, money, shortDate, signedMoney } from "@/features/format";
 import { workspaceRepo } from "@/features/household-plan/store";
 
 const EXAMPLES = [
-  "The final payment will arrive on January 8, 2027",
+  "The final payment moved to January 8, 2027",
   "I received $3,200 today for the bakery project",
-  "I contributed $1,500 to my 2026 SEP",
+  "I contributed $1,500 to my SEP today for 2026",
 ];
 
 type State =
@@ -23,7 +23,7 @@ type State =
   | { kind: "proposal"; request: AssistanceRequest; proposal: ChangeProposal; providerUsed: boolean; notes: string[]; preview: EngineChangePreview | { status: "blocked"; message: string } | null }
   | { kind: "error"; message: string };
 
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const today = localCalendarDate;
 
 /**
  * "What changed?" — the user's words become a typed proposal (Claude 3: patterns or, with consent,
@@ -94,7 +94,7 @@ export function WhatChanged({ ws, onSaved, onNotice, dataKind }: {
     <div className="examples">{EXAMPLES.map(x => <button key={x} type="button" className="chip-btn" onClick={() => setText(x)}>{x}</button>)}</div>
     <label className="visually-hidden" htmlFor="wc-text">What changed</label>
     <textarea id="wc-text" rows={2} maxLength={4000} value={text} onChange={e => setText(e.target.value)} placeholder="e.g. The client moved the last payment to January 8, 2027" />
-    {aiText && <label className="check small"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />Let the AI service read this sentence (only the sentence and project names are sent).</label>}
+    {aiText && <label className="check small"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />Let the AI service read this sentence and the project/payment context needed to understand it.</label>}
     {!aiText && <p className="hint">Headroom understands common updates (a moved payment, a payment received, a SEP-IRA contribution, a new offer). The AI service for other wording isn&apos;t switched on in this version.</p>}
     <div className="row gap"><button type="button" className="btn primary small" disabled={!text.trim() || state.kind === "proposing"} onClick={() => void propose()}>{state.kind === "proposing" ? "Reading…" : "Show the change"}</button></div>
     {state.kind === "error" && <p className="notice warn" role="alert">{state.message}</p>}

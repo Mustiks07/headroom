@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { HouseholdWorkspace, Project } from "@/domain/household-workspace";
 import { effectiveLine } from "@/domain/household-workspace";
-import { centsToInput, money, shortDate } from "@/features/format";
+import { centsToInput, localCalendarDate, money, shortDate } from "@/features/format";
 import { AmountInput, parseAmount } from "@/features/household-plan/parts";
 
 /** What the person can change about the goal, kept as typed text until it is valid. */
@@ -27,7 +27,7 @@ export function defaultGoal(project: Project): GoalDraft {
     price: { min: centsToInput(total || null), max: centsToInput(total || null) },
     windows: { latestDate: project.terms.nextYearPaymentLatestDate ?? "", maxParts: project.terms.canSplitPayment ? 2 : 1 },
     clientOpen: project.terms.canSplitPayment || project.terms.canRenegotiatePrice ? true : null,
-    cash: { balance: "", asOf: new Date().toISOString().slice(0, 10), reserve: "0", complete: false },
+    cash: { balance: "", asOf: localCalendarDate(), reserve: "0", complete: false },
   };
 }
 

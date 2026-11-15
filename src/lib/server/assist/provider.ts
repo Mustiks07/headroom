@@ -1,5 +1,5 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import { createAiClient } from "../ai-client";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { ChangeCommandSchema, type AssistanceRequest, type ChangeCommand, type ChangeProposal, type ExplanationPacket } from "@/domain/assistance";
@@ -37,7 +37,7 @@ Rules:
 
 /** Ask the provider for a typed proposal; every reference/amount/date is re-validated here. */
 export async function proposeWithProvider(req: AssistanceRequest, id: string, reservation: AiReservation): Promise<ProviderCall<ChangeProposal>> {
-  const client = new Anthropic({ apiKey: reservation.apiKey, timeout: reservation.timeoutMs, maxRetries: 0 });
+  const client = createAiClient(reservation);
   const response = await client.messages.parse({
     model: reservation.model, max_tokens: reservation.maxOutputTokens,
     output_config: { effort: "low", format: zodOutputFormat(ModelProposalSchema) },
@@ -155,7 +155,7 @@ const EXPLAIN_SYSTEM = `Write one or two short sentences in plain, friendly Engl
 Do not write ANY digits: no amounts, percentages, dates or years. Do not give advice, recommendations or promises, and do not add facts that are not in the explanation.`;
 
 export async function explainWithProvider(packet: ExplanationPacket, reservation: AiReservation): Promise<ProviderCall<string>> {
-  const client = new Anthropic({ apiKey: reservation.apiKey, timeout: reservation.timeoutMs, maxRetries: 0 });
+  const client = createAiClient(reservation);
   const base = deterministicExplanation(packet).text;
   const response = await client.messages.create({
     model: reservation.model, max_tokens: reservation.maxOutputTokens, output_config: { effort: "low" }, system: EXPLAIN_SYSTEM,

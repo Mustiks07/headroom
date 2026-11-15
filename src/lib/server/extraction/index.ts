@@ -9,6 +9,7 @@ import { toExtractedFacts, type ExtractionResponse } from "@/lib/client/import-d
 import { aiFeatureEnabled, type AiReservation } from "../ai-budget";
 import { extractWithAnthropic, type ProviderCallInfo, type ProviderMedia } from "./anthropic";
 import { detectAsOfDate, documentKindCode, extractFromText } from "./text";
+import { readPdfText } from "./pdf-text";
 
 export const MAX_DOCUMENT_BYTES = 3 * 1024 * 1024;
 export const MAX_PDF_PAGES = 5;
@@ -86,12 +87,27 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
     throw new HttpError(400, "CONSENT_REQUIRED", "Confirm that this document may be sent to the document-analysis provider before it is read.");
   }
   if (!req.authorizeProvider) throw new HttpError(503, "AI_UNAVAILABLE", UNAVAILABLE_MESSAGE);
-  const reservation = await req.authorizeProvider(media.kind === "pdf" ? { pdfPages: media.pageCount } : { images: 1 });
+  // The configured BasisWeb route accepts text, not attachments. Read PDF text on
+  // our server, then send that text only after the same explicit provider consent.
+  if (serverConfig().ai?.provider === "basisweb") {
+    if (media.kind === "image") return { status: 200, result: { status: "unavailable", fields: [],
+      warnings: ["Photo reading is not available right now. Upload a PDF with selectable text, paste the relevant text, or enter the figures manually."] } };
+    try {
+      const pages = await readPdfText(media.data);
+      if (!pages.some(p => p.text.trim().length > 0)) return { status: 200, result: { status: "unavailable", fields: [],
+        warnings: ["This PDF has no readable text layer. Paste the relevant text or enter the figures manually."] } };
+      media = { kind: "pdf_text", pages, pageCount: media.pageCount };
+    } catch {
+      return { status: 200, result: { status: "unavailable", fields: [],
+        warnings: ["The text in this PDF could not be read. Upload a smaller text PDF or enter the figures manually."] } };
+    }
+  }
+  const reservation = await req.authorizeProvider(media.kind === "image" ? { images: 1 } : { pdfPages: media.pageCount });
   const info: ProviderCallInfo = { usage: null, outcome: "error" };
   try {
     const label = detected.kind === "pdf" ? "Uploaded PDF" : "Uploaded image";
     const result = await extractWithAnthropic(media, documentId, label,
-      { apiKey: reservation.apiKey, model: reservation.model, maxOutputTokens: reservation.maxOutputTokens, timeoutMs: reservation.timeoutMs }, info);
+      reservation, info);
     await reservation.settle(info.usage, info.outcome);
     const kind = result.document?.kind ?? "unknown";
     return { status: 200, result: { ...result, document: { documentId, kind }, facts: toExtractedFacts(result, documentId, kind, "ai_model") } };
@@ -99,6 +115,6 @@ export async function extractDocumentServer(req: ExtractRequest): Promise<{ stat
     await reservation.settle(info.usage, error instanceof Error ? error.name : "error");
     console.error("[headroom] document provider failed", error instanceof Error ? error.name : "unknown");
     return { status: 503, result: { status: "unavailable", fields: [],
-      warnings: ["Document analysis did not respond in time. Try again or enter the figures manually."] } };
+      warnings: ["Document analysis could not finish. Try again or enter the figures manually."] } };
   }
 }

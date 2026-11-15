@@ -339,7 +339,7 @@ export function Workspace({ seed, mode, initialStep = "household", entry, import
       {mode === "demo" ? <>
         <div className="sample-banner compact" role="note">
           <FlaskConical size={16} aria-hidden="true" />
-          <div><strong>Sample household — synthetic data.</strong> <span className="hide-sm">{sampleLine(draft)}</span></div>
+          <div><strong>Sample household.</strong> <span className="hide-sm">{sampleLine(draft)}</span></div>
           <Link className="btn ghost small" href="/check">Use my own data</Link>
         </div>
         <div className="result-first">

@@ -912,9 +912,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px
 .continue-plan { background: var(--cobalt-tint); border: 1px solid var(--cobalt-soft); }
 @media (prefers-reduced-motion: no-preference) {
   .hero-scene img { animation: scene-in 450ms var(--ease) both; }
+  .entry-tray { animation: panel-in 300ms var(--ease) both; }
+  .deal-panel, .readiness, .review-summary, .variant { animation: panel-in 220ms var(--ease) both; }
+  @keyframes panel-in { from { opacity: .3; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @keyframes scene-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 }
 @media (max-width: 1100px) { .hero h1 { font-size: 72px; } }
+/* Keep the live offer input visible on short laptop screens without changing C's composition. */
+@media (min-width: 801px) and (max-height: 850px) {
+  .hero-scene { width: min(780px, 100%, max(360px, calc(150svh - 660px))); margin-bottom: -70px; }
+  .offer-paper { padding: 8px 18px 10px; }
+  .offer-paper span { font-size: 13px; }
+  .offer-paper strong { font-size: 24px; }
+}
 @media (max-width: 800px) {
   .hero { padding-top: 8px; }
   .hero h1 { font-size: 42px; line-height: 1.02; margin-top: 8px; }

@@ -1,11 +1,12 @@
 import "server-only";
 import { isRealValue, publicSupabaseConfig } from "@/lib/client/public-config";
 import { aiFeatureEnabled } from "./ai-budget";
+import type { AiProvider } from "./ai-client";
 
 /** Server-only configuration. Values are read per call so tests and Vercel env changes apply. */
 export interface ServerConfig {
   supabase: { url: string; publishableKey: string; secretKey: string | null } | null;
-  ai: { provider: "anthropic"; apiKey: string; model: string } | null;
+  ai: { provider: AiProvider; apiKey: string; model: string } | null;
   stripe: { secretKey: string; webhookSecret: string | null; priceId: string } | null;
   appUrl: string | null;
 }
@@ -23,6 +24,8 @@ export function serverConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig
   const aiKey = env.AI_API_KEY?.trim();
   const ai = provider === "anthropic" && isRealValue(aiKey) && aiKey.startsWith("sk-ant-")
     ? { provider: "anthropic" as const, apiKey: aiKey, model: isRealValue(env.AI_MODEL) ? env.AI_MODEL.trim() : DEFAULT_ANTHROPIC_MODEL }
+    : provider === "basisweb" && isRealValue(aiKey) && /^sk-pl-[A-Za-z0-9_-]+$/.test(aiKey)
+    ? { provider: "basisweb" as const, apiKey: aiKey, model: isRealValue(env.AI_MODEL) ? env.AI_MODEL.trim() : "claude-opus-5.5" }
     : null;
 
   // Only Stripe TEST mode is supported. A live key is ignored so real billing is never enabled silently.

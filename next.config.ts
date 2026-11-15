@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const config: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
   async headers() {
     return [{
       source: "/:path*",

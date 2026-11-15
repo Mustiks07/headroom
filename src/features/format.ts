@@ -5,6 +5,11 @@
 const whole = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0, minimumFractionDigits: 0 });
 const exact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** A date-only user input follows the browser's calendar day, not the UTC day. */
+export function localCalendarDate(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 /** "$12,000" — rounded for display only. */
 export function money(cents: number | null | undefined): string {
   if (cents === null || cents === undefined || !Number.isFinite(cents)) return "—";

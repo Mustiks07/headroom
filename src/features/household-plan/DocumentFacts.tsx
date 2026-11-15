@@ -111,11 +111,11 @@ export function DocumentFacts({ ws, onCommit }: { ws: HouseholdWorkspace; onComm
   return <section className="plan-section" id="documents" aria-labelledby="docs-title">
     <h2 id="docs-title" className="section-title small">Add documents</h2>
     <p className="muted small">Profit-and-loss reports, pay stubs, Marketplace statements, payment and SEP-IRA confirmations. Headroom proposes figures; nothing is used until you confirm it.
-      {ai ? " PDFs and images are sent to the document-analysis service only after you agree for that file." : " This version reads CSV and text files; PDFs and photos need document analysis, which isn't switched on — enter those figures by hand."}</p>
+      {ai ? " Document analysis runs only after you agree for that file. Use PDFs with selectable text; if a photo or scan cannot be read, paste its text or enter the figures." : " CSV and text files work. Document analysis is unavailable right now; you can enter other figures by hand."}</p>
     <div className="row gap wrap">
       <label className="btn secondary small file-btn"><FileUp size={16} /> Choose files
         <input ref={input} type="file" multiple accept={ai ? ".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt" : ".csv,.txt,text/csv,text/plain"} onChange={e => add(e.target.files)} /></label>
-      <a className="link-btn" href="/samples/index.html" target="_blank" rel="noreferrer">Synthetic sample files</a>
+      <a className="link-btn" href="/samples/index.html" target="_blank" rel="noreferrer">Supported document formats</a>
     </div>
     {docs.length > 0 && <ul className="doc-queue">{docs.map(doc => <li key={doc.id} className={`doc doc-${doc.state}`}>
       <div className="doc-head"><strong>{doc.name}</strong><span className={`pill ${doc.state === "done" ? "good" : doc.state === "failed" || doc.state === "unavailable" ? "warn" : "neutral"}`}>{STATE_TEXT[doc.state]}</span>

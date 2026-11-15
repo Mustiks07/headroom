@@ -6,9 +6,9 @@ Headroom is a browser-based planning product for self-employed US adults. It hel
 
 **[Open Headroom](https://headroom-amber.vercel.app) · [Try the family example](https://headroom-amber.vercel.app/demo?case=family-cliff) · [Use your own figures](https://headroom-amber.vercel.app/check)**
 
-**Current status: live on Vercel, with guest cloud save connected to Supabase.** The English interface, deterministic financial engine and backend are connected. No signup, email, password or card is required. Public calculation, cloud save/reopen and PDF export were checked on November 15, 2026; see the [live release handoff](docs/handoffs/vercel-live-release.md). CSV/TXT import is available. AI PDF/image reading is not enabled, and checkout remains explicitly in demo mode.
+**Live on Vercel, with guest cloud save connected to Supabase.** No signup, email, password or card is required. Round 5 connects the selected C interface, goal-based terms, confirmed text updates, historical decision PDFs and current calendar exports. BasisWeb text assistance and text-PDF extraction have been exercised with real provider requests; photos/scanned PDFs are not supported by the configured gateway. All checkout access is no-charge. See the [round 5 integration handoff](docs/handoffs/integration-round5.md) for exact verification and remaining gaps.
 
-See the [round 4 integration review](docs/handoffs/integration-round4.md) for checked journeys, corrections and remaining work. Current calculation versions: `headroom-engine-1.2.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`, deal search `headroom-deal-1.0.0`.
+Current calculation versions: `headroom-engine-1.3.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`, deal search `headroom-deal-1.1.0`. Earlier reviews remain available as history, including [round 4](docs/handoffs/integration-round4.md).
 
 ## Try it locally
 
@@ -22,7 +22,7 @@ Saved plans reopen in the same browser. “Something changed” first checks the
 
 The household workspace separates expected money from payments already received. A new offer is compared on top of existing agreements; changing unpaid terms preserves deposits. Recording a SEP contribution reduces both the unpaid goal and the cash still available. “My income changed” checks the existing plan before suggesting changes. Download the [synthetic annual forecast example](docs/artifacts/round3/annual-income-forecast-explanation-synthetic.pdf) to inspect the exported facts, estimates and calculation trace.
 
-**Find terms for your goal:** in a household project, enter how much more cash you want to keep, your retirement-contribution limit and an optional date target. Headroom searches allowed prices and payment schedules and shows up to three distinct, calculated choices. Choose terms to create a client-message draft, decision PDF and calendar file. Record the client's agreement and actual payments to update the plan. No message is sent automatically. The search is approximate with exact checks of the displayed choices; it does not claim a global optimum. A saved decision's exports currently require its original calculation to remain current; historical exports after agreement are part of the next round.
+**Find terms for your goal:** enter how much more cash you want to keep, your retirement-contribution limit and an optional date target. Headroom searches allowed prices and payment schedules and shows up to three distinct calculated choices. Choose terms to create a client-message draft, decision PDF and calendar. Record agreement and actual payments to update the plan. No message is sent automatically. The search does not claim a global optimum. Historical decision records retain their original context after later updates; current-plan exports require current calculations. Calendar downloads are snapshots, not a live subscription.
 
 ## Development
 
@@ -51,7 +51,7 @@ For the bounded browser check, install Chromium once with `npx playwright instal
 
 Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
 
-**Next assignments:** read the [round 5 shared brief](docs/tasks/ROUND5_SHARED.md), then [Claude 1 — document-assisted journey](docs/tasks/CLAUDE1_ROUND5.md), [Claude 2 — readiness, change previews and explanations](docs/tasks/CLAUDE2_ROUND5.md), or [Claude 3 — AI, confirmed commands and exports](docs/tasks/CLAUDE3_ROUND5.md). Round 4 is integrated. The full document-first and natural-language workflows are next-round work, not current release claims.
+**Next assignments:** [round 6 shared brief](docs/tasks/ROUND6_SHARED.md), [Claude 1 — complete user experience](docs/tasks/CLAUDE1_ROUND6.md), [Claude 2 — trusted decisions and evidence](docs/tasks/CLAUDE2_ROUND6.md), [Claude 3 — common data/AI path](docs/tasks/CLAUDE3_ROUND6.md). These cover the remaining first-input, semantic multi-document, negotiation and partial-payment gaps. They are requirements, not claims that every requested feature is already live.
 
 ## Specification
 
@@ -64,7 +64,10 @@ Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [C
 - [Business assumptions and pitch evidence](docs/BUSINESS.md)
 - [Demand, alternatives, first-Cup evidence and modeled unit economics](docs/research/round5-business-research.md)
 - [Participant repository comparison and paid-value research](docs/research/README.md)
-- [Selected C design — implementation references, not the current deployed UI](docs/design/c-open/README.md)
+- [Selected C design — implemented visual system and reference images](docs/design/c-open/README.md)
+- [Paid demand, pricing experiments and economics assumptions](docs/research/round6-paid-demand.md)
+- [Current competitors and the ten-slide evidence plan](docs/research/round6-competition-pitch.md)
+- [Code-backed product gap audit](docs/research/round6-product-gap-audit.md)
 - [Archived visual exploration — rejected](docs/design/round5/design-direction.md)
 - [Official sources and research boundaries](docs/SOURCES.md)
 

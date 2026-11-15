@@ -36,7 +36,7 @@ export default function Pricing() {
           <DemoCheckout />
         </section>
       </div>
-      <p className="muted small">This is a launch pricing hypothesis. In this demo every feature is unlocked for everyone, including your own data — no card or account needed.</p>
+      <p className="muted small">Planned annual price. All features are currently available at no charge, including your own data — no card or account needed.</p>
     </main>
     <SiteFooter />
   </>;

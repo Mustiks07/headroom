@@ -12,7 +12,6 @@ export function HeadroomMark({ size = 28 }: { size?: number }) {
 type Current = "demo" | "check" | "plans" | "pricing";
 const LINKS: Array<{ href: string; key: Current; text: string }> = [
   { href: "/start?intent=offer", key: "check", text: "Check an offer" },
-  { href: "/demo", key: "demo", text: "Try a sample" },
   { href: "/household", key: "plans", text: "Your plans" },
   { href: "/pricing", key: "pricing", text: "Pricing" },
 ];
@@ -33,7 +32,7 @@ export function SiteHeader({ current, stage = false, journey = false }: { curren
 export function SiteFooter() {
   return <footer className="site-footer">
     <div className="shell footer-row">
-      <p>Headroom is a planning tool, not tax or legal advice, and not a Marketplace eligibility decision. Sample households are synthetic.</p>
+      <p>Income decisions, with the full picture. Planning estimates, not a tax filing or Marketplace eligibility decision.</p>
       <nav aria-label="Footer" className="footer-links">
         <Link href="/privacy">Privacy &amp; your data</Link>
         <Link href="/terms">Terms</Link>

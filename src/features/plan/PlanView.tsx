@@ -152,7 +152,6 @@ function PlanReady({ plan, events, eventsError, mode, notice, setNotice, editing
         <button type="button" className="btn primary" onClick={() => { setEditing(true); setTimeout(() => document.getElementById("changed")?.scrollIntoView({ behavior: "smooth" }), 30); }}><RefreshCw size={17} /> Something changed</button>
       </div>
     </div>
-    {plan.input.isSynthetic && <p className="sample-banner small"><FlaskConical size={16} aria-hidden="true" /> Built from a synthetic sample household. Plan prices are county candidates or illustrative.</p>}
     {notice && <p className={`notice ${notice.tone === "warn" ? "warn" : "ok"}`} role={notice.tone === "warn" ? "alert" : "status"}>{notice.text}</p>}
     {saveFailure && notice?.tone === "warn" && <StorageFallback error={saveFailure.error} plan={saveFailure.plan}
       onSaved={saved => router.push(`/plan/${encodeURIComponent(saved.id)}?saved=1`)} />}

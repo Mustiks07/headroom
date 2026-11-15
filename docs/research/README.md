@@ -1,5 +1,14 @@
 # Research and decision evidence
 
+## Current round 6 evidence and implementation plan
+
+- [Paid demand and pricing validation](round6-paid-demand.md): paid-category evidence, strongest objections, acquisition assumptions and experiments. Current BasisWeb dollar COGS is unknown; older fixed AI cost assumptions are not actual deployment costs.
+- [Competition and ten-slide pitch architecture](round6-competition-pitch.md): current alternative/participant evidence and precise artifacts needed for the defense.
+- [Code-backed gap audit](round6-product-gap-audit.md): actual missing integration and decision-lifecycle behavior, not a list of speculative features.
+- [Complete next implementation round](../tasks/ROUND6_SHARED.md): ownership, contracts, all three assignments and finite acceptance criteria.
+
+Research is not customer traction. Developer/fixture events cannot establish paid conversion or retention. No outreach or paid advertising was performed by these researchers.
+
 ## Newly found: the first winner's primary materials
 
 [Preggo winner data review](PREGGO_WINNER_DATA.md) identifies the public app/landing repositories and the team's ten-page **Business Cup Stage 2** economics PDF, inspected in full. This corrects the earlier search's missing-repository/document finding. [Reproduced arithmetic](preggo-reference-arithmetic.json) separates the team's assumptions from Codex stress cases. The review maps their evidence categories to what Headroom already has and still needs; the PDF is not verified as the final pitch deck or as measured campaign results.

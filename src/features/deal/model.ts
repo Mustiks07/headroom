@@ -3,7 +3,7 @@ import {
   type CashContext, type DealGoal, type DealTermsSpace,
 } from "@/domain/deal-planning";
 import type { HouseholdWorkspace, Project } from "@/domain/household-workspace";
-import { centsToInput } from "@/features/format";
+import { centsToInput, localCalendarDate } from "@/features/format";
 import { parseAmount } from "@/features/household-plan/parts";
 import { goalProblems, type GoalDraft } from "./GoalForm";
 
@@ -30,7 +30,7 @@ export function buildGoal(ws: HouseholdWorkspace, project: Project, d: GoalDraft
   if (!goal.success) return { ok: false, message: goal.error.issues[0]?.message ?? "The goal isn't complete." };
 
   // Payment windows: from today (or Jan 1, 2026) to the latest acceptable date; one window holds 100%.
-  const earliest = maxDate(new Date().toISOString().slice(0, 10), "2026-01-01");
+  const earliest = maxDate(localCalendarDate(), "2026-01-01");
   const latest = d.windows.latestDate || lastUnpaidDate(project) || "2026-12-31";
   if (d.clientOpen === true && latest < earliest) return { ok: false, message: "The latest payment date has passed. Choose a future date before searching new terms." };
   const start = minDate(earliest, latest); // fixed offered terms may have an overdue payment

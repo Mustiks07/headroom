@@ -36,7 +36,7 @@ export function HeroEntry() {
     <div className="tray-links">
       <Link href="/check?start=project&doc=1" onClick={() => void trackEvent("start", { dataKind: "own", inputPath: "document" })}><Paperclip size={18} aria-hidden="true" /> Add document</Link>
       <Link href="/check?start=project" onClick={() => void trackEvent("start", { dataKind: "own", inputPath: "manual" })}>Enter figures</Link>
-      <Link href="/demo">Try an example</Link>
+      <Link href="/#how">How it works</Link>
       <span className="tray-note">No account needed</span>
     </div>
   </form>;

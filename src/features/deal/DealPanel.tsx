@@ -18,7 +18,7 @@ const PURPOSE: Record<DealVariant["purpose"], string> = {
   most_retirement: "More into retirement", lowest_risk: "More room if income rises", as_offered: "As offered",
 };
 
-type SearchState = { key: string; pending: boolean; result?: DealSearchResult; error?: string };
+type SearchState = { key: string; revision: number; pending: boolean; result?: DealSearchResult; error?: string };
 
 /**
  * Goal-first deal planning for one project: the household says what it needs; Claude 2's engine
@@ -54,19 +54,19 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
     setBusy(true);
     const saved = await onSaveGoal(built);
     if (!saved) { setBusy(false); setMessage("Your goal wasn't saved, so nothing was searched. Your entries are kept — see the message at the top of the page and try again."); return; }
-    setSearch({ key: draftKey, pending: true });
+    setSearch({ key: draftKey, revision: saved.revision, pending: true });
     try {
       const goal = saved.dealPlanning!.goals.find(g => g.id === built.goal.id)!;
       const space = saved.dealPlanning!.termSpaces.find(t => t.projectId === project.id)!;
       const result = await searchTerms(saved, goal, space, saved.dealPlanning!.cashContext);
-      setSearch({ key: draftKey, pending: false, result });
+      setSearch({ key: draftKey, revision: saved.revision, pending: false, result });
       if (result.status === "ready") void trackEvent("result_calculated", { dataKind: ws.household.isSynthetic ? "sample" : "own", inputPath: "manual" });
-    } catch (e) { setSearch({ key: draftKey, pending: false, error: e instanceof Error ? e.message : String(e) }); }
+    } catch (e) { setSearch({ key: draftKey, revision: saved.revision, pending: false, error: e instanceof Error ? e.message : String(e) }); }
     setBusy(false);
     setTimeout(() => document.getElementById("deal-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   }
 
-  const stale = !!search && search.key !== draftKey;
+  const stale = !!search && (search.key !== draftKey || search.revision !== ws.revision);
   const savedGoalId = (ws.dealPlanning?.goals ?? []).filter(g => g.projectId === project.id).at(-1)?.id ?? null;
   const r = search?.result;
 
@@ -96,7 +96,7 @@ export function DealPanel({ ws, project, onSaveGoal, onChoose, onGoToForecast, o
     </div>
 
     <div id="deal-result" aria-live="polite">
-      {stale && <p className="stale-banner" role="status">You changed the goal. These results are for the previous goal — search again before choosing.</p>}
+      {stale && <p className="stale-banner" role="status">Your goal or plan changed. These results use the earlier facts — search again before choosing.</p>}
       {search?.pending && <p className="loading-line" role="status"><span className="spinner" aria-hidden="true" /> Searching terms within your limits…</p>}
       {search?.error && <div className="blocked unavailable" role="alert"><div className="blocked-head"><AlertTriangle size={20} aria-hidden="true" /><div><h3>The search failed</h3><p>{search.error}</p><p className="hint">Your goal is kept.</p></div></div></div>}
       {r && !search?.pending && (r.status === "needs_data" || r.status === "unsupported" || r.status === "unavailable") && <BlockedDeal result={r} onGoToForecast={onGoToForecast} />}
@@ -182,7 +182,9 @@ function Variants({ ws, result, stale, onChoose, onGoToForecast }: { ws: Househo
           <span className={`choice-amount num ${amount !== null && view === "settled" ? signClass(amount) : ""}`}>{amount === null ? "—" : view === "settled" ? signedMoney(amount) : money(amount)}</span>
         </label>;
       })}
-      <p className="hint">{view === "settled" ? "Amounts are cash after both tax settlements, compared with declining. Retirement is separate." : "Amounts are project money received by your date — gross, not profit after tax."}</p>
+      <p className="hint">{view === "settled"
+        ? `Amounts are cash after both tax settlements, compared with ${result.baseline.kind === "accept_as_offered" ? "accepting as offered" : "declining this project"}. Retirement is separate.`
+        : "Amounts use your date goal. Select a choice to see whether the figure means gross receipts, available project cash or household balance."}</p>
     </fieldset>}
     <p className="hint">Searched {searchedText(result)}. {result.search.exhaustiveWithinSpace ? "Every combination within your limits was checked." : humanizeDates(result.search.note)}
       {result.simplerVariantThresholdCents > 0 && ` A simpler option is preferred when the more complex one adds less than ${money(result.simplerVariantThresholdCents)}.`}</p>

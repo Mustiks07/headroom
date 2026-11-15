@@ -67,12 +67,8 @@ function openReceipts(ctx: AssistanceContext, text: string): Line[] {
   const t = text.toLowerCase();
   const named = all.filter(l => l.projectTitle.toLowerCase().split(/\W+/).filter(w => w.length > 3).some(w => t.includes(w)));
   let pool = named.length ? named : all;
-  // "remaining / final / rest / balance" points at projects that are already partly paid.
-  if (/\b(remaining|final|rest|balance|second|last)\b/.test(t)) {
-    const partlyPaid = new Set(ctx.projects.filter(p => p.lines.some(l => l.kind === "receipt" && l.received)).map(p => p.id));
-    const narrowed = pool.filter(l => partlyPaid.has(l.projectId));
-    if (narrowed.length) pool = narrowed;
-  }
+  // "Remaining" does not identify a project: a wholly unpaid project also has a
+  // remaining payment. Keep every matching open line and ask when ambiguous.
   return pool;
 }
 
@@ -102,7 +98,7 @@ export function proposeFromPatterns(req: AssistanceRequest, id: string, now = ne
     if (amount === null) ambiguities.push({ id: "amount", question: "How much did you contribute?", options: [] });
     if (!date) ambiguities.push({ id: "date", question: "On which date was the contribution paid?", options: [] });
     const year = /\bfor (2026|2027)\b/.exec(t)?.[1];
-    const taxYear = year ? Number(year) as 2026 | 2027 : date && date.date.slice(5) > "04-15" && date.date <= "2027-12-31" ? Number(date.date.slice(0, 4)) as 2026 | 2027 : null;
+    const taxYear = year ? Number(year) as 2026 | 2027 : null;
     if (!taxYear) ambiguities.push({ id: "tax_year", question: "Which tax year is this SEP-IRA contribution for?", options: [{ id: "2026", label: "2026" }, { id: "2027", label: "2027" }] });
     const person = adults.length === 1 ? adults[0].id : /\b(spouse|wife|husband|partner)\b/.test(t) ? adults.find(a => a.role === "spouse")?.id ?? null : /\b(my|i)\b/.test(t) ? adults.find(a => a.role === "primary")?.id ?? null : null;
     if (!person) ambiguities.push({ id: "person", question: "Whose SEP-IRA was this?", options: adults.map(a => ({ id: a.id, label: a.role === "primary" ? "You" : "Your spouse" })) });
@@ -110,7 +106,7 @@ export function proposeFromPatterns(req: AssistanceRequest, id: string, now = ne
   } else if (/\b(moved|move|rescheduled|reschedule|postponed|delayed|pushed|changed|now due|will pay)\b/.test(t) && /\b(payment|invoice|balance|installment)\b/.test(t)) {
     if (!date) ambiguities.push({ id: "date", question: "What is the new payment date?", options: [] });
     else pickLine(openReceipts(req.context, text), "Which payment moved?", l => ({ type: "update_expected_payment", projectId: l.projectId, lineId: l.id, newAmountCents: null, newDate: date.date }));
-  } else if (/\b(received|got paid|got|arrived|came in|deposited)\b/.test(t)) {
+  } else if (/\b(received|got paid|got|arrived|came in|deposited|client paid|customer paid|paid me|paid us|paid by)\b/.test(t)) {
     if (amount === null) ambiguities.push({ id: "amount", question: "How much did you receive?", options: [] });
     if (!date) ambiguities.push({ id: "date", question: "On which date did the money arrive?", options: [] });
     if (amount !== null && date) pickLine(openReceipts(req.context, text), "Which expected payment was this?", l => ({ type: "record_receipt", projectId: l.projectId, lineId: l.id, amountCents: amount, date: date.date }));

@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { serverConfig } from "./env";
 import { HttpError } from "./http";
 import { privilegedClient, requireOwner } from "./supabase";
+import { BASISWEB_MODELS, type AiProvider } from "./ai-client";
 
 /**
  * Durable spend budget for every AI endpoint (extraction, proposals, explanations).
@@ -55,7 +56,9 @@ export function enabledFeatures(env: NodeJS.ProcessEnv = process.env): Set<AiFea
 /** Provider + durable budget store + priced model + feature flag — otherwise the feature is off. */
 export function aiFeatureEnabled(feature: AiFeature): boolean {
   const config = serverConfig();
-  return config.ai !== null && config.supabase?.secretKey != null && MODEL_PRICES_PER_MTOK[config.ai.model] !== undefined && enabledFeatures().has(feature);
+  return config.ai !== null && config.supabase?.secretKey != null
+    && (config.ai.provider === "basisweb" ? BASISWEB_MODELS.has(config.ai.model) : MODEL_PRICES_PER_MTOK[config.ai.model] !== undefined)
+    && enabledFeatures().has(feature);
 }
 
 /** Micro-USD cost of a token count at the model's price (rounded up). */
@@ -72,11 +75,12 @@ export function estimateInputTokens(input: { textChars?: number; pdfPages?: numb
 
 export interface AiUsage { inputTokens: number; outputTokens: number }
 export interface AiReservation {
+  provider: AiProvider;
   model: string;
   apiKey: string;
   maxOutputTokens: number;
   timeoutMs: number;
-  /** Settle once with actual usage (or 0 tokens on failure before any output). Never throws. */
+  /** Settle once with reported usage. Unknown usage keeps the reservation. */
   settle(usage: AiUsage | null, outcome: string): Promise<void>;
 }
 
@@ -103,9 +107,33 @@ export async function reserveAiCall(request: Request, feature: AiFeature, input:
   }
   const limits = FEATURE_LIMITS[feature];
   const model = config.ai.model;
-  const reserve = costMicroUsd(model, estimateInputTokens(input), limits.maxOutputTokens);
   const day = new Date().toISOString().slice(0, 10);
   const hash = (v: string) => createHmac("sha256", config.supabase!.secretKey!).update(`${day}:${v}`).digest("hex").slice(0, 32);
+  // BasisWeb sells token credits with gateway-specific multipliers, not direct
+  // Anthropic USD pricing. Use the existing atomic call quota, keep failed calls
+  // counted, and report token usage without inventing a dollar cost.
+  if (config.ai.provider === "basisweb") {
+    const cap = (name: string, fallback: number, max: number) => Math.floor(usd(process.env[name], fallback, max));
+    const { data, error } = await admin.rpc("headroom_consume_ai_quota", {
+      p_user: hash(owner.userId), p_ip: hash(clientIp(request)),
+      p_user_limit: cap("AI_GUEST_DAILY_CALL_LIMIT", 10, 100),
+      p_ip_limit: cap("AI_IP_DAILY_CALL_LIMIT", 20, 200),
+      p_global_limit: cap("AI_DAILY_CALL_LIMIT", 100, 1000),
+    });
+    if (error || typeof data !== "string") throw new HttpError(503, "AI_UNAVAILABLE", "The AI request limit could not be checked. Enter the details manually.");
+    if (data !== "ok") throw new HttpError(429, "AI_BUDGET_REACHED", "Today's AI request limit has been reached. Enter the details manually or try again tomorrow.");
+    let reported = false;
+    return { provider: "basisweb", model, apiKey: config.ai.apiKey, ...limits,
+      async settle(usage, outcome) {
+        if (reported) return;
+        reported = true;
+        console.info(JSON.stringify({ type: "headroom_ai_call", provider: "basisweb", feature, model, outcome,
+          inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null,
+          usageKnown: usage !== null, accounting: "daily_call_quota", costUsd: null }));
+      },
+    };
+  }
+  const reserve = costMicroUsd(model, estimateInputTokens(input), limits.maxOutputTokens);
   const b = aiBudgets();
   const { data, error } = await admin.rpc("headroom_reserve_ai_spend", {
     p_guest: hash(owner.userId), p_ip: hash(clientIp(request)), p_feature: feature, p_model: model, p_reserve: reserve,
@@ -123,11 +151,18 @@ export async function reserveAiCall(request: Request, feature: AiFeature, input:
   }
   let settled = false;
   return {
-    model, apiKey: config.ai.apiKey, maxOutputTokens: limits.maxOutputTokens, timeoutMs: limits.timeoutMs,
+    provider: "anthropic", model, apiKey: config.ai.apiKey, maxOutputTokens: limits.maxOutputTokens, timeoutMs: limits.timeoutMs,
     async settle(usage, outcome) {
       if (settled) return;
       settled = true;
-      const actual = usage ? costMicroUsd(model, usage.inputTokens, usage.outputTokens) : 0;
+      // A timeout/lost response does not prove the provider did no billable work.
+      // Keep the reservation for the day rather than refunding a possibly paid call.
+      if (!usage) {
+        console.info(JSON.stringify({ type: "headroom_ai_call", feature, model, outcome,
+          usageKnown: false, reservedMicroUsd: reserve, reservationRetained: true }));
+        return;
+      }
+      const actual = costMicroUsd(model, usage.inputTokens, usage.outputTokens);
       const { error: e } = await admin.rpc("headroom_settle_ai_spend", { p_reservation: row.reservation_id, p_actual: actual,
         p_input: usage?.inputTokens ?? 0, p_output: usage?.outputTokens ?? 0, p_outcome: outcome });
       // Usage counters only (no content); a failed settle keeps the larger reservation in place.

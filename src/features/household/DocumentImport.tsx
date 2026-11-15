@@ -214,8 +214,8 @@ export function DocumentImport({ draft, update, initialText = null }: { draft: D
       </label>
     </div>
     <p className="hint">CSV and text files are read on Headroom&apos;s server. {aiAvailable
-      ? "PDFs and images are read by an AI document-analysis provider, only after you agree."
-      : "Reading PDFs and images isn't available in this version — enter those figures manually."} Files aren&apos;t stored. Don&apos;t upload documents showing a full Social Security or bank account number.</p>
+      ? "Document analysis runs only after you agree. Use PDFs with selectable text; if a photo or scan cannot be read, paste its text or enter the figures."
+      : "Document analysis is unavailable right now. Paste text or enter the figures manually."} Files aren&apos;t stored. Don&apos;t upload documents showing a full Social Security or bank account number.</p>
 
     {state.kind === "consent" && <div className="notice" role="group" aria-labelledby="consent-title">
       <strong id="consent-title">Send {state.file.name} for analysis?</strong>

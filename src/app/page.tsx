@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { TrackVisit } from "@/features/start/TrackVisit";
-import { ArrowRight, CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
+import { CalendarClock, FileSearch, Layers, ShieldCheck } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
-import { samples } from "@/features/samples";
 import { ContinuePlan } from "@/features/start/ContinuePlan";
 import { HeroEntry } from "@/features/start/HeroEntry";
 
@@ -59,19 +58,6 @@ export default function Home() {
         <p className="how-note"><FileSearch size={16} aria-hidden="true" /> Every key number has <strong>Show the calculation</strong>: the input it came from, the rule it used and the assumptions behind it.</p>
       </section>
 
-      <section className="shell" aria-labelledby="samples">
-        <p className="eyebrow">Sample households · synthetic data</p>
-        <h2 id="samples" className="section-title">See it work before typing anything</h2>
-        <div className="sample-grid">
-          {samples.map((s, i) => <Link className="sample-card" key={s.id} href={`/demo?case=${s.id}`}>
-            <span className="eyebrow">0{i + 1} · {s.kicker}</span>
-            <h3>{s.question}</h3>
-            <ul>{s.facts.map(f => <li key={f}>{f}</li>)}</ul>
-            <span className="go">Open and edit <ArrowRight size={15} /></span>
-          </Link>)}
-        </div>
-      </section>
-
       <section className="shell scope" aria-labelledby="scope">
         <div>
           <p className="eyebrow">What this version covers</p>
@@ -95,7 +81,7 @@ export default function Home() {
 
       <section className="shell price-teaser">
         <div><p className="eyebrow">Pricing</p><h2 className="section-title">$99 / year, per household</h2>
-          <p className="muted">Checking your risk is free. A year of plan updates, scenarios and accountant-ready exports is $99. In this demo, everything is unlocked.</p></div>
+          <p className="muted">Plan updates, new-project scenarios and accountant-ready exports. Explore every feature now with no account or card required.</p></div>
         <Link href="/pricing" className="btn ghost">See what&apos;s included</Link>
       </section>
     </div>

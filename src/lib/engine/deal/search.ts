@@ -35,7 +35,7 @@ import { evaluateYear, solveCredit, toYearResult } from "../year";
 import { hasRanges, modelAt, UNCERTAINTY_SCALE } from "../uncertainty";
 
 /** Label of the search layer (documentation; fingerprints use ENGINE_VERSION per the contract). */
-export const DEAL_SEARCH_VERSION = "headroom-deal-1.0.0";
+export const DEAL_SEARCH_VERSION = "headroom-deal-1.1.0";
 const MAX_PRICE_POINTS = 60, MAX_SPLIT_POINTS = 60;
 /** An option whose credit survives less than this much extra other profit (dollars) is called fragile. */
 export const FRAGILE_ROOM_DOLLARS = 1_000;

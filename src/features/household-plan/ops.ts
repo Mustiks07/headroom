@@ -1,4 +1,5 @@
 import { appendDecisionRecord } from "@/lib/client/deal-state";
+import { ensureOriginalOffer } from "@/lib/client/workspace-commands";
 import type { CaseInput, MoneyFact, ScenarioResult, TaxYear } from "@/domain/contracts";
 import { dealSearchFingerprint } from "@/domain/deal-planning";
 import { engineWorkspaceFingerprint, ENGINE_VERSION, RULES_VERSION } from "@/lib/engine";
@@ -80,6 +81,7 @@ export function addProject(w0: HouseholdWorkspace, p: NewProject): { workspace: 
   w.projects.push({ id, title: p.title, ownerPersonId: p.ownerPersonId, status: "proposed", createdAt: at, statusChangedAt: at,
     cashAccountingConfirmed: p.cashAccountingConfirmed, timingArrangementConfirmed: p.timingArrangementConfirmed, terms: p.terms,
     receipts: p.receipts.map(line), expenses: p.expenses.map(line), agreedDecision: null });
+  ensureOriginalOffer(w, id, at, { kind: "user_entered", sourceId }, "user_confirmed");
   return { workspace: log(w, `evt-add-${id}`, "project_added", `Added the proposal “${p.title}”.`, { projectId: id }), projectId: id };
 }
 

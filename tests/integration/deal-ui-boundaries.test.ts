@@ -1,13 +1,25 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { defaultGoal } from "@/features/deal/GoalForm";
 import { buildGoal } from "@/features/deal/model";
-import { recordClientAgreement, recordActual } from "@/features/household-plan/ops";
+import { addProject, recordClientAgreement, recordActual } from "@/features/household-plan/ops";
 import { emptyDealPlanning } from "@/domain/deal-planning";
 import { searchDealTerms } from "@/lib/engine";
 import { buildActionPackage } from "@/lib/client/deal-exports";
 import { deal, dealWorkspace } from "../engine/deal-fixture";
 
 afterEach(() => vi.useRealTimers());
+
+it("manual project entry keeps the client's original offer before any later edits", () => {
+  const ws = dealWorkspace();
+  const added = addProject(ws, { title: "Original proposal", ownerPersonId: ws.projects[0].ownerPersonId,
+    receipts: [{ amountCents: 1200000, date: "2026-12-20" }], expenses: [],
+    terms: { canSplitPayment: true, canRenegotiatePrice: true, nextYearPaymentLatestDate: "2027-01-31" },
+    cashAccountingConfirmed: true, timingArrangementConfirmed: null, sourceLabel: "Entered offer" });
+  const project = added.workspace.projects.find(p => p.id === added.projectId)!;
+  project.receipts[0].expected!.amountCents = 1400000;
+  expect(project.originalOffer).toMatchObject({ priceCents: 1200000, confirmation: "user_confirmed",
+    source: { kind: "user_entered" }, payments: [{ amountCents: 1200000, date: "2026-12-20" }] });
+});
 
 it("a deposit is part of the total price passed from the goal form to the engine", () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-15T12:00:00Z"));
@@ -21,8 +33,10 @@ it("a deposit is part of the total price passed from the goal form to the engine
 });
 
 it("new terms cannot backdate payments, and a January search has no inverted December window", () => {
-  vi.useFakeTimers(); vi.setSystemTime(new Date("2027-01-06T12:00:00Z"));
+  // Local midnight can still be the previous UTC day; do not backdate a new payment.
+  vi.useFakeTimers(); vi.setSystemTime(new Date(2027, 0, 6, 0, 30));
   const ws = dealWorkspace(), project = ws.projects[1], draft = defaultGoal(project);
+  expect(draft.cash.asOf).toBe("2027-01-06");
   draft.windows.latestDate = "2026-12-31";
   expect(buildGoal(ws, project, draft, null)).toMatchObject({ ok: false });
   draft.windows.latestDate = "2027-01-31";

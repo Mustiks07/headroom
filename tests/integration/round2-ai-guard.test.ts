@@ -19,9 +19,10 @@ const usage = { input_tokens: 2_500, output_tokens: 400, cache_creation_input_to
 const { POST } = await import("@/app/api/documents/extract/route");
 const { GET: capabilities } = await import("@/app/api/capabilities/route");
 
-async function pdfUpload(headers: Record<string, string> = {}, consent = true) {
+async function pdfUpload(headers: Record<string, string> = {}, consent = true, withText = true) {
   const pdf = await PDFDocument.create();
-  pdf.addPage();
+  const page = pdf.addPage();
+  if (withText) page.drawText("SYNTHETIC CHECK: Project fee: $12,000");
   const form = new FormData();
   form.set("file", new File([new Uint8Array(await pdf.save()) as BlobPart], "notice.pdf", { type: "application/pdf" }));
   if (consent) form.set("consent", "provider");
@@ -41,6 +42,39 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("paid document-analysis endpoint", () => {
+  it("uses BasisWeb's durable call quota without assigning invented USD prices", async () => {
+    vi.stubEnv("AI_PROVIDER", "basisweb");
+    vi.stubEnv("AI_API_KEY", "sk-pl-synthetic-test-key");
+    vi.stubEnv("AI_MODEL", "claude-opus-5.5");
+    rpc.mockClear();
+    rpc.mockImplementation(async (name: string) => {
+      if (name !== "headroom_consume_ai_quota") throw new Error("Unexpected USD budget call for gateway");
+      return { data: "ok", error: null };
+    });
+    expect((await (await capabilities()).json()).aiExtraction).toBe(true);
+    parse.mockResolvedValueOnce({ stop_reason: "end_turn", usage, parsed_output: {
+      documentKind: "other", printedTaxYear: 2026, fields: [], notes: [],
+    } });
+    expect((await pdfUpload()).status).toBe(200);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0]).toMatchObject(["headroom_consume_ai_quota", { p_global_limit: 100, p_user_limit: 10, p_ip_limit: 20 }]);
+    rpc.mockResolvedValueOnce({ data: "global_limit", error: null });
+    expect((await pdfUpload()).status).toBe(429);
+    expect(parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not spend a gateway call on a PDF without an embedded text layer", async () => {
+    vi.stubEnv("AI_PROVIDER", "basisweb");
+    vi.stubEnv("AI_API_KEY", "sk-pl-synthetic-test-key");
+    vi.stubEnv("AI_MODEL", "claude-opus-5.5");
+    rpc.mockClear();
+    const result = await (await pdfUpload({}, true, false)).json();
+    expect(result).toMatchObject({ status: "unavailable", fields: [] });
+    expect(result.warnings[0]).toMatch(/no readable text layer/);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(parse).not.toHaveBeenCalled();
+  });
+
   it("is offered only with a provider AND the durable quota store", async () => {
     expect((await (await capabilities()).json()).aiExtraction).toBe(true);
     vi.stubEnv("SUPABASE_SECRET_KEY", "");
@@ -83,9 +117,9 @@ describe("paid document-analysis endpoint", () => {
     expect(ok.warnings.join(" ")).toMatch(/AI model/);
     expect(ok.document.kind).toBe("marketplace_statement");
     expect(ok.facts[0]).toMatchObject({ provenance: "ai_model", personCandidate: null, review: "extracted", field: "coverage.enrollmentPremium" });
-    // Every provider call was settled with its actual usage (2,500 in + 400 out at the configured model's price).
+    // Only known usage is settled; a timeout keeps its reservation because billing is unknown.
     const settles = rpc.mock.calls.filter(c => c[0] === "headroom_settle_ai_spend").map(c => c[1]);
     expect(settles.at(-1)).toMatchObject({ p_input: 2_500, p_output: 400, p_outcome: "end_turn" });
-    expect(settles.find(s => s.p_outcome === "Error")).toMatchObject({ p_actual: 0 }); // timeout before output: reservation released, nothing billed
+    expect(settles.find(s => s.p_outcome === "Error")).toBeUndefined();
   });
 });

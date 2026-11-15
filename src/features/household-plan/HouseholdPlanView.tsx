@@ -184,7 +184,6 @@ export function HouseholdPlanView({ id, justSaved = false }: { id: string; justS
         <button type="button" className="btn secondary" onClick={() => { setAdding(true); setTimeout(() => document.getElementById("projects")?.scrollIntoView({ behavior: "smooth" }), 30); }}><Plus size={17} /> New client offer</button>
       </div>
     </div>
-    {ws.household.isSynthetic && <p className="sample-banner compact small"><FlaskConical size={16} aria-hidden="true" /> <span>Synthetic sample household. Plan prices are county candidates or illustrative.</span></p>}
     <div className="live-region" role="status" aria-live="polite" aria-atomic="true">{notice && <p className={`notice ${notice.tone === "warn" ? "warn" : "ok"}`}>{notice.text}</p>}</div>
     {pending && <div className="notice warn" role="group" aria-label="Unsaved change">
       <strong>One change isn&apos;t saved yet.</strong> The figures below are the last saved revision ({ws.revision}).
