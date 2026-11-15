@@ -29,6 +29,16 @@ Migration005 applied after001–004; 26 live RLS checks passed. Existing cloud p
 
 Production verification is appended after deployment; local success is not production verification.
 
+### Production: verified November15
+
+Vercel production deployment `5g36Ltg3CdkUpusHJZWvcBAwXgjV` built commit `2dc973b6bbf4a342382d81564e1cc388f7352a7f` and reached Ready. Public alias opens without registration or Vercel authentication. Capabilities: cloud save and all three AI flags true; checkout remains no-charge/demo mode.
+
+Actual production requests passed: text-PDF extraction returned all four expected offer fields and a natural-language payment update returned one correct typed command with `providerUsed:true`. The check used newly created synthetic guest data and removed that test identity. PDF parser/native dependencies therefore work on Vercel, not only locally. The live home was inspected and a local screenshot saved. Optional provider explanation framing was not separately exercised with a real request.
+
+The bounded UI suite also passed against the public production alias: calculation/edit/save/reopen, household receipts and SEP, three goal options, impossible goal, update preview/apply/retry, six 360px routes and no page errors. No repeated paid accuracy sweep was run. Tracked files and built client assets were scanned against the actual private AI/Supabase values: zero matches across 471 checked files.
+
+The user subsequently rejected the lower landing/internal visual quality while retaining the selected C hero/identity. This is a design-completion requirement in Claude1 round6, not a claim that the whole current interface has final approval.
+
 ## Known remaining work
 
 Initial pasted offer still uses TXT patterns and substantial manual questions; current-year offer evaluation needs a UI caller. Semantic import/ImportDraft needs actual common first-use/saved-plan wiring, conflict resolution and atomic apply. Saved import targets incomplete. Counteroffer/rejection and partial receipts need explicit lifecycle. No measured paid demand, validated price, customer retention or known gateway dollar COGS. No OCR/photos or live ZIP lookup.

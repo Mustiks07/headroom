@@ -65,6 +65,7 @@ Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [C
 - [Demand, alternatives, first-Cup evidence and modeled unit economics](docs/research/round5-business-research.md)
 - [Participant repository comparison and paid-value research](docs/research/README.md)
 - [Selected C design — implemented visual system and reference images](docs/design/c-open/README.md)
+- [C continuation — proposed lower landing and working-screen compositions](docs/design/c-round6/README.md)
 - [Paid demand, pricing experiments and economics assumptions](docs/research/round6-paid-demand.md)
 - [Current competitors and the ten-slide evidence plan](docs/research/round6-competition-pitch.md)
 - [Code-backed product gap audit](docs/research/round6-product-gap-audit.md)
