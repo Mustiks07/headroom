@@ -52,3 +52,4 @@ export { HeadroomError, PlanConflictError, PlanIntegrityError, StorageUnavailabl
 export { parseOfferText, questionsForOffers, loadOnboardingDraft, saveOnboardingDraft, clearOnboardingDraft, draftFromIntake, openQuestions, answerQuestion,
   offerCommand, onboardingToWorkspace, counterofferCommand, ONBOARDING_STORAGE_KEY } from "./offer-intake";
 export { manualProposal, commitCommands, noteAcceptedTerms, CommandBlockedError } from "./workspace-commands";
+export { applyImportGroup, commitImportGroup } from "./import-pipeline";
