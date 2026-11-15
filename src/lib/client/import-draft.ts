@@ -42,6 +42,13 @@ const slotKey = (f: ExtractedFact) => [f.field, f.taxYear ?? "?", f.asOfDate ?? 
   f.value.kind === "money" ? f.value.period : f.value.kind].join("|");
 
 /**
+ * A slot is only comparable when the document identifies it: whose income (personal fields) and which
+ * months (coverage) are resolved by the user's targets first. Two W-2s without a named person are two
+ * unresolved targets, not one contradictory field (round 6).
+ */
+const slotIdentified = (f: ExtractedFact) => !((f.field.startsWith("income.") && f.personCandidate === null) || f.field.startsWith("coverage."));
+
+/**
  * Add one document's facts to the draft. Re-reading the same document is a no-op (same ids).
  * Two different values for the same field/period/target become `conflict` (never "last wins").
  */
@@ -57,7 +64,7 @@ export function mergeIntoDraft(draft: ImportDraft, facts: ExtractedFact[], doc: 
   // Recompute conflicts across the whole draft (confirmed/rejected stay as the user set them).
   for (const f of next.facts) f.conflictsWith = [];
   const bySlot = new Map<string, ExtractedFact[]>();
-  for (const f of next.facts) if (f.review !== "rejected") bySlot.set(slotKey(f), [...(bySlot.get(slotKey(f)) ?? []), f]);
+  for (const f of next.facts) if (f.review !== "rejected" && slotIdentified(f)) bySlot.set(slotKey(f), [...(bySlot.get(slotKey(f)) ?? []), f]);
   let conflicts = 0;
   for (const group of bySlot.values()) {
     if (new Set(group.map(valueKey)).size < 2) continue;
@@ -109,7 +116,7 @@ export function applyConfirmedFacts(ws: HouseholdWorkspace, draft: ImportDraft, 
       proposedValue: fact.value.kind === "money" ? { kind: "money", amountCents: fact.value.amountCents, period: fact.value.period, asPrinted: fact.valueAsPrinted }
         : fact.value.kind === "date" ? { kind: "date", date: fact.value.date, asPrinted: fact.valueAsPrinted } : { kind: "text", text: fact.value.text },
       evidence: { id: `doc-${fact.documentId.slice(0, 16)}-${fact.id.split(":").pop()}`.slice(0, 100), kind: "document" as const, label: fact.source.label,
-        documentId: fact.documentId, ...(fact.taxYear ? { taxYear: fact.taxYear } : {}), ...(fact.source.page ? { page: fact.source.page } : {}),
+        documentId: fact.documentId, ...(fact.taxYear === 2026 || fact.taxYear === 2027 ? { taxYear: fact.taxYear } : {}), ...(fact.source.page ? { page: fact.source.page } : {}),
         ...(fact.source.excerpt ? { excerpt: fact.source.excerpt } : {}) },
     };
     const r = applyDocumentFact(current, field, d.target);

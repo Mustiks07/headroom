@@ -100,14 +100,27 @@ export function buildDecisionRecordModel({ ws, record, snapshot, goal, variant, 
 
   // Facts recorded AFTER the decision for this project (not recalculated here).
   const now = ws.projects.find(p => p.id === record.projectId);
+  const fromTerms = (id: string) => variant.terms.payments.some(p => id.includes(p.id));
   const since = (now?.receipts ?? []).filter(l => l.actual && !receivedThen.some(t => t.id === l.id));
-  const moved = (now?.receipts ?? []).filter(l => !l.actual && l.expected && variant.terms.payments.some(p => l.id.includes(p.id)) &&
+  const moved = (now?.receipts ?? []).filter(l => !l.actual && !l.cancelledAt && l.expected && fromTerms(l.id) &&
     !variant.terms.payments.some(p => l.id.includes(p.id) && p.date === l.expected!.date && p.amountCents === l.expected!.amountCents));
+  const added = (now?.receipts ?? []).filter(l => !l.actual && !l.cancelledAt && l.expected && !fromTerms(l.id) && !(project?.receipts ?? []).some(t => t.id === l.id));
+  const dropped = (now?.receipts ?? []).filter(l => l.cancelledAt && !l.actual && l.expected && l.cancelledAt > record.recordedAt);
+  const versions = (now?.offerVersions ?? []).filter(v => v.recordedAt > record.recordedAt);
+  const items = [
+    ...since.map(l => l.expected && l.actual!.amountCents < l.expected.amountCents
+      ? `Received ${money(l.actual!.amountCents)} of the expected ${money(l.expected.amountCents)} on ${l.actual!.date}.`
+      : `Received ${money(l.actual!.amountCents)} on ${l.actual!.date}${l.expected ? ` (expected ${money(l.expected.amountCents)} on ${l.expected.date})` : ""}.`),
+    ...moved.map(l => `An agreed payment now expects ${money(l.expected!.amountCents)} on ${l.expected!.date}.`),
+    ...added.map(l => `Now also expected: ${money(l.expected!.amountCents)} on ${l.expected!.date}${l.label ? ` (${l.label.toLowerCase()})` : ""}.`),
+    ...dropped.map(l => `No longer expected: ${money(l.expected!.amountCents)} on ${l.expected!.date}.`),
+    ...versions.map(v => v.kind === "client_counteroffer" ? `Client counteroffer recorded ${day(v.recordedAt)}: ${money(v.priceCents)} in total (${v.status}).`
+      : v.kind === "accepted_terms" ? `Terms recorded as accepted ${day(v.recordedAt)}: ${money(v.priceCents)} in total.` : `Terms version ${v.version} recorded ${day(v.recordedAt)} (${v.status}).`),
+    ...(now?.status === "cancelled" ? ["The project is now recorded as declined; money already received stays recorded."] : []),
+  ];
   blocks.push({ type: "heading", text: "Recorded since the decision" });
   blocks.push({ type: "bullets", items: [
-    ...since.map(l => `Received ${money(l.actual!.amountCents)} on ${l.actual!.date}${l.expected ? ` (expected ${money(l.expected.amountCents)} on ${l.expected.date})` : ""}.`),
-    ...moved.map(l => `An agreed payment now expects ${money(l.expected!.amountCents)} on ${l.expected!.date}.`),
-    ...(since.length || moved.length ? [] : ["Nothing new recorded for this project."]),
+    ...(items.length ? items : ["Nothing new recorded for this project."]),
     "Open your plan in Headroom for the current figures; they are recalculated separately from this record.",
   ] });
   return { title: "Decision record", subtitle: `${title} - recorded ${day(record.recordedAt)}`, fingerprint: record.searchFingerprint, blocks };

@@ -90,12 +90,18 @@ describe("documents → reviewed facts → one atomic apply", () => {
     let draft = emptyImportDraft();
     for (const r of [a, b, c]) draft = mergeIntoDraft(draft, r.facts, { documentId: r.document.documentId, kind: r.document.kind, label: "P&L", addedAt: "2026-11-16T10:00:00Z", provenance: "deterministic_text" }).draft;
     expect(draft.facts).toHaveLength(3);
-    expect(draft.facts.every(f => f.review === "conflict")).toBe(true);
-    expect(draft.facts.find(f => f.value.kind === "money" && f.value.amountCents === 8_650_000)!.conflictsWith).toHaveLength(2);
+    // Round 6: whose profit it is comes first — unassigned P&Ls are unresolved targets, not yet a conflict.
+    expect(draft.facts.every(f => f.review === "extracted" && f.conflictsWith.length === 0)).toBe(true);
     const ws = structuredClone(workspaceFixture) as HouseholdWorkspace;
+    const forecastYtd = structuredClone(ws);
+    forecastYtd.forecasts[0] = { method: "year_to_date_plus_remaining", personId: "primary", year: 2026, asOfDate: "2026-09-30", asOfConfirmed: true, excludesManagedProjects: true,
+      ytdNetProfit: { valueCents: null, status: "unknown", sourceId: ws.evidence[0].id }, remainingReceipts: { valueCents: 0, status: "estimated", sourceId: ws.evidence[0].id }, remainingExpenses: { valueCents: 0, status: "estimated", sourceId: ws.evidence[0].id } } as HouseholdWorkspace["forecasts"][number];
+    const { applyImportGroup } = await import("@/lib/client/import-pipeline");
     const target = { kind: "forecast" as const, personId: "primary", year: 2026 as const, field: "ytdNetProfit" as const, status: "confirmed" as const, asOfDate: "2026-09-30" };
-    expect(applyConfirmedFacts(ws, draft, [{ factId: draft.facts[1].id, target }])).toMatchObject({ status: "rejected" });
-    expect(applyConfirmedFacts(ws, draft, [{ factId: draft.facts[1].id, target, resolvesConflict: true }]).status).toBe("applied");
+    const both = applyImportGroup(forecastYtd, draft, [draft.facts[0], draft.facts[1]].map(f => ({ factId: f.id, target, resolvesConflictWith: [], correctedAmountCents: null })), { userDate: "2026-11-16" });
+    expect(both.result.status).toBe("rejected"); // same person and period, different values: choose one
+    const one = applyImportGroup(forecastYtd, draft, [{ factId: draft.facts[1].id, target, resolvesConflictWith: [draft.facts[0].id, draft.facts[2].id], correctedAmountCents: null }], { userDate: "2026-11-16" });
+    expect(one.result.status).toBe("applied");
   });
 });
 
