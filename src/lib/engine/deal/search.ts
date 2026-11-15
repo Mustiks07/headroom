@@ -33,6 +33,7 @@ import { ENGINE_VERSION, RULES_VERSION } from "../rules";
 import { profitHeadroomDollars } from "../search";
 import { evaluateYear, solveCredit, toYearResult } from "../year";
 import { hasRanges, modelAt, UNCERTAINTY_SCALE } from "../uncertainty";
+import { money, type MoneyResult } from "../descriptors";
 
 /** Label of the search layer (documentation; fingerprints use ENGINE_VERSION per the contract). */
 export const DEAL_SEARCH_VERSION = "headroom-deal-1.1.0";
@@ -51,7 +52,10 @@ interface Candidate { price: number; remainder: number; x: number; payments: Pay
 export type EngineDealVariant = DealVariant & {
   scenario: ScenarioResult;
   /** The same option against BOTH baselines: declining the unpaid terms, and accepting the offer as it stands (null if not calculable). */
-  comparisons: { versusDeclineCents: number; versusOfferedCents: number | null };
+  /** versusOriginalOfferCents: against the client's ORIGINAL offer (project.originalOffer) when it differs from the current one; null if the same or not calculable. */
+  comparisons: { versusDeclineCents: number; versusOfferedCents: number | null; versusOriginalOfferCents: number | null };
+  /** Every money figure of this option with its meaning, basis, horizon/date and precision (render labels from these). */
+  results: MoneyResult[];
   /** Whether the option holds: across declared income ranges (exact credit check + worst checked cash), else by the room policy. */
   robustness: { holds: boolean; basis: "declared_ranges" | "room_policy"; roomCents: number | null; worstCashInRangesCents: number | null };
   /** Whether these terms need the client's agreement (a new price and/or new payment dates). The household's own SEP never does. */
@@ -387,6 +391,8 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
   const re: RefineEnv = { slots, space, meets, ev, sepOpt, shift, ctx, p, priceStep };
   const offeredCash = asOfferedNoSep ? asOfferedNoSep.cashDelta + shift : null;           // vs declining
   const agreedProject = p.cc.candidate.status === "agreed";
+  const original = originalOfferCash(p, ev, ctx.declineCash);                                   // vs declining, null if not calculable/same as current
+  const inputsEstimated = p.parsed.years.some(y => y.incomes.some(r => Object.values(r).some(v => v && typeof v === "object" && "status" in v && (v as { status: string }).status === "estimated")));
   if (agreedProject) warnings.push(goal.baseline === "decline_unpaid_terms"
     ? `"${p.cc.candidate.title}" is already agreed: declining its unpaid part is not a free choice (a deposit refund, costs or obligations may apply and are not known here, so they are not counted as $0). Compare options with the agreed terms first; the comparison with declining is for reference only.`
     : `"${p.cc.candidate.title}" is already agreed: options are compared with the agreed terms. Changing them needs the client's agreement.`);
@@ -400,7 +406,8 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     if (!v) continue;
     const vsDecline = v.twoYearCashDeltaCents + shift;
     const room = Math.min(...roomsOf(refined));
-    v.comparisons = { versusDeclineCents: vsDecline, versusOfferedCents: offeredCash === null ? null : vsDecline - offeredCash };
+    v.comparisons = { versusDeclineCents: vsDecline, versusOfferedCents: offeredCash === null ? null : vsDecline - offeredCash,
+      versusOriginalOfferCents: original.cashCents === null ? null : vsDecline - original.cashCents };
     v.robustness = { holds: holds(refined), basis: highModels ? "declared_ranges" : "room_policy", roomCents: Number.isFinite(room) ? room * 100 : null,
       worstCashInRangesCents: highModels && v.scenario.stress.worstCashDeltaCents !== null ? v.scenario.stress.worstCashDeltaCents - shift : null };
     if (highModels && v.robustness.worstCashInRangesCents !== null && v.robustness.worstCashInRangesCents < goal.minimumTwoYearCashDeltaCents) v.robustness.holds = false;
@@ -408,6 +415,15 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     if (purpose === "most_cash" && changesTerms) v.label = clip(v.label.replace(PURPOSE_LABEL.most_cash, "More cash, if the client agrees"), 200);
     if (purpose === "as_offered" && agreedProject) v.label = clip(v.label.replace(PURPOSE_LABEL.as_offered, "Keep the agreed terms"), 200);
     variants.push(v);
+  }
+  // Cosmetic duplicates: same price, same SEP, the same money per tax year within $100 and cash within the materiality
+  // threshold of an option already shown — the later one adds nothing to the choice.
+  const yearSplit = (v: EngineDealVariant) => [2026, 2027].map(y => v.terms.payments.filter(q => q.date.startsWith(`${y}-`)).reduce((a, q) => a + q.amountCents, 0));
+  for (let i = variants.length - 1; i > 0; i--) {
+    const v = variants[i];
+    const twin = variants.slice(0, i).find(o => o.terms.priceCents === v.terms.priceCents && (o.terms.additionalSep?.amountCents ?? 0) === (v.terms.additionalSep?.amountCents ?? 0)
+      && yearSplit(o).every((x, k) => Math.abs(x - yearSplit(v)[k]) <= 10000) && Math.abs(o.twoYearCashDeltaCents - v.twoYearCashDeltaCents) < materiality);
+    if (twin) variants.splice(i, 1);
   }
   const best = variants.length ? Math.max(...variants.map(v => v.twoYearCashDeltaCents)) : 0;
   for (const v of variants) v.differenceFromBestCents = best - v.twoYearCashDeltaCents;
@@ -428,6 +444,8 @@ export async function searchDealTerms(ws: HouseholdWorkspace, goalRaw: DealGoal,
     warnings.push("Options with a different price depend on the client agreeing to it; allowing a price range does not mean the client accepts it.");
   // Recommendation: the smallest change of terms that meets the goal (and holds, when such an option exists).
   const recommended = primaryV ?? mostV ?? variants[0];
+  for (const v of variants) v.results = variantResults(v, { agreedProject, title: p.cc.candidate.title, original, inputsEstimated, declinePtc: [decl[0].ptc, decl[1].ptc] });
+  if (original.note) warnings.push(original.note);
 
   // ---------------------------------------------------------------- meta --
   const workspaceFp = await engineWorkspaceFingerprint(p.cc.ws);
@@ -571,7 +589,7 @@ function exactVariant(c: Candidate, purpose: DealVariant["purpose"], x: ExactEnv
     twoYearCashDeltaCents: exactDelta, retirementAddedCents: c.sep, datedFlows: datedFlows.slice(0, 100), dateTargets: dts,
     aca: ([0, 1] as const).map(i => ({ year: YEARS[i], magiCents: ycs[i].credit.magi, ptcCents: ycs[i].credit.ptc.ptc, creditLost: p.models[i].ptcEligible && x.decl[i].ptc > 0 && ycs[i].credit.ptc.ptc === 0 })),
     constraints, actions, differenceFromBestCents: 0, verifiedExact: true, scenario,
-    comparisons: { versusDeclineCents: 0, versusOfferedCents: null }, robustness: { holds: false, basis: "room_policy", roomCents: null, worstCashInRangesCents: null },
+    comparisons: { versusDeclineCents: 0, versusOfferedCents: null, versusOriginalOfferCents: null }, results: [], robustness: { holds: false, basis: "room_policy", roomCents: null, worstCashInRangesCents: null },
     clientAgreement: agreementOf(c, p), moneyByDate: moneyByDate(x, exact, c),
   };
 }
@@ -812,4 +830,55 @@ export function evaluateTermsExact(ws: HouseholdWorkspace, goal: DealGoal, terms
     if (e instanceof EngineStop) return { status: e.kind === "unsupported" ? "unsupported" : "needs_data", code: e.code, message: e.message, fields: [{ path: "terms", reason: e.message }] };
     throw e;
   }
+}
+
+// =====================================================================================================
+/**
+ * The client's ORIGINAL offer (stored once in project.originalOffer) against declining. Money already received is
+ * matched to the earliest original payments first; the rest keeps its original dates. Not calculable when a remaining
+ * original date is unknown or the original price is below what was received. Null when it equals the current offer.
+ */
+function originalOfferCash(p: Prepared, ev: ReturnType<typeof yearEvaluator>, declineCash: number): { cashCents: number | null; note: string | null } {
+  const o = p.cc.candidate.originalOffer;
+  if (!o) return { cashCents: null, note: null };
+  const same = o.priceCents === p.offeredPrice && JSON.stringify(o.payments.map(q => [q.date, q.amountCents])) ===
+    JSON.stringify([...p.cc.candidate.receipts.filter(l => l.actual).map(l => [l.expected?.date ?? l.actual!.date, l.expected?.amountCents ?? l.actual!.amountCents]), ...p.offered.map(q => [q.date, q.amountCents])]);
+  if (same) return { cashCents: null, note: null };
+  let received = p.received;
+  const rest: Array<{ date: string | null; amountCents: number }> = [];
+  for (const q of [...o.payments].sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"))) {
+    const used = Math.min(received, q.amountCents);
+    received -= used;
+    if (q.amountCents - used > 0) rest.push({ date: q.date, amountCents: q.amountCents - used });
+  }
+  if (received > 0) return { cashCents: null, note: "The original offer is smaller than the money already received, so it is not compared." };
+  if (rest.some(q => !q.date)) return { cashCents: null, note: "The original offer has a payment without a date, so it is not compared." };
+  const r: [number, number] = [0, 0];
+  for (const q of rest) r[yearOf(q.date!)] += q.amountCents;
+  const y0 = ev(0, r[0], 0), y1 = ev(1, r[1], 0);
+  if (!y0 || !y1) return { cashCents: null, note: "The original offer is outside the supported calculation, so it is not compared." };
+  return { cashCents: y0.spendable + y1.spendable - declineCash, note: null };
+}
+
+function variantResults(v: EngineDealVariant, x: { agreedProject: boolean; title: string; original: { cashCents: number | null }; inputsEstimated: boolean; declinePtc: [number, number] }): MoneyResult[] {
+  const precision: MoneyResult["precision"] = !v.robustness.holds ? "conditional" : v.robustness.basis === "declared_ranges" ? "range_checked" : x.inputsEstimated ? "estimated_inputs" : "exact";
+  const conditions = [...(v.clientAgreement.required && v.clientAgreement.note ? [v.clientAgreement.note] : []),
+    ...(!v.robustness.holds ? [v.robustness.basis === "declared_ranges" ? "Meets the goal at your entered income, not across your whole declared range." : `Keeps a credit with less than ${formatUsd(FRAGILE_ROOM_DOLLARS * 100)} of extra profit to spare.`] : [])];
+  const out: MoneyResult[] = [
+    money("settled_cash_two_year", v.comparisons.versusDeclineCents, { kind: "decline_unpaid_terms", label: x.agreedProject
+      ? `Declining the unpaid part of "${x.title}" (refunds or costs of ending it are not known and not counted)` : `Your plan without the unpaid terms of "${x.title}"` }, { precision, conditions }),
+  ];
+  if (v.comparisons.versusOfferedCents !== null) out.push(money("settled_cash_two_year", v.comparisons.versusOfferedCents,
+    { kind: x.agreedProject ? "agreed_terms" : "latest_client_offer", label: x.agreedProject ? `The agreed terms of "${x.title}"` : `"${x.title}" as currently offered` }, { precision, conditions }));
+  if (v.comparisons.versusOriginalOfferCents !== null) out.push(money("settled_cash_two_year", v.comparisons.versusOriginalOfferCents,
+    { kind: "original_offer", label: `The client's original offer for "${x.title}"` }, { precision, conditions }));
+  out.push(money("retirement_added", v.retirementAddedCents, { kind: "none", label: "Retirement savings, not spendable" }, { horizon: null }));
+  for (const m of v.moneyByDate) {
+    out.push(money("project_gross_by_date", m.receivedCents, { kind: "none", label: m.event }, { date: m.date }));
+    out.push(money("project_available_by_date", m.availableCents, { kind: "decline_unpaid_terms", label: m.event }, { date: m.date, precision: precision === "conditional" ? "conditional" : "estimated_inputs",
+      conditions: ["The tax reserve is a planning amount set aside as money arrives, not an estimated-tax calculation."] }));
+  }
+  v.aca.forEach((a, yi) => out.push(money("credit_change", a.ptcCents - x.declinePtc[yi], { kind: "decline_unpaid_terms", label: `Premium tax credit ${a.year}: with these terms vs without the unpaid terms` },
+    { year: a.year, precision, horizon: null })));
+  return out;
 }
