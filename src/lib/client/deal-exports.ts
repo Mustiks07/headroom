@@ -295,9 +295,9 @@ export function buildCurrentCalendar(ws: HouseholdWorkspace, now = new Date()): 
   const at = now.toISOString();
   const issued: IssuedCalendarEvent[] = [];
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Headroom//Current plan 1.0//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Headroom plan"];
-  const vevent = (e: { uid: string; date: string; title: string; description: string }, sequence: number, status: "CONFIRMED" | "CANCELLED") => {
+  const vevent = (e: { uid: string; date: string; title: string; description: string }, sequence: number, status: "CONFIRMED" | "CANCELLED", prefix = "Cancelled") => {
     lines.push("BEGIN:VEVENT", `UID:${e.uid}`, `DTSTAMP:${stamp(now)}`, `DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${nextDay(e.date)}`,
-      `SEQUENCE:${sequence}`, `SUMMARY:${escapeText(status === "CANCELLED" ? `Cancelled: ${e.title}` : e.title)}`, `DESCRIPTION:${escapeText(e.description)}`,
+      `SEQUENCE:${sequence}`, `SUMMARY:${escapeText(status === "CANCELLED" ? `${prefix}: ${e.title}` : e.title)}`, `DESCRIPTION:${escapeText(e.description)}`,
       `STATUS:${status}`, "TRANSP:TRANSPARENT");
     if (status === "CONFIRMED") lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${escapeText(e.title)}`, "TRIGGER:-P1D", "END:VALARM");
     lines.push("END:VEVENT");
@@ -310,13 +310,22 @@ export function buildCurrentCalendar(ws: HouseholdWorkspace, now = new Date()): 
     issued.push({ uid: e.uid, sequence, date: e.date, title: e.title.slice(0, 300), status: "active", issuedAt: at });
   }
   const currentUids = new Set(current.map(e => e.uid));
+  // Done (received / contributed / completed) is not the same as cancelled: both leave the calendar, labelled truthfully.
+  const done = new Set<string>([
+    ...ws.projects.flatMap(p => p.receipts.filter(l => l.actual).map(l => calendarUid(ws.id, p.id, l.id, "receipt"))),
+    ...(ws.dealPlanning?.packages ?? []).flatMap(k => k.reminders.filter(r => r.status === "done").map(r => r.uid)),
+    ...([2026, 2027] as const).flatMap(y => ws.household.people.filter(pp => { const sp = sepPosition(ws, pp.id, y); return (sp.targetCents ?? 0) > 0 && sp.remainingCents === 0; })
+      .map(pp => calendarUid(ws.id, "sep", pp.id, String(y)))),
+  ]);
   for (const prev of previous.values()) {
     if (currentUids.has(prev.uid)) continue;
     const sequence = prev.status === "cancelled" ? prev.sequence : prev.sequence + 1;
     // Keep sending the cancellation for a while so a later import still removes it.
     const ageDays = (now.getTime() - new Date(`${prev.date}T00:00:00Z`).getTime()) / 86_400_000;
     if (ageDays > 60) continue;
-    vevent({ uid: prev.uid, date: prev.date, title: prev.title, description: "This plan action no longer applies (paid, moved or cancelled in Headroom)." }, sequence, "CANCELLED");
+    const isDone = done.has(prev.uid);
+    vevent({ uid: prev.uid, date: prev.date, title: prev.title, description: isDone ? "Recorded as done in Headroom; removed from your calendar."
+      : "This plan action no longer applies (moved, declined or cancelled in Headroom)." }, sequence, "CANCELLED", isDone ? "Done" : "Cancelled");
     issued.push({ ...prev, sequence, status: "cancelled", issuedAt: at });
     cancelled++;
   }
