@@ -31,6 +31,23 @@ export const OriginalOfferSchema = z.object({
   recordedAt: DateTimeSchema,
 });
 
+/**
+ * Round 6 (additive): versions of a project's terms. The original offer stays immutable in
+ * `Project.originalOffer`; every later state (client counteroffer, terms the user shared, accepted
+ * terms) is appended here with a status. Informational history: excluded from fingerprints — the
+ * project lines remain the financial truth.
+ */
+export const OfferVersionSchema = z.object({
+  version: z.number().int().min(1),
+  kind: z.enum(["original", "client_counteroffer", "terms_shared", "accepted_terms"]),
+  recordedAt: DateTimeSchema,
+  priceCents: CentsSchema.nonnegative(),
+  payments: z.array(z.object({ amountCents: CentsSchema.positive(), date: DateSchema.nullable(), received: z.boolean() })).max(12),
+  status: z.enum(["open", "accepted", "rejected", "superseded"]),
+  source: z.object({ kind: z.enum(["user_entered", "document", "assistant_text", "package", "existing_project"]), sourceId: IdSchema.nullable() }),
+  note: z.string().max(300).nullable(),
+});
+
 export const VariantComparisonsSchema = z.object({ versusDeclineCents: CentsSchema.nullable(), versusOfferedCents: CentsSchema.nullable() });
 export const VariantRobustnessSchema = z.object({
   holds: z.boolean(), basis: z.enum(["declared_ranges", "room_policy"]), roomCents: CentsSchema.nullable(), worstCashInRangesCents: CentsSchema.nullable(),
@@ -60,3 +77,4 @@ export const DecisionContextSchema = z.object({
 
 export type OriginalOffer = z.infer<typeof OriginalOfferSchema>;
 export type DecisionContext = z.infer<typeof DecisionContextSchema>;
+export type OfferVersion = z.infer<typeof OfferVersionSchema>;
