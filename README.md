@@ -1,17 +1,18 @@
 # Headroom
 
-**Plan your income. Protect your health-insurance subsidy.**
+**Before you say yes.**
 
-Headroom is a browser-based planning product for self-employed US adults. It helps a household understand how changing income affects its ACA subsidy, compare feasible next steps, and update its plan when income changes again.
+Headroom helps independent professionals with Marketplace health insurance see what a client offer leaves their household after taxes and insurance, choose feasible terms, and keep the decision current when the client or the payments change.
 
 **[Open Headroom](https://headroom-amber.vercel.app) · [Try the family example](https://headroom-amber.vercel.app/demo?case=family-cliff) · [Use your own figures](https://headroom-amber.vercel.app/check)**
 
-**Live on Vercel, with guest cloud save connected to Supabase.** No signup, email, password or card is required. Round 5 connects the selected C interface, goal-based terms, confirmed text updates, historical decision PDFs and current calendar exports. BasisWeb text assistance and text-PDF extraction have been exercised with real provider requests; photos and scanned PDFs are not read (no OCR); paste or manual entry is offered instead. All checkout access is no-charge. See the [round 5 integration handoff](docs/handoffs/integration-round5.md) for exact verification and remaining gaps.
+**No signup, email, password or card is required.** The combined round 6 release connects offer-first intake, a short missing-fact flow, confirmed document imports, goal-based terms, client counteroffers, partial payments, decision PDFs and calendar actions. Text PDFs can be read without AI; photos and scanned PDFs need pasted or manual figures. Optional AI reads and explains; the versioned engine calculates. Guest cloud save uses Supabase. See the [round 6 integration record](docs/handoffs/integration-round6.md) and [actual browser artifacts](docs/artifacts/round6/ui/).
 
-Current calculation versions: `headroom-engine-1.3.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`, deal search `headroom-deal-1.1.0`. Earlier reviews remain available as history, including [round 4](docs/handoffs/integration-round4.md).
+Current calculation versions: `headroom-engine-1.3.0` / `us-federal-aca-2026-2027.r3`; household layer `headroom-household-1.0.1`, deal search `headroom-deal-1.2.0`. Earlier reviews remain available as history, including [round 4](docs/handoffs/integration-round4.md).
 
 ## Try it locally
 
+- Open `/check?start=project`: paste or enter an offer, confirm its terms, answer the necessary household questions and open the offer-as-written result.
 - Open `/demo?case=family-cliff`: edit a project offer, constrain retirement contributions, compare payment schedules and save a plan.
 - Open `/demo?case=ordinary-gig`: see a profitable project where no special intervention is needed.
 - Open `/demo?case=missing-spouse-income`: confirm the missing facts before a result is shown.
@@ -51,9 +52,9 @@ For the bounded browser check, install Chromium once with `npx playwright instal
 
 Use separate clones or worktrees. Start by reading [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
 
-**Next assignments:** [round 6 shared brief](docs/tasks/ROUND6_SHARED.md), [Claude 1 — complete user experience](docs/tasks/CLAUDE1_ROUND6.md), [Claude 2 — trusted decisions and evidence](docs/tasks/CLAUDE2_ROUND6.md), [Claude 3 — common data/AI path](docs/tasks/CLAUDE3_ROUND6.md). These cover the remaining first-input, semantic multi-document, negotiation and partial-payment gaps. They are requirements, not claims that every requested feature is already live.
+**Round 6 assignments and delivery:** [shared brief](docs/tasks/ROUND6_SHARED.md), [Claude 1 handoff](docs/handoffs/claude1-round6.md), [Claude 2 handoff](docs/handoffs/claude2-round6.md), [Claude 3 handoff](docs/handoffs/claude3-round6.md). The combined release record above identifies what was checked together.
 
-## Data and AI path (round 6, Claude 3 branch)
+## Data and AI path
 
 - **First offer from an ordinary email** (`POST /api/assist/intake`): amounts and dates as written, costs unknown unless stated, no inferred tax year, invoices stay "expected", separate projects stay separate, typed questions for what is missing. Works without AI (built-in reading) and, with consent, through the configured provider with every value checked against the text.
 - **One document import path** for new and saved plans: the user chooses whose figure, which year, which months and which payment; the engine's semantic check runs on the whole group; one revision or nothing; repeat imports add nothing. A PDF's embedded text is read on the server without AI when AI is off or not allowed; scans and photos are not read.
