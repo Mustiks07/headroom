@@ -1,0 +1,44 @@
+{
+  "goal": {
+    "id": "g",
+    "projectId": "B",
+    "minimumTwoYearCashDeltaCents": 400000,
+    "baseline": "decline_unpaid_terms",
+    "maxAdditionalSepCents": 100000,
+    "dateTargets": [
+      {
+        "id": "dec20",
+        "kind": "project_receipts",
+        "byDate": "2026-12-20",
+        "minimumCents": 1500000
+      }
+    ],
+    "createdAt": "2026-11-15T12:00:00.000Z",
+    "updatedAt": "2026-11-15T12:00:00.000Z"
+  },
+  "space": {
+    "projectId": "B",
+    "price": {
+      "minCents": 1200000,
+      "maxCents": 1300000,
+      "stepCents": 25000
+    },
+    "paymentWindows": [
+      {
+        "id": "dec",
+        "earliest": "2026-12-15",
+        "latest": "2026-12-31",
+        "maxShareBps": 10000
+      },
+      {
+        "id": "jan",
+        "earliest": "2027-01-04",
+        "latest": "2027-01-10",
+        "maxShareBps": 10000
+      }
+    ],
+    "maxPayments": 2,
+    "newTermsConfirmed": true,
+    "allowAdditionalSep": true
+  }
+}
