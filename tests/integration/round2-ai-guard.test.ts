@@ -81,13 +81,16 @@ describe("paid document-analysis endpoint", () => {
     expect((await (await capabilities()).json()).aiExtraction).toBe(true);
     vi.stubEnv("SUPABASE_SECRET_KEY", "");
     expect((await (await capabilities()).json()).aiExtraction).toBe(false);
-    const res = await pdfUpload();
-    expect(await res.json()).toMatchObject({ status: "unavailable", warnings: ["Document analysis is unavailable. Enter the figures manually."] });
+    const res = await (await pdfUpload()).json();
+    // Round 6: AI off → the PDF's embedded text is read deterministically on the server; no provider call.
+    expect(res.warnings[0]).toMatch(/without AI/);
     expect(parse).not.toHaveBeenCalled();
   });
 
   it("requires consent, a guest session and quota before any provider call", async () => {
-    expect((await pdfUpload({}, false)).status).toBe(400);
+    const noConsent = await pdfUpload({}, false); // no consent → read on our server only, never sent
+    expect(noConsent.status).toBe(200);
+    expect((await noConsent.json()).warnings[0]).toMatch(/didn't allow sending it/);
     requireOwner.mockRejectedValueOnce(new Error("no session"));
     expect((await pdfUpload()).status).toBe(401);
     rpc.mockResolvedValueOnce(reserve("guest_budget"));

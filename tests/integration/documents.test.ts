@@ -75,8 +75,9 @@ describe("document import", () => {
     pdf.addPage();
     const response = await upload(new Uint8Array(await pdf.save()) as BlobPart, "w2.pdf", "application/pdf");
     expect(response.status).toBe(200);
+    // Round 6: a PDF's embedded text is read on the server without AI; this one has none (like a scan).
     expect(await response.json()).toEqual({ status: "unavailable", fields: [],
-      warnings: ["Document analysis is unavailable. Enter the figures manually."] });
+      warnings: ["This PDF has no readable text layer (for example a scan). Paste the relevant text or enter the figures manually."] });
   });
 
   it("requires explicit consent before a document goes to a configured provider", async () => {
@@ -88,7 +89,8 @@ describe("document import", () => {
     const pdf = await PDFDocument.create();
     pdf.addPage();
     const response = await upload(new Uint8Array(await pdf.save()) as BlobPart, "w2.pdf", "application/pdf");
-    expect(response.status).toBe(400);
-    expect((await response.json()).error.code).toBe("CONSENT_REQUIRED");
+    // Round 6: without consent nothing goes to the provider; the PDF is read on Headroom's server only.
+    expect(response.status).toBe(200);
+    expect((await response.json()).warnings[0]).toMatch(/no readable text layer/);
   });
 });
