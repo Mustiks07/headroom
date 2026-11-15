@@ -1,0 +1,6 @@
+Payment confirmation
+Synthetic Bank — incoming transfer
+Payment received: $3,000.00
+Date received: November 20, 2026
+From: Northside Bakery LLC
+Memo: Final payment, website redesign
