@@ -158,3 +158,5 @@ for (const [label, s] of [["base", baseS], ["qualified→paid 2%", { ...baseS, q
   lines.push(`| ${label} | ${num(r).toFixed(2)} |`);
 }
 console.log(lines.join("\n"));
+
+export {};
